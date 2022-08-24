@@ -3,8 +3,8 @@
 Collection of shared github actions which are used in our org. 
 
 ## OWASP scanner
-
 Example usage:
+
 ```
 jobs:
   owasp:
@@ -14,7 +14,6 @@ jobs:
 ```
 
 ## Nancy Scan
-
 OSS scanner which helps find CVEs in Go dependencies
 
 Example usage:
@@ -35,4 +34,14 @@ jobs:
     with:
       dir: ${{ matrix.package }}
     secrets: inherit
+```
+
+## Semgrep
+CodeQL like OSS linter
+
+Example usage:
+```
+jobs:
+  semgrep:
+    uses: TykTechnologies/github-actions/.github/workflows/semgrep.yaml@main
 ```
