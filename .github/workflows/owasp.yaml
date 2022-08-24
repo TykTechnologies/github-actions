@@ -1,0 +1,20 @@
+name: OWASP scanner 
+
+workflow_call:
+  inputs:
+    target:
+      required: true
+      type: string
+
+jobs:
+  zap_scan:
+    name: OWASP Zap
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: OWASP Zap
+      uses: zaproxy/action-full-scan@v0.4.0
+      with:
+        target: ${{ inputs.target }}
+        cmd_options: '-a'
+        allow_issue_writing: false
