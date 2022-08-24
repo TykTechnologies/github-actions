@@ -1,0 +1,40 @@
+name: OWASP scanner 
+
+workflow_call:
+  inputs:
+    dir:
+      required: false
+      type: string
+  secrets:
+    ORG_GH_TOKEN:
+      required: false
+
+jobs:
+  nancy_scan:
+    name: Sonatype Nexus
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Set up Go 1.x in order to write go.list file
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.17
+
+      - name: Configure git access for Tyk's private Go modules
+        env:
+          GITHUB_PAT: ${{ secrets.ORG_GH_TOKEN }}
+        run: |
+          echo "https://$GITHUB_PAT:x-oauth-basic@github.com" >> ~/.git-credentials
+          git config --global credential.helper store
+          git config --global url."https://$GITHUB_PAT:x-oauth-basic@github.com".insteadOf "https://github.com"
+      - name: Write Go List
+        run: go list -json -m all > go.list
+        working-directory: ./${{ inputs.dir }}
+
+      - name: Nancy scan
+        uses: sonatype-nexus-community/nancy-github-action@main
+        with:
+          goListFile: ${{ inputs.dir }}/go.list
