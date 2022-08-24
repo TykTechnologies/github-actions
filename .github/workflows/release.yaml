@@ -1,13 +1,14 @@
-name: OWASP scanner 
+name: Nancy Scan
 
-workflow_call:
-  inputs:
-    dir:
-      required: false
-      type: string
-  secrets:
-    ORG_GH_TOKEN:
-      required: false
+on:
+  workflow_call:
+    inputs:
+      dir:
+        required: false
+        type: string
+    secrets:
+      ORG_GH_TOKEN:
+        required: false
 
 jobs:
   nancy_scan:
