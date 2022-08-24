@@ -1,10 +1,11 @@
 name: OWASP scanner 
 
-workflow_call:
-  inputs:
-    target:
-      required: true
-      type: string
+on:
+  workflow_call:
+    inputs:
+      target:
+        required: true
+        type: string
 
 jobs:
   zap_scan:
