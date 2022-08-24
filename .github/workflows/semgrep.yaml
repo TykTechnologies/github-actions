@@ -1,0 +1,28 @@
+on:
+  workflow_call:
+
+jobs:
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-20.04
+
+    outputs:
+      scan: ${{ steps.scan.outputs.test }}
+
+    container:
+      image: returntocorp/semgrep
+
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Semgrep scan
+        id: scan
+        run: |
+          semgrep --config auto --output semgrep-report.txt --error --exclude=docs
+      - name: Archive Semgrep report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: semgrep-report.txt
+          path: semgrep-report.txt
