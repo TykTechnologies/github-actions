@@ -30,7 +30,7 @@ jobs:
             build_tags: []
             skip_dirs: []
       - name: Apply template
-        run:
+        run: |
           stopMarker=$(uuidgen)
           echo "::stop-commands::$stopMarker"
           echo '${{ steps.render_template.outputs.result }}' >> .golangci.yaml
