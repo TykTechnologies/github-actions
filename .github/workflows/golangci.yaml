@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 1
       - name: Download template
         run: |
-          curl https://raw.githubusercontent.com/TykTechnologies/github-actions/main/.github/workflows/.golangci.tmpl.yaml -O .golangci.yaml
+          curl 'https://raw.githubusercontent.com/TykTechnologies/github-actions/main/.github/workflows/.golangci.tmpl.yaml' -o .golangci.yaml
       - name: Render template
         id: render_template
         uses: chuhlomin/render-template@v1.5
