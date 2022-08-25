@@ -31,7 +31,7 @@ jobs:
             skip_dirs: []
       - name: Apply template
         run:
-          echo '${{ steps.render_template.outputs.result }}' > .golangci.yaml
+          $(echo '${{ steps.render_template.outputs.result }}' > .golangci.yaml)
           cp .golangci.yaml /tmp/.golangci.yaml
           if [[ `git status --porcelain` ]]; then
             git commit -a -m 'Update Golangci config'
