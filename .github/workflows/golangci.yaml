@@ -1,0 +1,46 @@
+name: GolangCI
+
+on:
+  workflow_call:
+  
+jobs:
+  golangci:
+    steps:
+      - name: Git - checkout master
+        uses: actions/checkout@v3
+        with:
+          ref: "master"
+          fetch-depth: 1
+      - name: Download template
+        run: |
+          curl https://raw.githubusercontent.com/TykTechnologies/github-actions/main/.github/workflows/.golangci.tmpl.yaml -O .golangci.yaml
+      - name: Render template
+        id: render_template
+        uses: chuhlomin/render-template@v1.5
+        with:
+          template: .golangci.yaml
+          vars: |
+            build-tags: []
+            skip-dirs: []
+      - name: Apply template
+        run:
+          echo '${{ steps.render_template.outputs.result }}' > .golangci.yaml
+          cp .golangci.yaml /tmp/.golangci.yaml
+          if [[ `git status --porcelain` ]]; then
+            git commit -a -m 'Update Golangci config'
+            git push
+          fi
+          git checkout ${{ github.sha }}
+          cp /tmp/.golangci.yaml .golangci.yaml
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          # Version of golangci-lint to use in form of v1.2 or `latest` to use the latest version
+          version: latest
+
+          # golangci-lint command line arguments.
+          args: --timeout=5m --verbose
+
+          # If set to true and the action runs on a pull request - the action outputs only newly found issues
+          only-new-issues: true
+       
