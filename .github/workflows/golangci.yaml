@@ -5,6 +5,7 @@ on:
   
 jobs:
   golangci:
+    runs-on: ubuntu-latest
     steps:
       - name: Git - checkout master
         uses: actions/checkout@v3
