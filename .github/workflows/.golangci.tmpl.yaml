@@ -11,7 +11,7 @@ issues:
         - dupl
 
   # Show only new issues created since branching away from default branch on the remote
-  new-from-rev: origin/{{.main-branch}}
+  new-from-rev: origin/{{.main_branch}}
 
 linters:
   enable:
@@ -125,5 +125,5 @@ linters-settings:
 
 run:
   timeout: 10m
-  build-tags: {{.build-tags}}
-  skip-dirs: {{.skip-dirs}}
+  build-tags: {{.build_tags}}
+  skip-dirs: {{.skip_dirs}}
