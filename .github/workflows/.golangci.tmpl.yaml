@@ -11,7 +11,7 @@ issues:
         - dupl
 
   # Show only new issues created since branching away from default branch on the remote
-  new-from-rev: origin/master
+  new-from-rev: origin/{{.main-branch}}
 
 linters:
   enable:
