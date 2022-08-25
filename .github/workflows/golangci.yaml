@@ -26,6 +26,7 @@ jobs:
           template: .golangci.yaml
           vars: |
             main_branch: ${{ github.event.inputs.main_branch }}
+            goimports: ""
             build_tags: []
             skip_dirs: []
       - name: Apply template
