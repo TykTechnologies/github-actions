@@ -2,6 +2,10 @@ name: GolangCI
 
 on:
   workflow_call:
+    inputs:
+      main_branch:
+        default: "main"
+        type: string
   
 jobs:
   golangci:
@@ -10,7 +14,7 @@ jobs:
       - name: Git - checkout master
         uses: actions/checkout@v3
         with:
-          ref: "master"
+          ref: ${{ github.event.inputs.main_branch }}
           fetch-depth: 1
       - name: Download template
         run: |
@@ -21,6 +25,7 @@ jobs:
         with:
           template: .golangci.yaml
           vars: |
+            main_branch: ${{ github.event.inputs.main_branch }}
             build-tags: []
             skip-dirs: []
       - name: Apply template
