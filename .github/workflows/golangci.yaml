@@ -24,6 +24,7 @@ jobs:
         uses: chuhlomin/render-template@v1.5
         with:
           template: .golangci.yaml
+          result_path: .golangci.yaml
           vars: |
             main_branch: ${{ github.event.inputs.main_branch }}
             goimports: '""'
@@ -31,10 +32,6 @@ jobs:
             skip_dirs: []
       - name: Apply template
         run: |
-          stopMarker=$(uuidgen)
-          echo "::stop-commands::$stopMarker"
-          echo '${{ steps.render_template.outputs.result }}' >> .golangci.yaml
-          echo "::$stopMarker::"
           cp .golangci.yaml /tmp/.golangci.yaml
           if [[ `git status --porcelain` ]]; then
             git commit -a -m 'Update Golangci config'
