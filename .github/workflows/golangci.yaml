@@ -92,8 +92,8 @@ jobs:
           git diff >"${TMPFILE}"
           reviewdog -f=diff -f.diff.strip=1 -reporter=github-pr-review < "${TMPFILE}"
           
-          cat golangci_lint.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-check
-          cat golangci_lint2.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-check
+#          cat golangci_lint.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-check
+#          cat golangci_lint2.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-check
       - name: Check on failures
         if: steps.lint-fix.outcome != 'success' || steps.lint-not-fix.outcome != 'success'
         run: exit 1
