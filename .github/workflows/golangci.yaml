@@ -53,10 +53,11 @@ jobs:
         run: |
           go install golang.org/x/tools/cmd/goimports
           pwd
-          goimports -w .
-          gofmt -w .
+          goimports -w ./..
+          gofmt -w ./..
           git diff
           git status
+          ls
       - name: Disable output variables
         id: stop_vars
         run: |
