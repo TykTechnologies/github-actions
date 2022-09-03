@@ -49,14 +49,9 @@ jobs:
       - uses: actions/setup-go@v3
         with:
           go-version: 1.17
-      - name: Install goimports
+      - name: Fetch modules
         run: |
-          go install golang.org/x/tools/cmd/goimports
           go mod download
-          goimports -v -w .
-          gofmt -w .
-          echo "----------------"
-          git status
       - name: Disable output variables
         id: stop_vars
         run: |
