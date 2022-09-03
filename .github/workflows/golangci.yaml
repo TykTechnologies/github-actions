@@ -69,6 +69,10 @@ jobs:
         continue-on-error: true
         with:
           version: latest
+          
+          skip-cache: true
+          skip-pkg-cache: true
+          skip-build-cache: true
 
           # golangci-lint command line arguments.
           args: --timeout=5m --verbose
