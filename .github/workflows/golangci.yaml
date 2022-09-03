@@ -52,7 +52,7 @@ jobs:
       - name: Disable output variables
         id: stop_vars
         run: |
-          stopMarker=$(uuidgen)
+          export stopMarker=$(uuidgen)
           echo "::set-output name=stopMarker::$stopMarker"
           echo "::stop-commands::$stopMarker"
       - name: golangci-lint without auto-fix
@@ -68,7 +68,7 @@ jobs:
           # If set to true and the action runs on a pull request - the action outputs only newly found issues
           only-new-issues: true
           
-          output-file: checkstyle:golangci_lint2.xml
+          output-file: checkstyle:golangci_lint.xml
       - name: Re-enable output variables
         run: |
           echo "::${{ steps.stop_vars.outputs.stopMarker }}::"
@@ -89,7 +89,7 @@ jobs:
           # If set to true and the action runs on a pull request - the action outputs only newly found issues
           only-new-issues: true
           
-          output-file: checkstyle:golangci_lint.xml
+          output-file: checkstyle:golangci_lint2.xml
       - uses: reviewdog/action-setup@v1
         with:
           reviewdog_version: latest
