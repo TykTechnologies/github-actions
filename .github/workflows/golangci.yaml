@@ -46,7 +46,7 @@ jobs:
         with:
           go-version: 1.17
       - name: golangci-lint
-        uses: gessnerfl/golangci-lint-action@latest
+        uses: gessnerfl/golangci-lint-action@master
         with:
           version: latest
 
