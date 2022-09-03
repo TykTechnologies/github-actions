@@ -102,6 +102,7 @@ jobs:
         run: |
           TMPFILE=$(mktemp)
           git diff >"${TMPFILE}"
+          git diff
           reviewdog -f=diff -f.diff.strip=1 -reporter=github-pr-review < "${TMPFILE}"
           
 #          cat golangci_lint.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-check
