@@ -34,7 +34,7 @@ jobs:
         run: |
           cp .golangci.yaml /tmp/.golangci.yaml
           if [[ `git status --porcelain` ]]; then
-            local ref=$(git rev-parse HEAD)
+            export ref=$(git rev-parse HEAD)
             git checkout ${{ inputs.main_branch }}
             git config --global user.name 'Bender'
             git config --global user.email 'bender@users.noreply.github.com'
