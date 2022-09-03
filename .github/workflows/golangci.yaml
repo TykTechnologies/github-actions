@@ -34,14 +34,15 @@ jobs:
         run: |
           cp .golangci.yaml /tmp/.golangci.yaml
           if [[ `git status --porcelain` ]]; then
+            local ref=$(git rev-parse HEAD)
             git checkout ${{ inputs.main_branch }}
             git config --global user.name 'Bender'
             git config --global user.email 'bender@users.noreply.github.com'
             git add -A
             git commit -a -m 'Update Golangci config'
             git push
+            git checkout ${{ $ref }}
           fi
-          git checkout ${{ github.head_ref }}
           cp /tmp/.golangci.yaml .golangci.yaml
       - uses: actions/setup-go@v3
         with:
