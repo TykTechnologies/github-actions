@@ -57,4 +57,12 @@ jobs:
           only-new-issues: true
           
           output-file: checkstyle:golangci_lint.xml
-       
+      - uses: reviewdog/action-setup@v1
+        with:
+          reviewdog_version: latest
+      - name: Run reviewdog
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat golangci_lint.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-check
+
