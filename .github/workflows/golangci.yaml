@@ -72,7 +72,7 @@ jobs:
           git diff >"${TMPFILE}"
           reviewdog -f=diff -f.diff.strip=1 -reporter=github-pr-review < "${TMPFILE}"
       - name: Check on failures
-        if: steps.lint.outputs.status == 'failure'
+        if: steps.lint.outcome != 'success'
         run: exit 1
 
 # cat golangci_lint.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-check
