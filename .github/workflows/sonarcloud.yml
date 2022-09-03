@@ -1,0 +1,35 @@
+name: Sonarcloud
+
+on:
+  workflow_call:
+    inputs:
+      exclusions:
+        required: false
+        type: string
+    secrets:
+      GITHUB_TOKEN:
+        required: true
+      SONAR_TOKEN:
+        required: true
+
+jobs:
+  sonarcloud:
+    name: Sonarcloud
+    runs-on: ubuntu-latest
+    steps:
+      - name: SonarCloud Scan
+        uses: sonarsource/sonarcloud-github-action@master
+        with:
+          args: >
+            -Dsonar.organization=tyktechnologies
+            -Dsonar.projectKey=TykTechnologies_${{ github.event.repository.name }}
+            -Dsonar.sources=.
+            -Dsonar.exclusions=${{ github.event.inputs.exclusions }}
+            -Dsonar.coverage.exclusions=**/*_test.go
+            -Dsonar.test.inclusions=**/*_test.go
+            -Dsonar.tests=.
+            -Dsonar.go.coverage.reportPaths=*.cov
+            -Dsonar.go.golangci-lint.reportPaths=golanglint.xml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
