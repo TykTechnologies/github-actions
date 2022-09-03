@@ -80,7 +80,7 @@ jobs:
           # If set to true and the action runs on a pull request - the action outputs only newly found issues
           only-new-issues: true
           
-          output-file: checkstyle:golangci_lint.xml
+          output-file: checkstyle:golangci_lint2.xml
       - uses: reviewdog/action-setup@v1
         with:
           reviewdog_version: latest
@@ -91,6 +91,9 @@ jobs:
           TMPFILE=$(mktemp)
           git diff >"${TMPFILE}"
           reviewdog -f=diff -f.diff.strip=1 -reporter=github-pr-review < "${TMPFILE}"
+          
+          cat golangci_lint.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-check
+          cat golangci_lint2.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-check
       - name: Check on failures
         if: steps.lint-fix.outcome != 'success' || steps.lint-not-fix.outcome != 'success'
         run: exit 1
