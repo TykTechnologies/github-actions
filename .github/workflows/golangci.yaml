@@ -14,7 +14,7 @@ jobs:
       - name: Git - checkout master
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.inputs.main_branch }}
+          ref: ${{ inputs.main_branch }}
           fetch-depth: 1
       - name: Download template
         run: |
@@ -26,7 +26,7 @@ jobs:
           template: .golangci.yaml
           result_path: .golangci.yaml
           vars: |
-            main_branch: ${{ github.event.inputs.main_branch }}
+            main_branch: ${{ inputs.main_branch }}
             goimports: ''
             build_tags: []
             skip_dirs: []
@@ -34,7 +34,7 @@ jobs:
         run: |
           cp .golangci.yaml /tmp/.golangci.yaml
           if [[ `git status --porcelain` ]]; then
-            git checkout ${{ github.event.inputs.main_branch }}
+            git checkout ${{ inputs.main_branch }}
             git config --global user.name 'Bender'
             git config --global user.email 'bender@users.noreply.github.com'
             git add -A
