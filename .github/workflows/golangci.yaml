@@ -70,6 +70,7 @@ jobs:
         run: |
           TMPFILE=$(mktemp)
           git diff >"${TMPFILE}"
+          git diff
           reviewdog -f=diff -f.diff.strip=1 -reporter=github-pr-review < "${TMPFILE}"
       - name: Check on failures
         if: steps.lint.outcome != 'success'
