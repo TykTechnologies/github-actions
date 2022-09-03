@@ -49,8 +49,22 @@ jobs:
       - uses: actions/setup-go@v3
         with:
           go-version: 1.17
-      - name: golangci-lint
-        id: lint
+      - name: golangci-lint with auto-fixes
+        id: lint-fix
+        uses: gessnerfl/golangci-lint-action@master
+        continue-on-error: true
+        with:
+          version: latest
+
+          # golangci-lint command line arguments.
+          args: --timeout=5m --verbose -fix
+
+          # If set to true and the action runs on a pull request - the action outputs only newly found issues
+          only-new-issues: true
+          
+          output-file: checkstyle:golangci_lint.xml
+      - name: golangci-lint without auto-fix
+        id: lint-no-fix
         uses: gessnerfl/golangci-lint-action@master
         continue-on-error: true
         with:
@@ -70,14 +84,11 @@ jobs:
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ls
-          git status
           TMPFILE=$(mktemp)
           git diff >"${TMPFILE}"
-          git diff
           reviewdog -f=diff -f.diff.strip=1 -reporter=github-pr-review < "${TMPFILE}"
       - name: Check on failures
-        if: steps.lint.outcome != 'success'
+        if: steps.lint-fix.outcome != 'success' || steps.lint-not-fix.outcome != 'success'
         run: exit 1
 
 # cat golangci_lint.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-check
