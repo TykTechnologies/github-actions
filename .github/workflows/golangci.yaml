@@ -69,7 +69,7 @@ jobs:
           go mod download
           go install golang.org/x/tools/cmd/goimports@latest
           goimports -w .
-          gofmt -sw .
+          gofmt -s -w .
           git status
       - name: Disable output variables
         id: stop_vars
