@@ -52,7 +52,7 @@ jobs:
           version: latest
 
           # golangci-lint command line arguments.
-          args: --timeout=5m --verbose --out-format 'checkstyle:golangci.xml,github-actions'
+          args: --timeout=5m --verbose --out-format 'checkstyle:golanglint.xml,github-actions'
 
           # If set to true and the action runs on a pull request - the action outputs only newly found issues
           only-new-issues: true
