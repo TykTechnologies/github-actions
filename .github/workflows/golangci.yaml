@@ -41,7 +41,7 @@ jobs:
             git add -A
             git commit -a -m 'Update Golangci config'
             git push
-            git checkout ${{ $ref }}
+            git checkout $ref
           fi
           cp /tmp/.golangci.yaml .golangci.yaml
       - uses: actions/setup-go@v3
