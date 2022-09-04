@@ -76,7 +76,7 @@ jobs:
         continue-on-error: true
         if: ${{ github.event_name == 'pull_request' }}
         run: |
-          $(go env GOPATH)/bin/golangci-lint run --verbose --out-format 'checkstyle:golangci_lint.xml' --timeout=300s --fix --new=true --new-from-rev=origin/${{ github.base_ref }} ./...
+          $(go env GOPATH)/bin/golangci-lint run --verbose --out-format 'checkstyle:golangci_lint.xml' --timeout=300s --max-same-issues 50 --fix --new=true --new-from-rev=origin/${{ github.base_ref }} ./...
       - name: golangci-lint
         continue-on-error: true
         if: ${{ github.event_name == 'push' }}
@@ -88,6 +88,9 @@ jobs:
           name: golangci-report
           path: "*xml"
           
+      - uses: reviewdog/action-setup@v1
+        with:
+          reviewdog_version: latest # Optional. [latest,nightly,v.X.Y.Z]
       - name: Run reviewdog
         if: ${{ github.event_name == 'pull_request' }}
         env:
