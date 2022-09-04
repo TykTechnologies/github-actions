@@ -2,12 +2,24 @@ name: Go test
 
 on:
   workflow_call:
+    inputs:
+      goversion:
+        type: string
+        default: '["1.17.x"]'
 
 jobs:
   gotest:
+    strategy:
+      matrix:
+        go-version: ${{ fromJSON(inputs.goversion) }}
+        
     name: Go Test
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/setup-go@v3
+      with:
+        go-version: ${{ matrix.go-version }}
+    - uses: actions/checkout@v3
     - name: Go Test
       run: |
         PKGS="$(go list ./...)"
