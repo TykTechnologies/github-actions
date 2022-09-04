@@ -3,7 +3,7 @@ name: Go test
 on:
   workflow_call:
     inputs:
-      goversion:
+      go:
         type: string
         default: "1.17.x"
       mongo:
@@ -18,7 +18,7 @@ jobs:
     steps:
     - uses: actions/setup-go@v3
       with:
-        go-version: ${{ inputs.go-version }}
+        go-version: ${{ inputs.go }}
     - uses: actions/checkout@v3
     
     - name: Start Redis
