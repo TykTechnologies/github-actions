@@ -110,9 +110,6 @@ jobs:
 #       - name: Re-enable output variables
 #         run: |
 #           echo "::${{ steps.stop_vars.outputs.stopMarker }}::"
-      - uses: reviewdog/action-setup@v1
-        with:
-          reviewdog_version: latest
       - name: Run reviewdog
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -120,18 +117,21 @@ jobs:
           go install golang.org/x/tools/cmd/goimports@latest
           goimports -w .
 
-          TMPFILE=$(mktemp)
-          git diff >"${TMPFILE}"
-          git diff
-          git status
-          
-          #-diff="git diff"
-          git stash -u && git stash drop
-          reviewdog -f=diff -f.diff.strip=1 -reporter=github-pr-review < "${TMPFILE}"
+#          TMPFILE=$(mktemp)
+#          git diff >"${TMPFILE}"
+#          git diff
+#          git status
+#          
+#          #-diff="git diff"
+#          git stash -u && git stash drop
+#          reviewdog -f=diff -f.diff.strip=1 -reporter=github-pr-review < "${TMPFILE}"
           
 #           cat golangci_lint2.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-review
           
 #          cat golangci_lint2.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-check
+      - uses: reviewdog/action-suggester@v1
+        with:
+          tool_name: golint
       - name: Check on failures
         if: steps.lint-fix.outcome != 'success' || steps.lint-not-fix.outcome != 'success'
         run: exit 1
