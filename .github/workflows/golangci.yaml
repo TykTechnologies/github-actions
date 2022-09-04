@@ -127,7 +127,7 @@ jobs:
           #-diff="git diff"
           reviewdog -f=diff -f.diff.strip=1 -reporter=github-pr-review < "${TMPFILE}"
           
-          cat golangci_lint2.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-review
+#           cat golangci_lint2.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-review
           
 #          cat golangci_lint2.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-check
       - name: Check on failures
