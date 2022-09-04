@@ -17,6 +17,12 @@ jobs:
     name: Sonarcloud
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: coverage
+      - uses: actions/download-artifact@v3
+        with:
+          name: golangci-report
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@master
         with:
