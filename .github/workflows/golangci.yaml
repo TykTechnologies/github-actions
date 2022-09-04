@@ -73,13 +73,15 @@ jobs:
         run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
 
       - name: golangci-lint
+        continue-on-error: true
         if: ${{ github.event_name == 'pull_request' }}
         run: |
-          $(go env GOPATH)/bin/golangci-lint run --out-format checkstyle --timeout=300s --fix --new=true --new-from-rev=origin/${{ github.base_ref }} ./... > golangci_lint.xml
+          $(go env GOPATH)/bin/golangci-lint run --verbose --out-format 'checkstyle:golangci_lint.xml' --timeout=300s --fix --new=true --new-from-rev=origin/${{ github.base_ref }} ./...
       - name: golangci-lint
+        continue-on-error: true
         if: ${{ github.event_name == 'push' }}
         run: |
-          $(go env GOPATH)/bin/golangci-lint run --out-format checkstyle --timeout=300s --new=false --new-from-rev= --issues-exit-code=0 ./... > golangci_lint.xml
+          $(go env GOPATH)/bin/golangci-lint run --verbose --out-format 'checkstyle:golangci_lint.xml' --timeout=300s --new=false --new-from-rev= ./...
 
       - uses: actions/upload-artifact@v3
         with:
