@@ -132,6 +132,10 @@ jobs:
       - uses: reviewdog/action-suggester@v1
         with:
           tool_name: golint
+      - uses: actions/upload-artifact@v3
+        with:
+          name: golangci-report
+          path: "*xml"
       - name: Check on failures
         if: steps.lint-fix.outcome != 'success' || steps.lint-not-fix.outcome != 'success'
         run: exit 1
