@@ -69,20 +69,20 @@ jobs:
           go mod download
 #          gofmt -s -w .
 #          git status
-      - name: golangci-lint without auto-fix
-        id: lint-no-fix
-        uses: gessnerfl/golangci-lint-action@master
-        continue-on-error: true
-        with:
-          version: latest
+#       - name: golangci-lint without auto-fix
+#         id: lint-no-fix
+#         uses: gessnerfl/golangci-lint-action@master
+#         continue-on-error: true
+#         with:
+#           version: latest
 
-          # golangci-lint command line arguments.
-          args: --timeout=5m --verbose
+#           # golangci-lint command line arguments.
+#           args: --timeout=5m --verbose
 
-          # If set to true and the action runs on a pull request - the action outputs only newly found issues
-          only-new-issues: true
+#           # If set to true and the action runs on a pull request - the action outputs only newly found issues
+#           only-new-issues: true
           
-          output-file: checkstyle:golangci_lint.xml
+#           output-file: checkstyle:golangci_lint.xml
 #       - name: Disable output variables
 #         id: stop_vars
 #         run: |
@@ -101,12 +101,12 @@ jobs:
           version: latest
 
           # golangci-lint command line arguments.
-          args: --timeout=5m --verbose --fix
+          args: --timeout=5m --verbose --fix --max-issues-per-linter=0 --max-same-issues=0
 
           # If set to true and the action runs on a pull request - the action outputs only newly found issues
           only-new-issues: true
           
-          output-file: checkstyle:golangci_lint2.xml
+          output-file: checkstyle:golangci_lint.xml
 #       - name: Re-enable output variables
 #         run: |
 #           echo "::${{ steps.stop_vars.outputs.stopMarker }}::"
