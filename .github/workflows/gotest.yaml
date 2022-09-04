@@ -6,6 +6,10 @@ on:
       goversion:
         type: string
         default: "1.17.x"
+      mongo:
+        type: string
+      redis:
+        type: string
 
 jobs:
   gotest:
@@ -16,6 +20,19 @@ jobs:
       with:
         go-version: ${{ inputs.go-version }}
     - uses: actions/checkout@v3
+    
+    - name: Start Redis
+      if: ${{ inputs.redis != "" }}
+      uses: supercharge/redis-github-action@1.2.0
+      with:
+        redis-version: '${{ inputs.redis }}'
+
+    - name: Start MongoDB
+      if: ${{ inputs.mongo != "" }}
+      uses: supercharge/mongodb-github-action@1.2.0
+      with:
+        mongodb-version: '${{ inputs.mongo }}'    
+        
     - name: Cache
       uses: actions/cache@v2
       with:
