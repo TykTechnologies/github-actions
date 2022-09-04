@@ -67,8 +67,6 @@ jobs:
       - name: Fetch modules
         run: |
           go mod download
-#          go install golang.org/x/tools/cmd/goimports@latest
-#          goimports -w .
 #          gofmt -s -w .
 #          git status
       - name: golangci-lint without auto-fix
@@ -85,12 +83,12 @@ jobs:
           only-new-issues: true
           
           output-file: checkstyle:golangci_lint.xml
-      - name: Disable output variables
-        id: stop_vars
-        run: |
-          export stopMarker=$(uuidgen)
-          echo "::set-output name=stopMarker::$stopMarker"
-          echo "::stop-commands::$stopMarker"
+#       - name: Disable output variables
+#         id: stop_vars
+#         run: |
+#           export stopMarker=$(uuidgen)
+#           echo "::set-output name=stopMarker::$stopMarker"
+#           echo "::stop-commands::$stopMarker"
       - name: golangci-lint with auto-fixes
         id: lint-fix
         uses: gessnerfl/golangci-lint-action@master
@@ -109,9 +107,9 @@ jobs:
           only-new-issues: true
           
           output-file: checkstyle:golangci_lint2.xml
-      - name: Re-enable output variables
-        run: |
-          echo "::${{ steps.stop_vars.outputs.stopMarker }}::"
+#       - name: Re-enable output variables
+#         run: |
+#           echo "::${{ steps.stop_vars.outputs.stopMarker }}::"
       - uses: reviewdog/action-setup@v1
         with:
           reviewdog_version: latest
@@ -119,6 +117,9 @@ jobs:
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          go install golang.org/x/tools/cmd/goimports@latest
+          goimports -w .
+
           TMPFILE=$(mktemp)
           git diff >"${TMPFILE}"
           git diff
