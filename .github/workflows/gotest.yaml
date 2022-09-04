@@ -1,0 +1,31 @@
+name: Go test
+
+on:
+  workflow_call:
+    inputs:
+      
+
+jobs:
+  gotest:
+    name: Go Test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Go Test
+      run: |
+        PKGS="$(go list ./...)"
+        OPTS="$@"
+        if [[ -z "$OPTS" ]]; then
+          OPTS="-race -count=1 -failfast -v"
+        fi
+        
+        for pkg in ${PKGS}; do
+            tags=""
+            if [[ ${pkg} == *"goplugin" ]]; then
+                tags="-tags 'goplugin'"
+            fi
+
+            coveragefile=`echo "$pkg" | awk -F/ '{print $NF}'`
+
+            echo go test ${OPTS} -timeout ${TEST_TIMEOUT} -coverprofile=${coveragefile}.cov ${pkg} ${tags}
+            go test ${OPTS} -timeout ${TEST_TIMEOUT} -coverprofile=${coveragefile}.cov ${pkg} ${tags}
+        done
