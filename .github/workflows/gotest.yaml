@@ -36,6 +36,6 @@ jobs:
 
             coveragefile=`echo "$pkg" | awk -F/ '{print $NF}'`
 
-            echo go test ${OPTS} -timeout ${TEST_TIMEOUT} -coverprofile=${coveragefile}.cov ${pkg} ${tags}
-            go test ${OPTS} -timeout ${TEST_TIMEOUT} -coverprofile=${coveragefile}.cov ${pkg} ${tags}
+            echo go test ${OPTS} -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
+            go test ${OPTS} -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
         done
