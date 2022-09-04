@@ -67,16 +67,10 @@ jobs:
       - name: Fetch modules
         run: |
           go mod download
-          go install golang.org/x/tools/cmd/goimports@latest
-          goimports -w .
-          gofmt -s -w .
-          git status
-      - name: Disable output variables
-        id: stop_vars
-        run: |
-          export stopMarker=$(uuidgen)
-          echo "::set-output name=stopMarker::$stopMarker"
-          echo "::stop-commands::$stopMarker"
+#          go install golang.org/x/tools/cmd/goimports@latest
+#          goimports -w .
+#          gofmt -s -w .
+#          git status
       - name: golangci-lint without auto-fix
         id: lint-no-fix
         uses: gessnerfl/golangci-lint-action@master
@@ -91,9 +85,12 @@ jobs:
           only-new-issues: true
           
           output-file: checkstyle:golangci_lint.xml
-      - name: Re-enable output variables
+      - name: Disable output variables
+        id: stop_vars
         run: |
-          echo "::${{ steps.stop_vars.outputs.stopMarker }}::"
+          export stopMarker=$(uuidgen)
+          echo "::set-output name=stopMarker::$stopMarker"
+          echo "::stop-commands::$stopMarker"
       - name: golangci-lint with auto-fixes
         id: lint-fix
         uses: gessnerfl/golangci-lint-action@master
@@ -112,6 +109,9 @@ jobs:
           only-new-issues: true
           
           output-file: checkstyle:golangci_lint2.xml
+      - name: Re-enable output variables
+        run: |
+          echo "::${{ steps.stop_vars.outputs.stopMarker }}::"
       - uses: reviewdog/action-setup@v1
         with:
           reviewdog_version: latest
@@ -125,6 +125,7 @@ jobs:
           git status
           
           #-diff="git diff"
+          git stash -u && git stash drop
           reviewdog -f=diff -f.diff.strip=1 -reporter=github-pr-review < "${TMPFILE}"
           
 #           cat golangci_lint2.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-review
