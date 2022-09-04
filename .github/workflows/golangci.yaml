@@ -30,9 +30,11 @@ jobs:
             ~/.cache/go-build
             ~/Library/Caches/go-build
             ~\AppData\Local\go-build
-          key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+            ~/.cache/golangci-lint
+            ~/Library/Caches/golangci-lint
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-${{ matrix.go-version }}-
+            ${{ runner.os }}-go-
       - name: Download template
         run: |
           curl 'https://raw.githubusercontent.com/TykTechnologies/github-actions/main/.github/workflows/.golangci.tmpl.yaml' -o .golangci.yaml
@@ -67,75 +69,40 @@ jobs:
       - name: Fetch modules
         run: |
           go mod download
-#          gofmt -s -w .
-#          git status
-#       - name: golangci-lint without auto-fix
-#         id: lint-no-fix
-#         uses: gessnerfl/golangci-lint-action@master
-#         continue-on-error: true
-#         with:
-#           version: latest
+      - name: Download golangci-lint
+        run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
 
-#           # golangci-lint command line arguments.
-#           args: --timeout=5m --verbose
+      - name: golangci-lint
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          $(go env GOPATH)/bin/golangci-lint run --out-format checkstyle --timeout=300s --fix --new=true --new-from-rev=origin/${{ github.base_ref }} ./... > golangci_lint.xml
+      - name: golangci-lint
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          $(go env GOPATH)/bin/golangci-lint run --out-format checkstyle --timeout=300s --new=false --new-from-rev= --issues-exit-code=0 ./... > golangci_lint.xml
 
-#           # If set to true and the action runs on a pull request - the action outputs only newly found issues
-#           only-new-issues: true
-          
-#           output-file: checkstyle:golangci_lint.xml
-#       - name: Disable output variables
-#         id: stop_vars
-#         run: |
-#           export stopMarker=$(uuidgen)
-#           echo "::set-output name=stopMarker::$stopMarker"
-#           echo "::stop-commands::$stopMarker"
-      - name: golangci-lint with auto-fixes
-        id: lint-fix
-        uses: gessnerfl/golangci-lint-action@master
-        continue-on-error: true
-        with:
-          skip-cache: true
-          skip-pkg-cache: true
-          skip-build-cache: true
-          
-          version: latest
-
-          # golangci-lint command line arguments.
-          args: --timeout=5m --verbose --fix --max-issues-per-linter=100 --max-same-issues=100
-
-          # If set to true and the action runs on a pull request - the action outputs only newly found issues
-          only-new-issues: true
-          
-          output-file: checkstyle:golangci_lint.xml
-#       - name: Re-enable output variables
-#         run: |
-#           echo "::${{ steps.stop_vars.outputs.stopMarker }}::"
       - uses: actions/upload-artifact@v3
         with:
           name: golangci-report
           path: "*xml"
+          
       - name: Run reviewdog
+        if: ${{ github.event_name == 'pull_request' }}
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           go install golang.org/x/tools/cmd/goimports@latest
           goimports -w .
+          
+          cat golangci_lint.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-review
 
-#          TMPFILE=$(mktemp)
-#          git diff >"${TMPFILE}"
-#          git diff
-#          git status
-#          
-#          #-diff="git diff"
-#          git stash -u && git stash drop
-#          reviewdog -f=diff -f.diff.strip=1 -reporter=github-pr-review < "${TMPFILE}"
-          
-#           cat golangci_lint2.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-review
-          
-#          cat golangci_lint2.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-check
-      - uses: reviewdog/action-suggester@v1
-        with:
-          tool_name: golint
+          TMPFILE=$(mktemp)
+          git diff >"${TMPFILE}"
+          git diff
+          git status
+         
+          git stash -u && git stash drop
+          reviewdog -f=diff -f.diff.strip=1 -name="Linter" -reporter=github-pr-review < "${TMPFILE}"
       - name: Check on failures
         if: steps.lint-fix.outcome != 'success' || steps.lint-not-fix.outcome != 'success'
         run: exit 1
