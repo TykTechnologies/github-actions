@@ -64,7 +64,7 @@ jobs:
 
             echo go test ${OPTS} -json -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
             
-            gotestsum --junitfile ${coveragefile}.xml --raw-command go test ${OPTS} -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
+            gotestsum --junitfile ${coveragefile}.xml --raw-command go test ${OPTS} --json -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
         done
 
     - uses: actions/upload-artifact@v3
