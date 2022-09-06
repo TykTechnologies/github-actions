@@ -51,20 +51,20 @@ jobs:
         PKGS="$(go list ./...)"
         OPTS="$@"
         if [[ -z "$OPTS" ]]; then
-          OPTS="-race -count=1 -failfast -v"
+          OPTS="--race --count=1 --failfast"
         fi
         
         for pkg in ${PKGS}; do
             tags=""
             if [[ ${pkg} == *"goplugin" ]]; then
-                tags="-tags 'goplugin'"
+                tags="--tags 'goplugin'"
             fi
 
             coveragefile=`echo "$pkg" | awk -F/ '{print $NF}'`
 
             echo go test ${OPTS} -json -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
             
-            gotestsum --junitfile ${coveragefile}.xml ${OPTS} -json -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
+            gotestsum --junitfile ${coveragefile}.xml ${OPTS} -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
         done
 
     - uses: actions/upload-artifact@v3
