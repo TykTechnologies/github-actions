@@ -74,22 +74,22 @@ jobs:
         run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
 
       - name: golangci-lint
-        continue-on-error: true
         if: ${{ github.event_name == 'pull_request' }}
         run: |
           $(go env GOPATH)/bin/golangci-lint run --verbose --out-format 'checkstyle:golangci_lint.xml' --timeout=300s --max-same-issues 50 --fix --new=true --new-from-rev=origin/${{ github.base_ref }} ./...
       - name: golangci-lint
-        continue-on-error: true
         if: ${{ github.event_name == 'push' }}
         run: |
           $(go env GOPATH)/bin/golangci-lint run --verbose --out-format 'checkstyle:golangci_lint.xml' --timeout=300s --new=false --new-from-rev= ./...
 
       - uses: actions/upload-artifact@v3
+        if: ${{ always() }}
         with:
           name: golangci-report
           path: "*xml"
           
       - uses: reviewdog/action-setup@v1
+        if: ${{ always() }}
         with:
           reviewdog_version: latest # Optional. [latest,nightly,v.X.Y.Z]
       - name: Run reviewdog
@@ -109,8 +109,5 @@ jobs:
          
           git stash -u && git stash drop
           reviewdog -f=diff -f.diff.strip=1 -name="Linter" -reporter=github-pr-review < "${TMPFILE}"
-      - name: Check on failures
-        if: steps.lint-fix.outcome != 'success' || steps.lint-not-fix.outcome != 'success'
-        run: exit 1
 
 # cat golangci_lint.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-check
