@@ -40,9 +40,14 @@ jobs:
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-go-
+          
+    # Alternatively, install using go install
+    - name: Set up gotestfmt
+      run: go install github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest
+       
+        
     - name: Go Test
       id: test
-      continue-on-error: true
       run: |
         PKGS="$(go list ./...)"
         OPTS="$@"
@@ -59,12 +64,18 @@ jobs:
             coveragefile=`echo "$pkg" | awk -F/ '{print $NF}'`
 
             echo go test ${OPTS} -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
-            go test ${OPTS} -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
+            set -euo pipefail
+            go test ${OPTS} -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags} | tee /tmp/gotest.log | gotestfmt
         done
+    # Upload the original go test log as an artifact for later review.
+    - name: Upload test log
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-log
+        path: /tmp/gotest.log
+        if-no-files-found: error
     - uses: actions/upload-artifact@v3
       with:
         name: coverage
         path: "*cov"
-    - name: Check on failures
-      if: steps.test.outcome != 'success'
-      run: exit 1
