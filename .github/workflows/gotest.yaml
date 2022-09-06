@@ -45,7 +45,6 @@ jobs:
     - name: Set up gotestfmt
       run: go install github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest
        
-        
     - name: Go Test
       id: test
       run: |
@@ -63,9 +62,9 @@ jobs:
 
             coveragefile=`echo "$pkg" | awk -F/ '{print $NF}'`
 
-            echo go test ${OPTS} -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
+            echo go test ${OPTS} -json -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
             set -euo pipefail
-            go test ${OPTS} -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags} | tee /tmp/gotest.log | gotestfmt
+            go test ${OPTS} -json -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags} | tee /tmp/gotest.log | gotestfmt
         done
     # Upload the original go test log as an artifact for later review.
     - name: Upload test log
