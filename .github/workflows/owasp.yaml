@@ -1,6 +1,7 @@
-name: OWASP scanner 
+---
+name: OWASP scanner
 
-on:
+on:  # yamllint disable-line rule:truthy
   workflow_call:
     inputs:
       target:
@@ -13,9 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: OWASP Zap
-      uses: zaproxy/action-full-scan@v0.4.0
-      with:
-        target: ${{ inputs.target }}
-        cmd_options: '-a'
-        allow_issue_writing: false
+      - name: OWASP Zap
+        uses: zaproxy/action-full-scan@v0.4.0
+        with:
+          target: ${{ inputs.target }}
+          cmd_options: '-a'
+          allow_issue_writing: false

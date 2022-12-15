@@ -1,3 +1,4 @@
+---
 issues:
   exclude:
     - "^exported: exported var Err[A-Za-z0-9]+ should have comment or be unexported$"
@@ -25,12 +26,12 @@ linters:
     - govet
     - gosec
     - ineffassign
-#    - lll
+    # - lll
     - misspell
     - revive
     - staticcheck
     - whitespace
-#    - wsl
+    # - wsl
 
 linters-settings:
   auto-fix: true
@@ -79,7 +80,7 @@ linters-settings:
     enable-all: true
 
   lll:
-    auto-fix: true  
+    auto-fix: true
     # Max line length; lines longer will be reported
     # '\t' is counted as 1 character by default, and can be changed with the 'tab-width' option
     line-length: 120
@@ -93,21 +94,21 @@ linters-settings:
     # Setting locale to US will correct the British spelling of 'colour' to 'color'.
 
     # Intentionally leaving this unset as most engineering terminology skews US however Tyk standard is UK.
-    #locale: UK
+    # locale: UK
 
     ignore-words: []
 
   staticcheck:
     auto-fix: true
     # https://staticcheck.io/docs/options#checks
-    checks: ["all"]
+    checks: [ "all" ]
     # Select the Go version to target.
     go: "1.17"
 
   whitespace:
     auto-fix: true
-    multi-if: false # Enforces newlines (or comments) after every multi-line if statement
-    multi-func: false # Enforces newlines (or comments) after every multi-line function signature
+    multi-if: false  # Enforces newlines (or comments) after every multi-line if statement
+    multi-func: false  # Enforces newlines (or comments) after every multi-line function signature
 
   wsl:
     auto-fix: true
