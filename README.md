@@ -84,3 +84,15 @@ jobs:
   govulncheck:
     uses: TykTechnologies/github-actions/.github/workflows/govulncheck.yaml@main
 ```
+
+## Yamllint
+Popular linter for yaml linter with good defaults.
+
+Example usage:
+```
+jobs:
+  yamllint:
+    uses: TykTechnologies/github-actions/.github/workflows/yamllint.yaml@main
+  with:
+    main_branch: master
+```

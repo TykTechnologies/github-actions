@@ -1,0 +1,32 @@
+---
+name: Yamllint
+
+on:  # yamllint disable-line rule:truthy
+  workflow_call:
+  push:
+
+inputs:
+  yamllint_config_filepath:
+    description: 'Custom yamllint config path'
+    required: false
+    default: '' # using default
+
+jobs:
+  yamllint:
+    name: Yamllint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git - checkout current ref
+        uses: actions/checkout@v3
+
+      - name: Download template
+        run: |
+          curl 'https://raw.githubusercontent.com/TykTechnologies/github-actions/add/yamllint/.github/workflows/.yamllint.tmpl.yaml' -o .yamllint.yaml
+
+      - name: Run yaml linter
+        uses: karancode/yamllint-github-action@master
+        with:
+          yamllint_file_or_dir: '.'
+          yamllint_config_datapath: .yamllint.yaml
+          yamllint_strict: strict
+          yamllint_comment: true
