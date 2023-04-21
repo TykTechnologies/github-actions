@@ -52,7 +52,3 @@ jobs:
       - name: Upload SBOM
         run: |
            curl '$DEPDASH_URL' -X 'POST' -H 'X-API-Key: $DEPDASH_KEY' -H "Content-Type: multipart/form-data" -F "autoCreate=true" -F "projectName=${GITHUB_REPOSITORY##*/}" -F "projectVersion=${GITHUB_REF#refs/heads/}" -F "bom=@./sbom.json" -vvv
-          
-        uses: sonatype-nexus-community/nancy-github-action@main
-
-          goListFile: ${{ inputs.dir }}/go.list
