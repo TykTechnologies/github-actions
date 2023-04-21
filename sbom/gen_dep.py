@@ -28,19 +28,22 @@ sbom["metadata"]["timestamp"] = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M
 
 depRefs = []
 
-with open(filenames[0], 'r') as file:
-    spec = yaml.safe_load(file)
-    for dep in spec["spec"]["dependsOnExt"]:
-        for v in dep["versions"]:
-            depUUID = str(uuid.uuid4())
-            depRefs.append(depUUID)
-            sbom["components"].append({
-                "bom-ref": depUUID,
-                "type": "application",
-                "name": (dep["name"] + " " + str(v)),
-                "version": str(v),
-                "cpe": (dep["cpe"] + ":" + str(v))
-            })
+try:
+    with open(filenames[0], 'r') as file:
+        spec = yaml.safe_load(file)
+        for dep in spec["spec"]["dependsOnExt"]:
+            for v in dep["versions"]:
+                depUUID = str(uuid.uuid4())
+                depRefs.append(depUUID)
+                sbom["components"].append({
+                    "bom-ref": depUUID,
+                    "type": "application",
+                    "name": (dep["name"] + " " + str(v)),
+                    "version": str(v),
+                    "cpe": (dep["cpe"] + ":" + str(v))
+                })
+except:
+    pass
 
 sbom["dependencies"] = [
     {
