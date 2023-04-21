@@ -5,6 +5,10 @@ on:
     secrets:
       TF_API_TOKEN:
         required: true
+      DEPDASH_URL:
+        required: true
+      DEPDASH_KEY:
+        required: true
     
 jobs:
   sbom:
