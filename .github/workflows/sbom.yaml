@@ -72,7 +72,7 @@ jobs:
       - name: Merge SBOM
         run: |
           curl https://raw.githubusercontent.com/TykTechnologies/github-actions/main/sbom/merge.py > merge.py
-          python3 merge.py source.sbom.json docker.sbom.json deps.sbom.json sbom.json
+          python3 merge.py source.sbom.json docker.sbom.json deps.sbom.json > sbom.json
       
       - name: Upload SBOM
         run: |
