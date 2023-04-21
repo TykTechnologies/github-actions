@@ -1,0 +1,58 @@
+name: Sbom
+
+on:
+  workflow_call:
+    inputs:
+    
+jobs:
+  sbom:
+    name: SBOM
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+        
+      - name: Configure AWS credentials for use
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ steps.aws-creds.outputs.key }}
+          aws-secret-access-key: ${{ steps.aws-creds.outputs.secret }}
+          aws-region: ${{ steps.aws-creds.outputs.region }}
+          
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Generate Source code SBOM
+        uses: aquasecurity/trivy-action@master
+        with:
+           scan-type: 'fs'
+           format: 'cyclonedx'
+           output: 'source.sbom.json'
+           image-ref: '.'
+
+      - name: Generate Docker SBOM
+        uses: aquasecurity/trivy-action@master
+        with:
+          format: 'cyclonedx'
+          output: 'docker.sbom.json'
+          image-ref: '${{ steps.login-ecr.outputs.registry }}/tyk-analytics:${{ github.sha }}'
+
+      - name: Generate Dependencies SBOM
+        run: |
+          curl https://raw.githubusercontent.com/TykTechnologies/github-actions/main/sbom/gen_dep.py > gen_dep.py
+          python3 gen_dep.py service.yaml > deps.sbom.json
+
+      - name: Merge SBOM
+        run: |
+          curl https://raw.githubusercontent.com/TykTechnologies/github-actions/main/sbom/merge.py > merge.py
+          python3 merge.py source.sbom.json docker.sbom.json deps.sbom.json sbom.json
+      
+      - name: Upload SBOM
+        run: |
+           curl '$DEPDASH_URL' -X 'POST' -H 'X-API-Key: $DEPDASH_KEY' -H "Content-Type: multipart/form-data" -F "autoCreate=true" -F "projectName=${GITHUB_REPOSITORY##*/}" -F "projectVersion=${GITHUB_REF#refs/heads/}" -F "bom=@./sbom.json" -vvv
+          
+        uses: sonatype-nexus-community/nancy-github-action@main
+
+          goListFile: ${{ inputs.dir }}/go.list
