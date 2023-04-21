@@ -76,6 +76,6 @@ jobs:
       
       - name: Upload SBOM
         run: |
-           echo ${{GITHUB_REF##*/}}
-           echo ${{GITHUB_REF}}
+           echo "${{GITHUB_REF##*/}}"
+           echo "${{GITHUB_REF}}"
            curl '${{secrets.DEPDASH_URL}}/api/v1/bom' -X 'POST' -H 'X-API-Key: ${{secrets.DEPDASH_KEY}}' -H "Content-Type: multipart/form-data" -F "autoCreate=true" -F "projectName=${GITHUB_REPOSITORY##*/}" -F "projectVersion=${GITHUB_REF##*/}" -F "bom=@./sbom.json" -vvv
