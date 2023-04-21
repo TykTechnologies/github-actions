@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
+        with:
+          submodules: true
         
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
