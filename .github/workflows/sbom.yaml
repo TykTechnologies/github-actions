@@ -2,6 +2,9 @@ name: Sbom
 
 on:
   workflow_call:
+    secrets:
+      TF_API_TOKEN:
+        required: true
     
 jobs:
   sbom:
