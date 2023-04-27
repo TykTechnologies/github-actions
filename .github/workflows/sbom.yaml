@@ -9,6 +9,8 @@ on:
         required: true
       DEPDASH_KEY:
         required: true
+      ORG_GH_TOKEN:
+        required: true
     
 jobs:
   sbom:
@@ -19,6 +21,8 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
         with:
+          fetch-depth: 1
+          token: ${{ secrets.ORG_GH_TOKEN }}
           submodules: true
         
       - name: Setup Terraform
