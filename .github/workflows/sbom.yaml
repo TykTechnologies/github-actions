@@ -35,13 +35,7 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::754489498669:role/ecr_rw_tyk
           role-session-name: cipush
-          aws-region: eu-central-  
-      - name: Configure AWS credentials for use
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ steps.aws-creds.outputs.key }}
-          aws-secret-access-key: ${{ steps.aws-creds.outputs.secret }}
-          aws-region: ${{ steps.aws-creds.outputs.region }}
+          aws-region: eu-central-1
           
       - name: Login to Amazon ECR
         id: login-ecr
