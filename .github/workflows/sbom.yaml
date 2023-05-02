@@ -29,21 +29,13 @@ jobs:
         uses: hashicorp/setup-terraform@v2
         with:
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
-          terraform_wrapper: false
+          terraform_wrapper: fal
 
-      - name: Get AWS creds from Terraform remote state
-        id: aws-creds
-        run: |
-          cd ci/terraform
-          terraform init -input=false
-          terraform refresh 2>&1 >/dev/null
-          eval $(terraform output -json tyk-analytics | jq -r 'to_entries[] | [.key,.value] | join("=")')
-          region=$(terraform output region | xargs)
-          [ -z "$key" -o -z "$secret" -o -z "$region" ] && exit 1
-          echo "secret=$secret" >> $GITHUB_OUTPUT
-          echo "key=$key" >> $GITHUB_OUTPUT
-          echo "region=$region" >> $GITHUB_OUTPUT
-        
+      - uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          role-to-assume: arn:aws:iam::754489498669:role/ecr_rw_tyk
+          role-session-name: cipush
+          aws-region: eu-central-  
       - name: Configure AWS credentials for use
         uses: aws-actions/configure-aws-credentials@v1
         with:
