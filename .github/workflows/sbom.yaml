@@ -68,7 +68,7 @@ jobs:
         with:
           format: 'cyclonedx'
           output: 'docker.sbom.json'
-          image-ref: '${{ steps.login-ecr.outputs.registry }}/tyk-analytics:${{ github.sha }}'
+          image-ref: '${{ steps.login-ecr.outputs.registry }}/${{ github.event.repository.name}}:${{ github.sha }}'
 
       - name: Generate Dependencies SBOM
         run: |
