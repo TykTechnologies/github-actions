@@ -89,3 +89,15 @@ jobs:
            fi
             
            curl '${{secrets.DEPDASH_URL}}/api/v1/bom' -X 'POST' -H 'X-API-Key: ${{secrets.DEPDASH_KEY}}' -H "Content-Type: multipart/form-data" -F "autoCreate=true" -F "projectName=${GITHUB_REPOSITORY##*/}" -F "projectVersion=${BRANCH_NAME}" -F "bom=@./sbom.json" -vvv
+           
+           PROJECT_UUID=$(curl --silent '${{secrets.DEPDASH_URL}}/api/v1/project/lookup?name=${GITHUB_REPOSITORY##*/}&version=${BRANCH_NAME}' -H 'X-API-Key: ${{secrets.DEPDASH_KEY}}' | jq -r .uuid)
+           
+           curl --request POST \
+            --url https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.event.workflow_run.head_commit.id }} \
+            --header 'authorization: Bearer ${{ secrets.ORG_GH_TOKEN }}' \
+            --header 'content-type: application/json' \
+            --data '{
+              "state": "success",
+              "context": "Dependency Track",
+              "target_url": "https://deptrack.tyk.io/projects/${PROJECT_UUID}"
+              }'
