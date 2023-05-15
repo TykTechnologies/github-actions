@@ -13,10 +13,29 @@ on:
         required: true
     
 jobs:
+  changedfiles:
+    runs-on: ubuntu-latest
+    # Map a step output to a job output
+    outputs:
+      go: ${{ steps.changes.outputs.go }}
+      npm: ${{ steps.changes.outputs.npm }}
+      ci: ${{ steps.changes.outputs.ci }}
+    steps:
+        # Make sure we have some code to diff.
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Get changed files
+        id: changes
+        # Set outputs using the command.
+        run: |
+          echo "::set-output name=go::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep go.mod$ | xargs)"
+          echo "::set-output name=npm::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep package.json$ | xargs)"    
+          echo "::set-output name=ci::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep ci/ | xargs)"          
   sbom:
     name: SBOM
     runs-on: ubuntu-latest
-
+    needs: changedfiles
+    if: startsWith(github.ref, 'refs/heads/release-') || startsWith(github.ref, 'refs/heads/master') || needs.changedfiles.outputs.go || needs.changedfiles.outputs.npm || needs.changedfiles.outputs.ci
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
@@ -90,16 +109,5 @@ jobs:
             
            curl '${{secrets.DEPDASH_URL}}/api/v1/bom' -X 'POST' -H 'X-API-Key: ${{secrets.DEPDASH_KEY}}' -H "Content-Type: multipart/form-data" -F "autoCreate=true" -F "projectName=${GITHUB_REPOSITORY##*/}" -F "projectVersion=${BRANCH_NAME}" -F "bom=@./sbom.json" -vvv
            
-           curl -vvv '${{secrets.DEPDASH_URL}}/api/v1/project/lookup?name=${GITHUB_REPOSITORY##*/}&version=${BRANCH_NAME}' -H 'X-API-Key: ${{secrets.DEPDASH_KEY}}
-           
-           PROJECT_UUID=$(curl --silent '${{secrets.DEPDASH_URL}}/api/v1/project/lookup?name=${GITHUB_REPOSITORY##*/}&version=${BRANCH_NAME}' -H 'X-API-Key: ${{secrets.DEPDASH_KEY}}' | jq -r .uuid)
-           
-           curl --request POST \
-            --url https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.event.workflow_run.head_commit.id }} \
-            --header 'authorization: Bearer ${{ secrets.ORG_GH_TOKEN }}' \
-            --header 'content-type: application/json' \
-            --data '{
-              "state": "success",
-              "context": "Dependency Track",
-              "target_url": "https://deptrack.tyk.io/projects/${PROJECT_UUID}"
-              }'
+           # curl -vvv '${{secrets.DEPDASH_URL}}/api/v1/project/lookup?name=${GITHUB_REPOSITORY##*/}&version=${BRANCH_NAME}' -H 'X-API-Key: ${{secrets.DEPDASH_KEY}}
+           # PROJECT_UUID=$(curl --silent '${{secrets.DEPDASH_URL}}/api/v1/project/lookup?name=${GITHUB_REPOSITORY##*/}&version=${BRANCH_NAME}' -H 'X-API-Key: ${{secrets.DEPDASH_KEY}}' | jq -r .uuid)
