@@ -27,20 +27,18 @@ for idx, filename in enumerate(filenames):
 
 # Set groups
 for idx, cp in enumerate(base_sbom["components"]):
-    if "purl" not in cp:
-        continue
+    if "purl" in cp:
+        if cp["purl"].startswith("pkg:golang"):
+            cp["group"] = "gomod"
 
-    if cp["purl"].startswith("pkg:golang"):
-        cp["group"] = "gomod"
-    
-    if cp["purl"].startswith("pkg:npm"):
-        cp["group"] = "npm"
-    
-    if cp["purl"].startswith("pkg:deb"):
-        cp["group"] = "deb"
-        
-    if cp["cpe"].startswith("cpe"):
-        cp["group"] = "software"
+        if cp["purl"].startswith("pkg:npm"):
+            cp["group"] = "npm"
+
+        if cp["purl"].startswith("pkg:deb"):
+            cp["group"] = "deb"
+            
+    if "type" in cp and cp["type"] == "application":
+        cp["group"] = "application"
 
     base_sbom["components"][idx] = cp
 
