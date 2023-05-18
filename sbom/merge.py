@@ -38,6 +38,9 @@ for idx, cp in enumerate(base_sbom["components"]):
     
     if cp["purl"].startswith("pkg:deb"):
         cp["group"] = "deb"
+        
+    if cp["cpe"].startswith("cpe"):
+        cp["group"] = "software"
 
     base_sbom["components"][idx] = cp
 
