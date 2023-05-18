@@ -1,0 +1,21 @@
+name: JIRA Issue Check
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+jobs:
+  check-jira-issue:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Check JIRA Issue Number
+        id: jira-issue-check
+        run: ./bin/jira-issue-check.sh
+        env:
+          PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
+          TOKEN: '${{ secrets.ORG_GH_TOKEN }}'
