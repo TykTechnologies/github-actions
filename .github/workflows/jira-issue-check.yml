@@ -17,6 +17,7 @@ jobs:
         id: jira-issue-check
         run: |
           curl https://raw.githubusercontent.com/TykTechnologies/github-actions/JIRA-issue-checker/bin/jira-issue-check.sh > jira-issue-check.sh
+          chmod +x jira-issue-check.sh
           ./jira-issue-check.sh
         env:
           PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
