@@ -15,7 +15,9 @@ jobs:
 
       - name: Check JIRA Issue Number
         id: jira-issue-check
-        run: ./bin/jira-issue-check.sh
+        run: |
+          curl https://raw.githubusercontent.com/TykTechnologies/github-actions/JIRA-issue-checker/bin/jira-issue-check.sh > jira-issue-check.sh
+          ./jira-issue-check.sh
         env:
           PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
           TOKEN: '${{ secrets.ORG_GH_TOKEN }}'

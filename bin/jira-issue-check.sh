@@ -24,7 +24,6 @@ if echo "$CHANGED_FILES" | grep -vqE '.*\.github/workflows/.*\.ya?ml$|.*bin/.*';
     COMMENT_BODY="JIRA issue number is missing in the branch name and the pull request title. Please include the JIRA issue number in either the branch name or the pull request title."
     PAYLOAD=$(echo '{}' | jq --arg body "$COMMENT_BODY" '.body = $body')
     URL=$(jq -r .pull_request.comments_url "$GITHUB_EVENT_PATH")
-    echo $TOKEN
     curl -s -X POST -H "Authorization: token $TOKEN" -d "$PAYLOAD" "$URL"
 
     exit 1
@@ -43,5 +42,5 @@ if echo "$CHANGED_FILES" | grep -vqE '.*\.github/workflows/.*\.ya?ml$|.*bin/.*';
   echo "valid=true" >> $GITHUB_OUTPUT
 else
   echo "Changes to GitHub workflow files or the bin folder detected. Skipping JIRA issue number check."
-  echo "::set-output name=valid::true"  # Set output valid to true
+  echo "valid=true" >> $GITHUB_OUTPUT
 fi
