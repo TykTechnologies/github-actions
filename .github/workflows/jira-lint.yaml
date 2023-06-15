@@ -13,4 +13,4 @@ jobs:
           jira-base-url: https://tyktech.atlassian.net/
           skip-branches: '^(release-[0-9.-]+(lts)?|master|main)$'
           validate_issue_status: true
-          allowed_issue_statuses: "In Progress, In Review"
+          allowed_issue_statuses: "In Dev, In Progress, In Review"
