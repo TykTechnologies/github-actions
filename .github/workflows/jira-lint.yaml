@@ -5,7 +5,7 @@ jobs:
   jira-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: cleartax/jira-lint@master
+      - uses: cyrus-za/jira-lint@master
         name: jira-lint
         with:
           github-token: ${{ secrets.ORG_GH_TOKEN }}
@@ -13,4 +13,4 @@ jobs:
           jira-base-url: https://tyktech.atlassian.net/
           skip-branches: '^(release-[0-9.-]+(lts)?|master|main)$'
           validate_issue_status: true
-          allowed_issue_statuses: "In Dev, In Progress, In Review"
+          allowed_issue_statuses: "In Dev, In Code Review, Ready For Testing, In Test, In Progress, In Review"
