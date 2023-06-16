@@ -5,7 +5,7 @@ jobs:
   jira-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: cyrus-za/jira-lint@master 
+      - uses: cyrus-za/jira-lint@master
         name: jira-lint
         with:
           github-token: ${{ secrets.ORG_GH_TOKEN }}
