@@ -1,5 +1,11 @@
 name: jira-lint
-on: [pull_request]
+on:
+  workflow_call:
+    secrets:
+      JIRA_TOKEN:
+        required: true
+      ORG_GH_TOKEN:
+        required: true
 
 jobs:
   jira-lint:
