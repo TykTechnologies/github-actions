@@ -22,6 +22,8 @@ jobs:
       go: ${{ steps.changes.outputs.go }}
       npm: ${{ steps.changes.outputs.npm }}
       ci: ${{ steps.changes.outputs.ci }}
+      docker: ${{ steps.changes.outputs.docker }}
+      github: ${{ steps.changes.outputs.github }}
     steps:
         # Make sure we have some code to diff.
       - name: Checkout repository
