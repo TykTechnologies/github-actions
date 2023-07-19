@@ -68,12 +68,18 @@ jobs:
           
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
+        env:
+          DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
+        if: env.DOCKER_IMAGE == null
         with:
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
           terraform_wrapper: false
           
       - name: Get AWS creds from Terraform remote state
         id: aws-creds
+        env:
+          DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
+        if: env.DOCKER_IMAGE == null
         run: |
            cd ci/terraform
            terraform init -input=false
@@ -87,12 +93,18 @@ jobs:
 
       - name: Configure AWS credentials for use
         uses: aws-actions/configure-aws-credentials@v1
+        env:
+          DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
+        if: env.DOCKER_IMAGE == null
         with:
           aws-access-key-id: ${{ steps.aws-creds.outputs.key }}
           aws-secret-access-key: ${{ steps.aws-creds.outputs.secret }}
           aws-region: ${{ steps.aws-creds.outputs.region }}
           
       - name: Login to Amazon ECR
+        env:
+          DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
+        if: env.DOCKER_IMAGE == null
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
