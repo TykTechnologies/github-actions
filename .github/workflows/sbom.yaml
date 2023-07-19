@@ -33,11 +33,18 @@ jobs:
         id: changes
         # Set outputs using the command.
         run: |
-          echo "::set-output name=go::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep go.mod$ | xargs)"
-          echo "::set-output name=npm::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep package.json$ | xargs)"    
-          echo "::set-output name=ci::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep ci/ | xargs)"
-          echo "::set-output name=docker::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep Dockerfile | xargs)"
-          echo "::set-output name=workflows::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep workflows | xargs)"
+          if [ -n "${{ github.event.pull_request.head.sha }}" ]; then
+            # If pull request event is available, use the PR commit SHA
+            COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            # If pull request event is not available, use the push commit SHA
+            COMMIT_SHA="${{ github.sha }}"
+          fi
+          echo "::set-output name=go::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} $COMMIT_SHA | grep go.mod$ | xargs)"
+          echo "::set-output name=npm::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} $COMMIT_SHA | grep package.json$ | xargs)"    
+          echo "::set-output name=ci::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} $COMMIT_SHA | grep ci/ | xargs)"
+          echo "::set-output name=docker::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} $COMMIT_SHA | grep Dockerfile | xargs)"
+          echo "::set-output name=workflows::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} $COMMIT_SHA | grep workflows | xargs)"
   sbom:
     name: SBOM
     runs-on: ubuntu-latest
