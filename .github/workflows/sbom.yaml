@@ -34,7 +34,7 @@ jobs:
           echo "::set-output name=npm::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep package.json$ | xargs)"    
           echo "::set-output name=ci::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep ci/ | xargs)"
           echo "::set-output name=docker::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep Dockerfile | xargs)"
-          echo "::set-output name=workflows::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep .workflows | xargs)"
+          echo "::set-output name=workflows::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep workflows | xargs)"
   sbom:
     name: SBOM
     runs-on: ubuntu-latest
