@@ -57,7 +57,7 @@ jobs:
     name: SBOM
     runs-on: ubuntu-latest
     needs: changedfiles
-    if: contains(github.ref, 'release-') || contains(github.ref, 'master') || needs.changedfiles.outputs.go || needs.changedfiles.outputs.npm || needs.changedfiles.outputs.ci || needs.changedfiles.outputs.docker || needs.changedfiles.outputs.workflows
+    if: contains(github.ref, 'release-') ||  contains(github.head_ref, 'release-') || contains(github.ref, 'master') || needs.changedfiles.outputs.go || needs.changedfiles.outputs.npm || needs.changedfiles.outputs.ci || needs.changedfiles.outputs.docker || needs.changedfiles.outputs.workflows
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
