@@ -86,7 +86,7 @@ jobs:
 
       - name: Generate Docker SBOM
         uses: aquasecurity/trivy-action@master
-        if: secrets.DOCKER_IMAGE == ''
+        if: ${{ secrets.DOCKER_IMAGE == ''}}
         with:
           format: 'cyclonedx'
           output: 'docker.sbom.json'
@@ -94,7 +94,7 @@ jobs:
           
       - name: Generate Docker SBOM
         uses: aquasecurity/trivy-action@master
-        if: secrets.DOCKER_IMAGE
+        if: ${{ secrets.DOCKER_IMAGE }}
         with:
           format: 'cyclonedx'
           output: 'docker.sbom.json'
