@@ -5,6 +5,8 @@ on:
     secrets:
       TF_API_TOKEN:
         required: true
+      DOCKER_IMAGE:
+        required: false
       DEPDASH_URL:
         required: true
       DEPDASH_KEY:
@@ -35,7 +37,7 @@ jobs:
     name: SBOM
     runs-on: ubuntu-latest
     needs: changedfiles
-    if: startsWith(github.ref, 'refs/heads/release-') || startsWith(github.ref, 'refs/heads/master') || needs.changedfiles.outputs.go || needs.changedfiles.outputs.npm || needs.changedfiles.outputs.ci
+    if: startsWith(github.ref, 'refs/heads/release-') || contains(github.ref, 'master') || needs.changedfiles.outputs.go || needs.changedfiles.outputs.npm || needs.changedfiles.outputs.ci
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
@@ -84,10 +86,20 @@ jobs:
 
       - name: Generate Docker SBOM
         uses: aquasecurity/trivy-action@master
+        if: ${{ !secrets.DOCKER_IMAGE }}
         with:
           format: 'cyclonedx'
           output: 'docker.sbom.json'
           image-ref: '${{ steps.login-ecr.outputs.registry }}/${{ github.event.repository.name}}:${{ github.sha }}'
+          
+      - name: Generate Docker SBOM
+        uses: aquasecurity/trivy-action@master
+        if: ${{ secrets.DOCKER_IMAGE }}
+        with:
+          format: 'cyclonedx'
+          output: 'docker.sbom.json'
+          image-ref: '${{ secrets.DOCKER_IMAGE }}'
+
 
       - name: Generate Dependencies SBOM
         run: |
