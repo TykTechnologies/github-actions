@@ -10,6 +10,9 @@ on:
         type: string
       redis:
         type: string
+      test-options:
+        type: string
+        default: "-race -count=1 -failfast -v"
 
 jobs:
   gotest:
@@ -49,10 +52,7 @@ jobs:
       id: test
       run: |
         PKGS="$(go list ./...)"
-        OPTS="$@"
-        if [[ -z "$OPTS" ]]; then
-          OPTS="-race -count=1 -failfast -v"
-        fi
+        OPTS="${{ inputs.test-options }}"
         
         for pkg in ${PKGS}; do
             tags=""
