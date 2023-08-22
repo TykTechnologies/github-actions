@@ -1,5 +1,9 @@
 on:
   workflow_call:
+    inputs:
+      config:
+        default: "auto"
+        type: string
 
 jobs:
   semgrep:
@@ -19,7 +23,8 @@ jobs:
       - name: Semgrep scan
         id: scan
         run: |
-          semgrep --config auto --output semgrep-report.txt --error --exclude=docs
+          semgrep --config ${{ inputs.config }} --output semgrep-report.txt --error --exclude=docs
+    
       - name: Archive Semgrep report
         if: ${{ always() }}
         uses: actions/upload-artifact@v3
