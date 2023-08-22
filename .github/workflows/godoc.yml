@@ -2,6 +2,12 @@ name: Print Go API changes
 
 on:
   workflow_call:
+    secrets:
+      ORG_GH_TOKEN:
+        required: true
+
+env:
+  GOPRIVATE: github.com/TykTechnologies
 
 jobs:
   test:
@@ -9,6 +15,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Use GitHub Token
+        env:
+          TOKEN: '${{ secrets.ORG_GH_TOKEN }}'
+        run: >
+          git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
+
       - name: Checkout repo
         uses: TykTechnologies/github-actions/.github/actions/checkout-pr@main
 
