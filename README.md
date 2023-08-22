@@ -18,6 +18,20 @@ jobs:
         uses: TykTechnologies/github-actions/.github/actions/checkout-pr@main
 ```
 
+## Print Go API Changes
+
+For a PR, the action will print the changes in `go doc` output. This
+surfaces API changes (function removals, renames, additions), as well as
+comment changes.
+
+Example usage:
+
+```
+jobs:
+  godoc:
+    uses: TykTechnologies/github-actions/.github/workflows/godoc.yml@main
+```
+
 ## OWASP scanner
 Example usage:
 
