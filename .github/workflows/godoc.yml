@@ -9,16 +9,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout GH actions
+      - name: Checkout repo
+        uses: TykTechnologies/github-actions/.github/actions/checkout-pr@main
+
+      - name: Checkout exp
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
           repository: TykTechnologies/exp
           ref: main
           path: exp
-
-      - name: Checkout repo
-        uses: TykTechnologies/github-actions/.github/actions/checkout-pr@main
 
       - name: Setup Go
         uses: actions/setup-go@v4
