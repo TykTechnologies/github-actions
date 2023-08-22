@@ -2,6 +2,22 @@
 
 Collection of shared github actions which are used in our org. 
 
+## PR Checkout
+
+The checkout PR action will fetch only the commits that belong to the PR.
+This is required for various code analysis tooling, including sonarcloud.
+
+Example usage:
+
+```
+jobs:
+  golangci-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: TykTechnologies/github-actions/.github/actions/checkout-pr@main
+```
+
 ## OWASP scanner
 Example usage:
 

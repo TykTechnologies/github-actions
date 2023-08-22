@@ -1,0 +1,25 @@
+name: 'Checkout PR'
+description: >-
+  Checkout the exact number of PR commits + 1 (base_ref).
+inputs:
+  jobname:
+    default: ${{ github.job }}
+runs:
+  using: "composite"
+  steps:
+    - name: 'PR commits + 1'
+      shell: bash
+      run: echo "PR_FETCH_DEPTH=$(( ${{ github.event.pull_request.commits }} + 1 ))" >> "${GITHUB_ENV}"
+
+    - name: 'Checkout PR branch and all PR commits'
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.pull_request.head.ref }}
+        fetch-depth: ${{ env.PR_FETCH_DEPTH }}
+        lfs: true
+
+    - name: 'Fetch the other branch with enough history for a common merge-base commit'
+      shell: bash
+      run: |
+        git fetch origin ${{ github.event.pull_request.base.ref }}
+        git log -n 1
