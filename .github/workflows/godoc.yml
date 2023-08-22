@@ -2,9 +2,13 @@ name: Print Go API changes
 
 on:
   workflow_call:
+    secrets:
+      ORG_GH_TOKEN:
+        required: true
 
 env:
   GOPRIVATE: github.com/TykTechnologies
+
 jobs:
   test:
     name: Detect Go API changes
