@@ -5,13 +5,18 @@ on:
 
 env:
   GOPRIVATE: github.com/TykTechnologies
-
 jobs:
   test:
     name: Detect Go API changes
     runs-on: ubuntu-latest
 
     steps:
+      - name: Use GitHub Token
+        env:
+          TOKEN: '${{ secrets.ORG_GH_TOKEN }}'
+        run: >
+          git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
+
       - name: Checkout repo
         uses: TykTechnologies/github-actions/.github/actions/checkout-pr@main
 
