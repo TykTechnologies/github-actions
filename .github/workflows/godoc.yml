@@ -18,7 +18,7 @@ jobs:
           path: /tmp/exp
 
       - name: Checkout repo
-        uses: ../actions/checkout-pr@main
+        uses: ./.github/actions/checkout-pr@main
 
       - name: Setup Go
         uses: actions/setup-go@v4
