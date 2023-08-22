@@ -1,0 +1,79 @@
+name: Print Go API changes
+
+on:
+  workflow_call:
+
+jobs:
+  test:
+    name: Detect Go API changes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout GH actions
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+          repository: TykTechnologies/exp
+          ref: main
+          path: /tmp/exp
+
+      - name: Checkout repo
+        uses: ../actions/checkout-pr@main
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.20"
+
+      - name: Install Task
+        uses: arduino/setup-task@v1
+        with:
+          version: 3
+
+      - name: Put taskfiles into place
+        run: |
+          rsync --del -a /tmp/exp/.taskfiles/ ./.taskfiles/
+
+      - name: Set up comment author
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Collect API docs
+        run: |
+          go mod tidy
+          task -t .taskfiles/godoc/Taskfile.yml > current.txt
+          git checkout -- .
+          git checkout ${{ github.base_ref }}
+          go mod tidy
+          rsync -a /tmp/.taskfiles/ .taskfiles/
+          task -t .taskfiles/godoc/Taskfile.yml > prev.txt
+
+      - name: Diff API docs
+        id: api-check
+        run: |
+          set +e
+          diff -u prev.txt current.txt > changes.txt
+          echo "diff-output<<EOF" >> $GITHUB_OUTPUT
+          cat changes.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Find Comment
+        uses: peter-evans/find-comment@v2
+        id: fc
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: API Changes
+
+      - name: Create or update comment
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          comment-id: ${{ steps.fc.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            API Changes
+            ```diff
+            ${{ steps.api-check.outputs.diff-output || 'no api changes detected' }}
+            ```
+          edit-mode: replace
