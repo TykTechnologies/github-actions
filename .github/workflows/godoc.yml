@@ -3,6 +3,9 @@ name: Print Go API changes
 on:
   workflow_call:
 
+env:
+  GOPRIVATE: github.com/TykTechnologies
+
 jobs:
   test:
     name: Detect Go API changes
