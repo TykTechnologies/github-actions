@@ -15,7 +15,7 @@ jobs:
           fetch-depth: 1
           repository: TykTechnologies/exp
           ref: main
-          path: .tmp/exp
+          path: exp
 
       - name: Checkout repo
         uses: TykTechnologies/github-actions/.github/actions/checkout-pr@main
@@ -32,7 +32,7 @@ jobs:
 
       - name: Put taskfiles into place
         run: |
-          rsync --del -a .tmp/exp/.taskfiles/ ./.taskfiles/
+          rsync --del -a exp/.taskfiles/ ./.taskfiles/
 
       - name: Set up comment author
         run: |
@@ -46,7 +46,7 @@ jobs:
           git checkout -- .
           git checkout ${{ github.base_ref }}
           go mod tidy
-          rsync -a .tmp/.taskfiles/ .taskfiles/
+          rsync -a exp/.taskfiles/ .taskfiles/
           task -t .taskfiles/godoc/Taskfile.yml > prev.txt
 
       - name: Diff API docs
