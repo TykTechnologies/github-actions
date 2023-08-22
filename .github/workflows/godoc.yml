@@ -30,10 +30,6 @@ jobs:
         with:
           version: 3
 
-      - name: Put taskfiles into place
-        run: |
-          rsync --del -a exp/.taskfiles/ ./.taskfiles/
-
       - name: Set up comment author
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
@@ -41,13 +37,16 @@ jobs:
 
       - name: Collect API docs
         run: |
+          cp ./exp/.taskfiles/godoc/Taskfile.yml ./Taskfile.godoc.yml
+
           go mod tidy
-          task -t .taskfiles/godoc/Taskfile.yml > current.txt
+          task -t Taskfile.godoc.yml > current.txt
+
           git checkout -- .
           git checkout ${{ github.base_ref }}
+
           go mod tidy
-          rsync -a exp/.taskfiles/ .taskfiles/
-          task -t .taskfiles/godoc/Taskfile.yml > prev.txt
+          task -t Taskfile.godoc.yml > prev.txt
 
       - name: Diff API docs
         id: api-check
