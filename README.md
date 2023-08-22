@@ -30,6 +30,8 @@ Example usage:
 jobs:
   godoc:
     uses: TykTechnologies/github-actions/.github/workflows/godoc.yml@main
+    secrets:
+      ORG_GH_TOKEN: ${{ secrets.ORG_GH_TOKEN }}
 ```
 
 ## OWASP scanner
