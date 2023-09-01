@@ -4,12 +4,16 @@ on:
     inputs:
       comment-author:
         type: string
+        default: ""
+        description: "The author of the comment to find."
       body-includes:
         type: string
+        default: ""
+        description: "The text to search for in the comment body."
       body: 
         required: true
         type: string
-
+        description: "The text to add to the comment body."
 jobs:
   create-update-comment:
     runs-on: ubuntu-latest
