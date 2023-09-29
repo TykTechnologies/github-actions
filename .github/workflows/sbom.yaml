@@ -3,6 +3,9 @@ name: Sbom
 on:
   workflow_call:
     secrets:
+      # Remove this as soon as this is removed from release wf.
+      TF_API_TOKEN:
+        required: false
       DOCKER_IMAGE:
         required: false
       DEPDASH_URL:
