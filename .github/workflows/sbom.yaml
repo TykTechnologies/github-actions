@@ -103,7 +103,7 @@ jobs:
         with:
           format: 'cyclonedx'
           output: 'docker.sbom.json'
-          image-ref: '${{ steps.login-ecr.outputs.registry }}/${{ github.event.repository.name}}:${{ github.sha }}'
+          image-ref: '${{ steps.login-ecr.outputs.registry }}/${{ github.event.repository.name}}:sha-${{ github.sha }}'
           
       - name: Generate Docker SBOM
         uses: aquasecurity/trivy-action@master
