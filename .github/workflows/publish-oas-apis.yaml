@@ -23,6 +23,7 @@ jobs:
       with:
         fetch-depth: 0
         repository: TykTechnologies/github-actions
+        ref: 'publish-oas-apis'
         path: github-actions
 
     - name: List repo contents
