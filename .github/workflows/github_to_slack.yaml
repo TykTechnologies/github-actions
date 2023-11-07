@@ -1,7 +1,6 @@
 name: Github to slack
 
 on:
-  pull_request:
   workflow_call:
     inputs:
       github_email:
