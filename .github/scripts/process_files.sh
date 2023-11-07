@@ -1,4 +1,6 @@
 #!/bin/bash
+echo "AAA"
+echo $BASE_URL
 if [ "$#" -ne 6 ]; then
     echo "Usage: $0 TOKEN BASE_URL PARENT_COMMIT_SHA QUERY_PARAMS API_IDS FILE_REGEX"
     exit 1
