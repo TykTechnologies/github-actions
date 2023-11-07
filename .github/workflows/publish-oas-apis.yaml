@@ -1,4 +1,4 @@
-name: Update Tyk OAS APIs
+name: publish-oas-apis
 
 on:
   workflow_call:
