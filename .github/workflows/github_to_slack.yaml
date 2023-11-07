@@ -5,12 +5,10 @@ on:
   workflow_call:
     inputs:
       github_email:
-        default: "ermirizio@gmail.com"
         type: string
   workflow_dispatch:
     inputs:
       github_email:
-        default: "ermirizio@gmail.com"
         type: string
       
 
@@ -26,6 +24,6 @@ jobs:
       - name: Set slack user based on github user of code commiter
         id: user_map
         env:
-          EMAIL: ${{ inputs.github_email }}
+          EMAIL: ermirizio@gmail.com
         run: |
           ./github_to_slack/github_to_slack.sh
