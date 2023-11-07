@@ -1,0 +1,28 @@
+name: Github to slack
+
+on:
+  workflow_call:
+    inputs:
+      github_email:
+        default: "main"
+        type: string
+  workflow_dispatch:
+    inputs:
+      github_email:
+        default: "main"
+        type: string
+      
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    outputs: 
+      slack_user_id: steps.user_map.slack_user_name
+
+    steps:  
+    - name: Set slack user based on github user of code commiter
+      id: user_map
+      env:
+        EMAIL: ${{ inputs.github_email }}
+      run: |
+        ./github_to_slack/github_to_slack.sh
