@@ -38,7 +38,7 @@ jobs:
     - name: Iterate over committed files and make requests
       env:
         TOKEN: ${{ secrets.API_TOKEN }}
-        BASE_URL: ${{ secrets.BASE_API_URL }}
+        BASE_URL: ${{ secrets.BASE_URL }}
         PARENT_COMMIT_SHA: ${{ steps.get_parent_commit_sha.outputs.parent_commit_sha }}
         QUERY_PARAMS: ${{ steps.extract_query_params.outputs.queryParams }}
         API_IDS: ${{ steps.extract_query_params.outputs.apiIds }}
