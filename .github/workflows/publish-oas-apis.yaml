@@ -25,6 +25,9 @@ jobs:
         repository: TykTechnologies/github-actions
         path: github-actions
 
+    - name: List repo contents
+      run: find
+
     - name: Set up environment variables
       run: ./github-actions/.github/scripts/set_env_vars.sh ${{ secrets.API_TOKEN }} ${{ secrets.BASE_API_URL }}
 
