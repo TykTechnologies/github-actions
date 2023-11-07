@@ -1,0 +1,41 @@
+name: Update Tyk OAS APIs
+
+on:
+  workflow_call:
+    secrets:
+      API_TOKEN:
+        required: true
+      BASE_API_URL:
+        required: true
+
+jobs:
+  process_commits:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up environment variables
+      run: ./.github/scripts/set_env_vars.sh ${{ secrets.API_TOKEN }} ${{ secrets.BASE_API_URL }}
+
+    - name: Get parent commit SHA
+      id: get_parent_commit_sha
+      run: |
+        echo "parent_commit_sha=$(git log --pretty=format:%H -n 1)" >> $GITHUB_OUTPUT
+
+    - name: Extract query parameters from tyk-manifest.json
+      id: extract_query_params
+      run: ./.github/scripts/extract_query_params.sh
+
+    - name: Iterate over committed files and make requests
+      env:
+        TOKEN: ${{ secrets.API_TOKEN }}
+        BASE_URL: ${{ secrets.BASE_URL }}
+        PARENT_COMMIT_SHA: ${{ steps.get_parent_commit_sha.outputs.parent_commit_sha }}
+        QUERY_PARAMS: ${{ steps.extract_query_params.outputs.queryParams }}
+        API_IDS: ${{ steps.extract_query_params.outputs.apiIds }}
+        FILE_REGEX: '*.oas.json$'
+      run: ./.github/scripts/process_files.sh $TOKEN $BASE_URL $PARENT_COMMIT_SHA "$QUERY_PARAMS" "$API_IDS" "$FILE_REGEX"
