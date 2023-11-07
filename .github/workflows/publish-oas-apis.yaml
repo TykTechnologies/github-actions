@@ -20,6 +20,7 @@ jobs:
 
     - name: Set up environment variables
       run: |
+        echo "AAA"
         if [[ -n "${{ secrets.BASE_API_URL }}" ]]; then
           if [[ "${{ secrets.BASE_API_URL }}" != "" ]]; then
             echo "BASE_API_URL is not empty and has a value"
