@@ -1,10 +1,11 @@
 name: Github to slack
 
 on:
+  pull_request:
   workflow_call:
     inputs:
       github_email:
-        default: "main"
+        default: "ermirizio@gmail.com"
         type: string
   workflow_dispatch:
     inputs:
