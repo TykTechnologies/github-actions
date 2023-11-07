@@ -19,7 +19,7 @@ jobs:
         fetch-depth: 0
 
     - name: Set up environment variables
-      run: bash ${{ github.action_path }}/scripts/set_env_vars.sh ${{ secrets.API_TOKEN }} ${{ secrets.BASE_API_URL }}
+      run: ./.github/scripts/set_env_vars.sh ${{ secrets.API_TOKEN }} ${{ secrets.BASE_API_URL }}
 
     - name: Get parent commit SHA
       id: get_parent_commit_sha
@@ -28,7 +28,7 @@ jobs:
 
     - name: Extract query parameters from tyk-manifest.json
       id: extract_query_params
-      run: bash ${{ github.action_path }}/scripts/extract_query_params.sh
+      run: ./.github/scripts/extract_query_params.sh
 
     - name: Iterate over committed files and make requests
       env:
@@ -38,4 +38,4 @@ jobs:
         QUERY_PARAMS: ${{ steps.extract_query_params.outputs.queryParams }}
         API_IDS: ${{ steps.extract_query_params.outputs.apiIds }}
         FILE_REGEX: '*.oas.json$'
-      run: bash ${{ github.action_path }}/scripts/process_files.sh $TOKEN $BASE_URL $PARENT_COMMIT_SHA "$QUERY_PARAMS" "$API_IDS" "$FILE_REGEX"
+      run: ./.github/scripts/process_files.sh $TOKEN $BASE_URL $PARENT_COMMIT_SHA "$QUERY_PARAMS" "$API_IDS" "$FILE_REGEX"
