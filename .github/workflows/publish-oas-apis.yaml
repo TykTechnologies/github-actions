@@ -17,9 +17,16 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        repository: TykTechnologies/github-actions
+        path: github-actions
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up environment variables
-      run: ./.github/scripts/set_env_vars.sh ${{ secrets.API_TOKEN }} ${{ secrets.BASE_API_URL }}
+      run: ./github-actions/.github/scripts/set_env_vars.sh ${{ secrets.API_TOKEN }} ${{ secrets.BASE_API_URL }}
 
     - name: Get parent commit SHA
       id: get_parent_commit_sha
@@ -28,7 +35,7 @@ jobs:
 
     - name: Extract query parameters from tyk-manifest.json
       id: extract_query_params
-      run: ./.github/scripts/extract_query_params.sh
+      run: ./github-actions/.github/scripts/extract_query_params.sh
 
     - name: Iterate over committed files and make requests
       env:
@@ -38,4 +45,4 @@ jobs:
         QUERY_PARAMS: ${{ steps.extract_query_params.outputs.queryParams }}
         API_IDS: ${{ steps.extract_query_params.outputs.apiIds }}
         FILE_REGEX: '*.oas.json$'
-      run: ./.github/scripts/process_files.sh $TOKEN $BASE_URL $PARENT_COMMIT_SHA "$QUERY_PARAMS" "$API_IDS" "$FILE_REGEX"
+      run: ./github-actions/.github/scripts/process_files.sh $TOKEN $BASE_URL $PARENT_COMMIT_SHA "$QUERY_PARAMS" "$API_IDS" "$FILE_REGEX"
