@@ -55,7 +55,7 @@ function set_slack_user() {
     CORRESPONDING_SLACK_MEMBER_ID="${EMAIL_TO_SLACK_ID_MAP[${EMAIL}]}"
 
     if [ -n "$CORRESPONDING_SLACK_MEMBER_ID" ]; then
-        echo "slack_user_name=$CORRESPONDING_SLACK_MEMBER_ID" >> $GITHUB_OUTPUTS
+        echo "slack_user_name=$CORRESPONDING_SLACK_MEMBER_ID" >> $GITHUB_OUTPUT
     else
         echo "No corresponding Slack member ID found for the user email."
     fi
