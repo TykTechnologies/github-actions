@@ -19,16 +19,7 @@ jobs:
         fetch-depth: 0
 
     - name: Set up environment variables
-      run: |
-        echo "AAA"
-        if [[ -n "${{ secrets.BASE_API_URL }}" ]]; then
-          if [[ "${{ secrets.BASE_API_URL }}" != "" ]]; then
-            echo "BASE_API_URL is not empty and has a value"
-            echo "success"
-          fi
-        fi
-
-        ./.github/scripts/set_env_vars.sh ${{ secrets.API_TOKEN }} ${{ secrets.BASE_API_URL }}
+      run: ./.github/scripts/set_env_vars.sh ${{ secrets.API_TOKEN }} ${{ secrets.BASE_API_URL }}
 
 
     - name: Get parent commit SHA
@@ -43,7 +34,7 @@ jobs:
     - name: Iterate over committed files and make requests
       env:
         TOKEN: ${{ secrets.API_TOKEN }}
-        BASE_URL: ${{ secrets.BASE_URL }}
+        BASE_URL: ${{ secrets.BASE_API_URL }}
         PARENT_COMMIT_SHA: ${{ steps.get_parent_commit_sha.outputs.parent_commit_sha }}
         QUERY_PARAMS: ${{ steps.extract_query_params.outputs.queryParams }}
         API_IDS: ${{ steps.extract_query_params.outputs.apiIds }}
