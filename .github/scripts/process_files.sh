@@ -1,12 +1,10 @@
 #!/bin/bash
-
-# Check for required arguments
+echo "PROCESSING FILES"
 if [ "$#" -ne 6 ]; then
     echo "Usage: $0 TOKEN BASE_URL PARENT_COMMIT_SHA QUERY_PARAMS API_IDS FILE_REGEX"
     exit 1
 fi
 
-# Assign arguments to variables
 TOKEN="$1"
 BASE_URL="$2"
 PARENT_COMMIT_SHA="$3"
@@ -14,7 +12,6 @@ QUERY_PARAMS="$4"
 API_IDS="$5"
 FILE_REGEX="$6"
 
-# Function to check if the API exists
 check_api_existence() {
     local endpoint=$1
     local token=$2
@@ -23,7 +20,6 @@ check_api_existence() {
     echo $status_code
 }
 
-# Function to patch the API
 patch_api() {
     local endpoint=$1
     local token=$2
@@ -34,7 +30,6 @@ patch_api() {
     echo $response
 }
 
-# Function to import the API
 import_api() {
     local endpoint=$1
     local token=$2
@@ -46,7 +41,6 @@ import_api() {
     echo $response
 }
 
-# Main loop to process files
 echo "Start iterating over files"
 git diff-tree --no-commit-id --name-only -r "$PARENT_COMMIT_SHA"
 files=$(git diff-tree --no-commit-id --name-only -r "$PARENT_COMMIT_SHA" | grep -E "$FILE_REGEX")
