@@ -4,12 +4,10 @@ on:
   workflow_call:
     inputs:
       github_email:
-        default: "main"
         type: string
   workflow_dispatch:
     inputs:
       github_email:
-        default: "main"
         type: string
       
 
@@ -19,10 +17,12 @@ jobs:
     outputs: 
       slack_user_id: steps.user_map.slack_user_name
 
-    steps:  
-    - name: Set slack user based on github user of code commiter
-      id: user_map
-      env:
-        EMAIL: ${{ inputs.github_email }}
-      run: |
-        ./github_to_slack/github_to_slack.sh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set slack user based on github user of code commiter
+        id: user_map
+        env:
+          EMAIL: ${{ inputs.github_email }}
+        run: |
+          ./github_to_slack/github_to_slack.sh
