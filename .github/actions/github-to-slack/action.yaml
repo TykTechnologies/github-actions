@@ -19,6 +19,7 @@ runs:
 
     - name: Set slack user based on github user of code commiter
       id: user-map
+      shell: bash
       env:
         EMAIL: ${{ inputs.github_email }}
       run: |
