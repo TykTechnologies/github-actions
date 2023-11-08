@@ -1,0 +1,25 @@
+name: 'Github to slack'
+
+description: >-
+  Maps github email with slack user, based on a key value map. Maps needs to be mantained manually.
+
+inputs:
+  github_email:
+    type: string
+
+outputs:
+  slack-user-name:
+    description: "Random number"
+    value: ${{ steps.user-map.outputs.slack_user_name }}
+      
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+
+    - name: Set slack user based on github user of code commiter
+      id: user-map
+      env:
+        EMAIL: ${{ inputs.github_email }}
+      run: |
+        ./github_to_slack.sh
