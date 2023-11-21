@@ -17,12 +17,14 @@ jobs:
     steps:
       - name: Use GitHub Token
         env:
-          TOKEN: '${{ secrets.ORG_GH_TOKEN }}'
+          TOKEN: ${{ secrets.ORG_GH_TOKEN }}
         run: >
           git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
 
       - name: Checkout repo
         uses: TykTechnologies/github-actions/.github/actions/checkout-pr@main
+        with:
+          token: ${{ secrets.ORG_GH_TOKEN }}
 
       - name: Checkout exp
         uses: actions/checkout@v3
