@@ -10,7 +10,6 @@ inputs:
     default: ${{ github.job }}
   token:
     description: 'A Github PAT'
-    required: true
 
 runs:
   using: "composite"
