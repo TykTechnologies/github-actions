@@ -1,9 +1,17 @@
+# yamllint disable rule:line-length
+---
 name: 'Checkout PR'
+
 description: >-
   Checkout the exact number of PR commits + 1 (base_ref).
+
 inputs:
   jobname:
     default: ${{ github.job }}
+  token:
+    description: 'A Github PAT'
+    required: true
+
 runs:
   using: "composite"
   steps:
@@ -12,10 +20,12 @@ runs:
       run: echo "PR_FETCH_DEPTH=$(( ${{ github.event.pull_request.commits }} + 1 ))" >> "${GITHUB_ENV}"
 
     - name: 'Checkout PR branch and all PR commits'
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         ref: ${{ github.event.pull_request.head.ref }}
+        token: ${{ inputs.token }}
         fetch-depth: ${{ env.PR_FETCH_DEPTH }}
+        submodules: true
         lfs: true
 
     - name: 'Fetch the other branch with enough history for a common merge-base commit'
