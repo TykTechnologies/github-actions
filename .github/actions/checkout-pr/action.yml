@@ -16,7 +16,7 @@ runs:
   steps:
     - name: 'PR commits + 1'
       shell: bash
-      run: echo "PR_FETCH_DEPTH=$(( ${{ github.event.pull_request.commits }} + 1 ))" >> "${GITHUB_ENV}"
+      run: echo "PR_FETCH_DEPTH=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> "${GITHUB_ENV}"
 
     - name: 'Checkout PR branch and all PR commits'
       uses: actions/checkout@v4
@@ -30,5 +30,9 @@ runs:
     - name: 'Fetch the other branch with enough history for a common merge-base commit'
       shell: bash
       run: |
-        git fetch origin ${{ github.event.pull_request.base.ref }}
-        git log -n 1
+        git fetch origin ${{ github.event.pull_request.base.sha || github.event.before }}
+
+    - name: 'Print git position'
+      shell: bash
+      run: |
+        git log -n ${{ env.PR_FETCH_DEPTH }} --oneline
