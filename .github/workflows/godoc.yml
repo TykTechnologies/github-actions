@@ -57,6 +57,7 @@ jobs:
           task -t Taskfile.godoc.yml > current.txt
 
           git checkout -- .
+          git fetch --depth=1 origin ${{ github.base_ref }}
           git checkout ${{ github.base_ref }}
 
           go mod tidy
