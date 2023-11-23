@@ -27,11 +27,6 @@ runs:
         submodules: true
         lfs: true
 
-    - name: 'Print git position'
-      shell: bash
-      run: |
-        git log -n ${{ env.PR_FETCH_DEPTH }} --oneline
-
     - name: 'Fetch the other branch with enough history for a common merge-base commit'
       shell: bash
       run: |
