@@ -5,6 +5,10 @@ on:
     secrets:
       ORG_GH_TOKEN:
         required: true
+    inputs:
+      go-version:
+        type: string
+        default: "1.19"
 
 env:
   GOPRIVATE: github.com/TykTechnologies
@@ -37,7 +41,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.20"
+          go-version: ${{ inputs.go-version }}
 
       - name: Install Task
         uses: arduino/setup-task@v1
