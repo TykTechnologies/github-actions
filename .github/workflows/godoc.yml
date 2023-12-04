@@ -6,7 +6,7 @@ on:
       ORG_GH_TOKEN:
         required: true
     inputs:
-      go:
+      go-version:
         type: string
         default: "1.19"
 
@@ -41,7 +41,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: ${{ inputs.go }}
+          go-version: ${{ inputs.go-version }}
 
       - name: Install Task
         uses: arduino/setup-task@v1
