@@ -1,0 +1,29 @@
+name: 'Get latest version tags'
+
+description: >-
+  Uses github to get the major latest stable version tag (non rc) for a group of tyk repositories
+
+outputs:
+  tyk:
+    description: "Tyk gateway latest version"
+    value: ${{ steps.get-version.outputs.tyk_gateway }}
+  tyk-analytics:
+    description: "Tyk analytics latest version"
+    value: ${{ steps.get-version.outputs.tyk_dashboard }}
+  tyk-pump:
+    description: "Tyk pump latest version"
+    value: ${{ steps.get-version.outputs.tyk_pump }}
+  tyk-sink:
+    description: "Tyk sink latest version"
+    value: ${{ steps.get-version.outputs.tyk_sink }}  
+      
+runs:
+  using: "composite"
+  steps:
+    - run: echo "${{ github.action_path }}" >> $GITHUB_PATH
+      shell: bash
+
+    - name: Get version based on major latest stable tag pushed
+      id: get-version
+      shell: bash
+      run: get_version.sh
