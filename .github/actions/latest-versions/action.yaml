@@ -1,20 +1,32 @@
-name: 'Get latest version tags'
+name: 'Calculate tests tags'
 
 description: >-
-  Uses github to get the major latest stable version tag (non rc) for a group of tyk repositories
+  Calculates corresponding CI image tags based on github events for a group of tyk repositories
+
+inputs:
+  repo:
+    description: Name of the repository where the workflow was triggered from
+  github_event:
+    description: Github event passed from main workflow
+  github_ref:
+    description: Github reference passed from main workflow
+  github_base_ref:
+    description: Github reference passed from main workflow
+  build_sha:
+    description: Github sha for referencing the build tag for ci image
 
 outputs:
   tyk:
-    description: "Tyk gateway latest version"
+    description: "Tyk gateway ci image tag"
     value: ${{ steps.get-version.outputs.tyk_gateway }}
   tyk-analytics:
-    description: "Tyk analytics latest version"
+    description: "Tyk analytics ci image version"
     value: ${{ steps.get-version.outputs.tyk_dashboard }}
   tyk-pump:
-    description: "Tyk pump latest version"
+    description: "Tyk pump ci image version"
     value: ${{ steps.get-version.outputs.tyk_pump }}
   tyk-sink:
-    description: "Tyk sink latest version"
+    description: "Tyk sink ci image version"
     value: ${{ steps.get-version.outputs.tyk_sink }}  
       
 runs:
@@ -23,7 +35,7 @@ runs:
     - run: echo "${{ github.action_path }}" >> $GITHUB_PATH
       shell: bash
 
-    - name: Get version based on major latest stable tag pushed
+    - name: Calculate versions
       id: get-version
       shell: bash
-      run: get_version.sh
+      run: get_version.sh ${{ inputs.repo }} ${{ inputs.github_event }} ${{ inputs.github_ref }} ${{ inputs.github_base_ref }} ${{ inputs.build_sha }}
