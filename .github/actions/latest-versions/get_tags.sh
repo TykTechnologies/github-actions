@@ -4,7 +4,7 @@ set -euo pipefail
 #GITHUB_OUTPUT='/dev/tty'
 REPO_LIST=("tyk" "tyk-analytics" "tyk-pump" "tyk-sink" "tyk-automated-tests")
 
-current_repo=${1}
+current_repo=${1##*/}
 event=${2}
 ref=${3}
 base_ref=${4}
