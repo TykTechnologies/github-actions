@@ -2,7 +2,7 @@
 set -euo pipefail
 
 GITHUB_OUTPUT='/dev/tty'
-REPO_LIST=("tyk" "tyk-analytics" "tyk-pump" "tyk-sink")
+REPO_LIST=("tyk" "tyk-analytics" "tyk-pump" "tyk-sink" "tyk-automated-tests")
 
 current_repo=${1}
 event=${2}
@@ -35,6 +35,12 @@ if [ "$current_repo" == 'tyk' -o "$current_repo" == 'tyk-analytics' ] && [[ "$br
 	echo "tyk-analytics=$branch" >> $GITHUB_OUTPUT
 	echo "tyk-pump=$(get_latest_tag 'tyk-pump')" >> $GITHUB_OUTPUT
 	echo "tyk-sink=$(get_latest_tag 'tyk-sink')" >> $GITHUB_OUTPUT
+	if [[ "$branch" =~ ^release-[0-9]-lts$ ]];then
+		echo "tyk-automated-tests=$branch" >> $GITHUB_OUTPUT
+	else
+		echo "tyk-automated-tests=master" >> $GITHUB_OUTPUT
+	fi
+	
 else #default to master case
 	bulk_set_tag master
 fi

@@ -1,0 +1,104 @@
+### Processing combination: Repo=tyk, Action=pull_request, Branch=master ### 
+
+BRANCH =master
+---------------------------------------------------------------------
+
+### Processing combination: Repo=tyk, Action=pull_request, Branch=release-5-lts ### 
+
+BRANCH =release-5-lts
+---------------------------------------------------------------------
+
+### Processing combination: Repo=tyk, Action=pull_request, Branch=release-4-lts ### 
+
+BRANCH =release-4-lts
+---------------------------------------------------------------------
+
+### Processing combination: Repo=tyk-analytics, Action=pull_request, Branch=master ### 
+
+BRANCH =master
+---------------------------------------------------------------------
+
+### Processing combination: Repo=tyk-analytics, Action=pull_request, Branch=release-5-lts ### 
+
+BRANCH =release-5-lts
+---------------------------------------------------------------------
+
+### Processing combination: Repo=tyk-analytics, Action=pull_request, Branch=release-4-lts ### 
+
+BRANCH =release-4-lts
+---------------------------------------------------------------------
+
+### Processing combination: Repo=tyk-pump, Action=pull_request, Branch=master ### 
+
+BRANCH =master
+---------------------------------------------------------------------
+
+### Processing combination: Repo=tyk-pump, Action=pull_request, Branch=release-5-lts ### 
+
+BRANCH =release-5-lts
+---------------------------------------------------------------------
+
+### Processing combination: Repo=tyk-pump, Action=pull_request, Branch=release-4-lts ### 
+
+BRANCH =release-4-lts
+---------------------------------------------------------------------
+
+### Processing combination: Repo=tyk-sink, Action=pull_request, Branch=master ### 
+
+BRANCH =master
+---------------------------------------------------------------------
+
+### Processing combination: Repo=tyk-sink, Action=pull_request, Branch=release-5-lts ### 
+
+BRANCH =release-5-lts
+---------------------------------------------------------------------
+
+### Processing combination: Repo=tyk-sink, Action=pull_request, Branch=release-4-lts ### 
+
+BRANCH =release-4-lts
+---------------------------------------------------------------------
+
+tyk=master
+tyk-analytics=master
+tyk-pump=master
+tyk-sink=master
+tyk=sha-my_build_sha
+tyk=release-5-lts
+tyk-analytics=release-5-lts
+tyk-pump=v1.8.3
+tyk-sink=v2.4.1
+tyk=sha-my_build_sha
+tyk=release-4-lts
+tyk-analytics=release-4-lts
+tyk-pump=v1.8.3
+tyk-sink=v2.4.1
+tyk=sha-my_build_sha
+tyk=master
+tyk-analytics=master
+tyk-pump=master
+tyk-sink=master
+tyk-analytics=sha-my_build_sha
+tyk=release-5-lts
+tyk-analytics=release-5-lts
+tyk-pump=v1.8.3
+tyk-sink=v2.4.1
+tyk-analytics=sha-my_build_sha
+tyk=release-4-lts
+tyk-analytics=release-4-lts
+tyk-pump=v1.8.3
+tyk-sink=v2.4.1
+tyk-analytics=sha-my_build_sha
+tyk=master
+tyk-analytics=master
+tyk-pump=master
+tyk-sink=master
+tyk-pump=sha-my_build_sha
+tyk-pump=sha-my_build_sha
+tyk-pump=sha-my_build_sha
+tyk=master
+tyk-analytics=master
+tyk-pump=master
+tyk-sink=master
+tyk-sink=sha-my_build_sha
+tyk-sink=sha-my_build_sha
+tyk-sink=sha-my_build_sha
