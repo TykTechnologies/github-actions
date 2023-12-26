@@ -18,10 +18,10 @@ inputs:
 outputs:
   tyk:
     description: "Tyk gateway ci image tag"
-    value: ${{ steps.get-version.outputs.tyk_gateway }}
+    value: ${{ steps.get-version.outputs.tyk }}
   tyk-analytics:
     description: "Tyk analytics ci image version"
-    value: ${{ steps.get-version.outputs.tyk_dashboard }}
+    value: ${{ steps.get-version.outputs.tyk_analytics }}
   tyk-pump:
     description: "Tyk pump ci image version"
     value: ${{ steps.get-version.outputs.tyk_pump }}
