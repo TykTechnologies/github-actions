@@ -18,6 +18,7 @@ function get_latest_tag() {
 function bulk_set_tag() {
 	default_tag=${1}
 	for repository in "${REPO_LIST[@]}";do
+		repository=${repository/-/_}
 		echo "$repository=$default_tag" >> $GITHUB_OUTPUT
 	done
 }
@@ -32,13 +33,13 @@ fi
 # optional to only accept release-x-lts cases use ^release-[0-9]-lts$
 if [ "$current_repo" == 'tyk' -o "$current_repo" == 'tyk-analytics' ] && [[ "$branch" =~ ^release- ]]; then 
 	echo "tyk=$branch" >> $GITHUB_OUTPUT
-	echo "tyk-analytics=$branch" >> $GITHUB_OUTPUT
-	echo "tyk-pump=$(get_latest_tag 'tyk-pump')" >> $GITHUB_OUTPUT
-	echo "tyk-sink=$(get_latest_tag 'tyk-sink')" >> $GITHUB_OUTPUT
+	echo "tyk_analytics=$branch" >> $GITHUB_OUTPUT
+	echo "tyk_pump=$(get_latest_tag 'tyk-pump')" >> $GITHUB_OUTPUT
+	echo "tyk_sink=$(get_latest_tag 'tyk-sink')" >> $GITHUB_OUTPUT
 	if [[ "$branch" =~ ^release-[0-9]-lts$ ]];then
-		echo "tyk-automated-tests=$branch" >> $GITHUB_OUTPUT
+		echo "tyk_automated_tests=$branch" >> $GITHUB_OUTPUT
 	else
-		echo "tyk-automated-tests=master" >> $GITHUB_OUTPUT
+		echo "tyk_automated_tests=master" >> $GITHUB_OUTPUT
 	fi
 	
 else #default to master case

@@ -21,16 +21,16 @@ outputs:
     value: ${{ steps.get-version.outputs.tyk }}
   tyk-analytics:
     description: "Tyk analytics ci image version"
-    value: ${{ steps.get-version.outputs.tyk-analytics }}
+    value: ${{ steps.get-version.outputs.tyk_analytics }}
   tyk-pump:
     description: "Tyk pump ci image version"
-    value: ${{ steps.get-version.outputs.tyk-pump }}
+    value: ${{ steps.get-version.outputs.tyk_pump }}
   tyk-sink:
     description: "Tyk sink ci image version"
-    value: ${{ steps.get-version.outputs.tyk-sink }}
+    value: ${{ steps.get-version.outputs.tyk_sink }}
   tyk-automated-tests:
     description: "Tyk automated tests ci image version"
-    value: ${{ steps.get-version.outputs.tyk-automated-tests }}  
+    value: ${{ steps.get-version.outputs.tyk_automated_tests }}  
       
 runs:
   using: "composite"
