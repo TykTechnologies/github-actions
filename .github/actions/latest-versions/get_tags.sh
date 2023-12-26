@@ -18,7 +18,7 @@ function get_latest_tag() {
 function bulk_set_tag() {
 	default_tag=${1}
 	for repository in "${REPO_LIST[@]}";do
-		repository=${repository/-/_}
+		repository=${repository//-/_}
 		echo "$repository=$default_tag" >> $GITHUB_OUTPUT
 		echo "#DEBUG# $repository=$default_tag"
 	done
@@ -54,7 +54,7 @@ else #default to master case
 fi
 
 # Override always with build_tag, does not contain ecr URL
-current_repo=${current_repo/-/_}
+current_repo=${current_repo//-/_}
 echo "$current_repo=sha-$commit_sha" >> $GITHUB_OUTPUT
 echo "#DEBUG# $current_repo=sha-$commit_sha"
 
