@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-GITHUB_OUTPUT='/dev/tty'
+#GITHUB_OUTPUT='/dev/tty'
 REPO_LIST=("tyk" "tyk-analytics" "tyk-pump" "tyk-sink" "tyk-automated-tests")
 
 current_repo=${1}
