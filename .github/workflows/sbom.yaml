@@ -61,7 +61,7 @@ jobs:
       id-token: write   # This is required for requesting the JWT
       contents: read    # This is required for actions/checkout
     needs: changedfiles
-    if: contains(github.base_ref, 'release-') ||  contains(github.base_ref, 'release-') || contains(github.base_ref, 'master') || needs.changedfiles.outputs.go || needs.changedfiles.outputs.npm || needs.changedfiles.outputs.ci || needs.changedfiles.outputs.docker || needs.changedfiles.outputs.github
+    if: contains(github.base_ref, 'release-') || contains(github.base_ref, 'master') || needs.changedfiles.outputs.go || needs.changedfiles.outputs.npm || needs.changedfiles.outputs.ci || needs.changedfiles.outputs.docker || needs.changedfiles.outputs.github
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
