@@ -88,7 +88,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v1
 
       - name: Generate Source code SBOM
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.12.0
         with:
            scan-type: 'fs'
            format: 'cyclonedx'
@@ -96,7 +96,7 @@ jobs:
            image-ref: '.'
 
       - name: Generate Docker SBOM
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.12.0
         env:
           DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
         if: env.DOCKER_IMAGE == null
@@ -106,7 +106,7 @@ jobs:
           image-ref: '${{ steps.login-ecr.outputs.registry }}/${{ github.event.repository.name}}:sha-${{ github.sha }}'
           
       - name: Generate Docker SBOM
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.12.0
         env:
           DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
         if: env.DOCKER_IMAGE
