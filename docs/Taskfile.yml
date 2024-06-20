@@ -1,0 +1,25 @@
+---
+version: "3"
+
+tasks:
+  default:
+    desc: "List actions"
+    vars:
+      workflows:
+        sh: ls ../.github/workflows/*.{yml,yaml} | xargs -n1 basename
+    cmds:
+      - for: {var: workflows}
+        task: workflow
+        vars:
+          workflow:
+            sh: echo "{{.ITEM}}" | cut -d'.' -f1
+
+  workflow:
+    desc: "Check docs exists"
+    silent: true
+    requires:
+      vars: [workflow]
+    status:
+      - test -e content/{{.workflow}}.md
+    cmds:
+      - echo "Action not documented in {{.workflow}}.md"
