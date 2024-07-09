@@ -39,3 +39,5 @@ workflow. The set of tools being provided can be adjusted in
 
 A local Taskfile is available in `docker/tools/` that allows you to build
 the tools image locally. Changes are tested in PRs.
+
+Adoption: Internal use for PR workflows on the repository.
