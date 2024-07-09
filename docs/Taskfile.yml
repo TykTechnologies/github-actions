@@ -23,11 +23,13 @@ tasks:
       - for: {var: workflows}
         task: have:lint
         vars:
+          want: name
           filename: '{{.ITEM}}'
 
       - for: {var: actions}
         task: have:lint
         vars:
+          want: name description
           filename: '{{.ITEM}}'
 
   # This target ensures that every action and workflow
@@ -48,6 +50,7 @@ tasks:
     desc: "Check lint pass"
     silent: true
     requires:
-      vars: [filename]
+      vars: [filename, want]
     cmds:
-      - yq -o props {{.filename}} | grep -q '^name ' || echo "❌ Missing 'name' in {{.filename}}"
+      - for: {var: want}
+        cmd: yq -o props {{.filename}} | grep -q '^{{.ITEM}} ' || echo "❌ Missing '{{.ITEM}}' in {{.filename}}"
