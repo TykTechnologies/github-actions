@@ -1,41 +1,53 @@
 ---
 version: "3"
 
-vars:
-  path: ../.github/workflows
-
 tasks:
   default:
-    desc: "List actions"
+    desc: "List actions and workflows"
     vars:
+      actions:
+        sh: ls ../.github/actions/*/*.{yml,yaml}
       workflows:
-        sh: ls {{.path}}/*.{yml,yaml} | xargs -n1 basename
+        sh: ls ../.github/workflows/*.{yml,yaml}
     cmds:
       - for: {var: workflows}
         task: have:docs
         vars:
-          file: '{{.ITEM}}'
-          workflow:
-            sh: echo "{{.ITEM}}" | cut -d'.' -f1
+          filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml"}}.md'
+
+      - for: {var: actions}
+        task: have:docs
+        vars:
+          filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml"}}.md'
+
       - for: {var: workflows}
         task: have:lint
         vars:
-          file: '{{.ITEM}}'
+          filename: '{{.ITEM}}'
 
+      - for: {var: actions}
+        task: have:lint
+        vars:
+          filename: '{{.ITEM}}'
+
+  # This target ensures that every action and workflow
+  # should have documentation, and reports if it doesn't.
   have:docs:
     desc: "Check docs exists"
     silent: true
     requires:
-      vars: [file, workflow]
+      vars: [filename]
     status:
-      - test -e content/{{.workflow}}.md
+      - test -e ./{{.filename}}
     cmds:
-      - echo "❌ Action not documented in docs/content/{{.workflow}}.md"
+      - echo "❌ Action not documented in {{.filename}}"
 
+  # This target ensures that every action and workflow
+  # should have documentation, and reports if it doesn't.
   have:lint:
     desc: "Check lint pass"
     silent: true
     requires:
-      vars: [file]
+      vars: [filename]
     cmds:
-      - yq -o props {{.path}}/{{.file}} | grep -q '^name ' || echo "❌ {{.file}} missing 'name'"
+      - yq -o props {{.filename}} | grep -q '^name ' || echo "❌ Missing 'name' in {{.filename}}"
