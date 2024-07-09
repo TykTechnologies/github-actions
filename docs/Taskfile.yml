@@ -22,7 +22,7 @@ tasks:
     desc: "Check docs exists"
     silent: true
     requires:
-      vars: [file,workflow]
+      vars: [file, workflow]
     status:
       - test -e content/{{.workflow}}.md
     cmds:

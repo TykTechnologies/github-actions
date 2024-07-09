@@ -26,12 +26,12 @@ jobs:
       docker: ${{ steps.changes.outputs.docker }}
       github: ${{ steps.changes.outputs.github }}
     steps:
-        # Make sure we have some code to diff.
+      # Make sure we have some code to diff.
       - name: Checkout repository
         uses: actions/checkout@v2
         with:
           fetch-depth: 50
-          
+
       - name: Get changed files
         id: changes
         # Set outputs using the command.
@@ -90,10 +90,10 @@ jobs:
       - name: Generate Source code SBOM
         uses: aquasecurity/trivy-action@0.16.1
         with:
-           scan-type: 'fs'
-           format: 'cyclonedx'
-           output: 'source.sbom.json'
-           image-ref: '.'
+          scan-type: 'fs'
+          format: 'cyclonedx'
+          output: 'source.sbom.json'
+          image-ref: '.'
 
       - name: Generate Docker SBOM
         uses: aquasecurity/trivy-action@0.16.1

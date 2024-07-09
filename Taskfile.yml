@@ -1,0 +1,10 @@
+# yamllint disable rule:line-length
+---
+version: "3"
+
+tasks:
+  default:
+    desc: Lint actions
+    aliases: ["lint"]
+    cmds:
+      - yamllint .

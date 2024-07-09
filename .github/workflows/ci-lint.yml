@@ -1,0 +1,37 @@
+# yamllint disable rule:line-length
+---
+name: Lint changes
+
+# This workflow runs the taskfile in the root to ensure
+# that the changes added to the repository do not trigger
+# linter errors. This covers yaml files and github actions.
+
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+
+# Make sure to cancel previous job runs in case a PR
+# gets new commits. Changes being merged to the main
+# branch will continue to run.
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}-task-lint
+  cancel-in-progress: true
+
+# Set the default install path for `go install`.
+
+env:
+  GOBIN: /usr/local/bin
+
+jobs:
+  tools-latest:
+    name: 'Lint tyk-github-actions repo'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: arduino/setup-task@v1
+        with:
+          version: 3
+
+      - name: 'Run task lint'
+        run: task lint

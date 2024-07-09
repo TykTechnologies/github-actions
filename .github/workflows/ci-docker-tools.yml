@@ -1,0 +1,74 @@
+# yamllint disable rule:line-length
+---
+name: Docker - CI tools
+
+# This workflow builds the CI tooling from docker/tools/
+# within this repository. It runs whenever a file inside
+# is modified, and on a weekly schedule to get updates.
+
+on:  # yamllint disable-line rule:truthy
+  workflow_dispatch:
+  repository_dispatch:
+    types: ['exp-cmd']
+  pull_request:
+    paths:
+      - 'docker/tools/**'
+      - '.github/workflows/ci-docker-tools.yml'
+  push:
+    paths:
+      - 'docker/tools/**'
+      - '.github/workflows/ci-docker-tools.yml'
+    branches:
+      - 'main'
+  schedule:
+    - cron: '0 0 * * 1'  # Run every Monday at 12:00 AM UTC
+
+# Make sure to cancel previous job runs in case a PR
+# gets new commits. Changes being merged to the main
+# branch will continue to run.
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}-docker-tools
+  cancel-in-progress: true
+
+jobs:
+  tools-latest:
+    name: 'Build tykio/ci-tools:${{ matrix.tag }}'
+    permissions:
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        tag:
+          - 'latest'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: docker/setup-buildx-action@v2
+      - uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: 'Build tykio/ci-tools:${{ matrix.tag }}'
+        uses: docker/build-push-action@v4
+        with:
+          push: ${{ github.ref_name == 'main' || github.event_name == 'workflow_dispatch' }}
+          pull: true
+          load: ${{ github.ref_name != 'main' && github.event_name != 'workflow_dispatch' }}
+          no-cache: true
+          context: docker/tools/${{ matrix.tag }}
+          tags: tykio/ci-tools:${{ matrix.tag }}
+
+      - run: docker image ls
+
+      - name: 'Extract tykio/ci-tools:${{ matrix.tag }}'
+        uses: shrink/actions-docker-extract@v3
+        with:
+          image: tykio/ci-tools:${{ matrix.tag }}
+          path: /usr/local/bin/.
+          destination: /usr/local/bin
+
+      - run: gotestsum --version
