@@ -43,7 +43,7 @@ tasks:
       - echo "❌ Action not documented in {{.filename}}"
 
   # This target ensures that every action and workflow
-  # should have documentation, and reports if it doesn't.
+  # should have a `name` field present (poor mans schema).
   have:lint:
     desc: "Check lint pass"
     silent: true
