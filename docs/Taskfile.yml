@@ -12,13 +12,17 @@ tasks:
         sh: ls {{.path}}/*.{yml,yaml} | xargs -n1 basename
     cmds:
       - for: {var: workflows}
-        task: workflow
+        task: have:docs
         vars:
           file: '{{.ITEM}}'
           workflow:
             sh: echo "{{.ITEM}}" | cut -d'.' -f1
+      - for: {var: workflows}
+        task: have:lint
+        vars:
+          file: '{{.ITEM}}'
 
-  workflow:
+  have:docs:
     desc: "Check docs exists"
     silent: true
     requires:
@@ -26,5 +30,12 @@ tasks:
     status:
       - test -e content/{{.workflow}}.md
     cmds:
-      - echo "Action not documented in {{.workflow}}.md"
-      - yq -o props {{.path}}/{{.file}} | grep -q '^name ' || echo "{{.file}} missing 'name'"
+      - echo "❌ Action not documented in docs/content/{{.workflow}}.md"
+
+  have:lint:
+    desc: "Check lint pass"
+    silent: true
+    requires:
+      vars: [file]
+    cmds:
+      - yq -o props {{.path}}/{{.file}} | grep -q '^name ' || echo "❌ {{.file}} missing 'name'"
