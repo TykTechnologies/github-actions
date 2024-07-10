@@ -10,7 +10,10 @@ jobs:
     uses: TykTechnologies/github-actions/.github/workflows/semgrep.yaml@main
 ```
 
-Usage: unknown;
+Usage: unknown; Status: a bit out of date.
+
+Recent images use `semgrep/semgrep`, while this workflow still uses
+`returntocorp/semgrep`. Looks to be compatible at time of writing.
 
 ### Core: We are looking at semgrep for refactorings.
 

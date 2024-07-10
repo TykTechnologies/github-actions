@@ -1,3 +1,5 @@
+name: "Semgrep scan"
+
 on:
   workflow_call:
     inputs:
