@@ -15,12 +15,9 @@ Usage: unknown; Status: a bit out of date.
 Recent images use `semgrep/semgrep`, while this workflow still uses
 `returntocorp/semgrep`. Looks to be compatible at time of writing.
 
-### Core: We are looking at semgrep for refactorings.
-
 If you'd like to use semgrep:
 
-- reach out to @titpetric,
-- https://blog.semgrep-ci.com/
+- reach out to @titpetric if you need working-user assistance,
 - https://github.com/TykTechnologies/exp/tree/main/lsc
 - https://github.com/TykTechnologies/exp/actions/workflows/semgrep.yml
 
