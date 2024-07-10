@@ -18,7 +18,7 @@ tasks:
       - for: {var: actions}
         task: have:docs
         vars:
-          filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml"}}.md'
+          filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml" | trimSuffix "/action" }}.md'
 
       - for: {var: workflows}
         task: have:lint
@@ -32,6 +32,56 @@ tasks:
           want: name description
           filename: '{{.ITEM}}'
 
+  markdown:
+    desc: "Display markdown"
+    silent: true
+    vars:
+      actions:
+        sh: ls ../.github/actions/*/*.{yml,yaml} | sort
+      workflows:
+        sh: ls ../.github/workflows/*.{yml,yaml} | sort
+    cmds:
+      - echo "# Composite actions" && echo
+      - for: {var: actions}
+        task: cat:docs
+        vars:
+          source: '{{.ITEM}}'
+          filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml" | trimSuffix "/action" }}.md'
+
+      - echo "# Reusable workflows" && echo
+      - for: {var: workflows}
+        task: cat:docs
+        vars:
+          source: '{{.ITEM}}'
+          filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml"}}.md'
+
+  toc:
+    desc: "Display markdown TOC"
+    silent: true
+    vars:
+      actions:
+        sh: ls ../.github/actions/*/*.{yml,yaml} | sort
+      workflows:
+        sh: ls ../.github/workflows/*.{yml,yaml} | sort
+    cmds:
+      - echo "# Composite actions"
+      - echo
+      - for: {var: actions}
+        task: cat:docs-toc
+        vars:
+          source: '{{.ITEM}}'
+          filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml" | trimSuffix "/action" }}.md'
+      - echo
+
+      - echo "# Reusable workflows"
+      - echo
+      - for: {var: workflows}
+        task: cat:docs-toc
+        vars:
+          source: '{{.ITEM}}'
+          filename: 'docs/{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml"}}.md'
+
+
   # This target ensures that every action and workflow
   # should have documentation, and reports if it doesn't.
   have:docs:
@@ -43,6 +93,43 @@ tasks:
       - test -e ./{{.filename}}
     cmds:
       - echo "❌ Action not documented in {{.filename}}"
+
+  # This target reads a file for markdown output.
+  cat:docs:
+    internal: true
+    silent: true
+    requires:
+      vars: [filename, source]
+    vars:
+      link: '{{.source | replace "../" "/"}}'
+    cmds:
+      - |-
+          if [ -e ./{{.filename}} ]; then
+            cat ./{{.filename}}
+          else
+            name=$(yq '.name' {{.source}})
+            description=$(yq '.description' {{.source}})
+            if [ "$description" = "null" ] || [ -z "$description" ]; then
+              description="Undocumented action."
+            fi
+            echo -e "## $name\n\n$description"
+          fi
+          echo
+          echo "Source: [{{.link}}]({{.link}})"
+          echo
+
+  # This target reads a file for markdown output.
+  cat:docs-toc:
+    internal: true
+    silent: true
+    requires:
+      vars: [filename, source]
+    vars:
+      link: '{{.source | replace "../" "/"}}'
+    cmds:
+      - |-
+          name=$(yq '.name' {{.source}})
+          echo "- $name [documentation]({{.filename}}) [source]({{.link}})"
 
   # This target ensures that every action and workflow
   # should have a `name` field present (poor mans schema).

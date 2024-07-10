@@ -8,3 +8,17 @@ tasks:
     aliases: ["lint"]
     cmds:
       - yamllint .
+      - task: gen
+
+  gen:
+    desc: "Generate jobs (all)"
+    deps: [gen:readme]
+
+  gen:readme:
+    desc: "Generate README.md"
+    cmds:
+      - echo "# Re-usable github actions" > README.md
+      - echo >> README.md
+      - echo "Collection of shared github actions and workflows which are used in our org." >> README.md
+      - echo >> README.md
+      - cd docs && task markdown >> ../README.md
