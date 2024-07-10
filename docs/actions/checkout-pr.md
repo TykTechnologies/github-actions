@@ -5,7 +5,7 @@ This is required for various code analysis tooling, including sonarcloud.
 
 Example usage:
 
-```
+```yaml
 jobs:
   golangci-lint:
     runs-on: ubuntu-latest
