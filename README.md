@@ -1,6 +1,8 @@
 # Re-usable github actions
 
-Collection of shared github actions which are used in our org. 
+Collection of shared github actions and workflows which are used in our org.
+
+# Composite actions
 
 ## PR Checkout
 
@@ -18,6 +20,97 @@ jobs:
         uses: TykTechnologies/github-actions/.github/actions/checkout-pr@main
 ```
 
+The main use case behind this is to make sure the HEAD and the current PR
+state can be compared, and that we don't fetch the full git history for
+the checkout. This supports some of our custom actions like `godoc`.
+
+Supports: godoc, sonarcloud, dashboard (bindata size).
+
+Adoption: gateway, dashboard, reuse in shared CI workflows.
+
+Source: [/.github/actions/checkout-pr/action.yml](/.github/actions/checkout-pr/action.yml)
+
+# Github to slack
+
+Maps github email with slack user, based on a key value map. Maps needs to be mantained manually.
+
+Source: [/.github/actions/github-to-slack/action.yaml](/.github/actions/github-to-slack/action.yaml)
+
+# Calculate tests tags
+
+Calculates corresponding CI image tags based on github events for a group of tyk repositories
+
+Source: [/.github/actions/latest-versions/action.yaml](/.github/actions/latest-versions/action.yaml)
+
+# Reusable workflows
+
+## CI tools
+
+We build a docker image from the CI pipeline in this repository that
+builds and installs all the CI tooling needed for the test pipelines.
+
+Providing the docker image avoids continous compilation of the tools from
+using `go install` or `go get`, decreasing resource usage on GitHub
+actions.
+
+All the tools are built using a recent go version and `CGO_ENABLED=0`,
+enabling reuse for old releases. It's still possible to version the
+tooling against releases either inside the image, or by creating new
+versions of the docker image in the future.
+
+The images built are:
+
+- `tykio/ci-tools:latest`.
+
+The image is rebuilt weekly and on triggers from `exp/cmd`.
+
+To use the CI tools from any github pipeline:
+
+```yaml
+- name: 'Extract tykio/ci-tools:${{ matrix.tag }}'
+  uses: shrink/actions-docker-extract@v3
+  with:
+    image: tykio/ci-tools:${{ matrix.tag }}
+    path: /usr/local/bin/.
+    destination: /usr/local/bin
+
+- run: gotestsum --version
+```
+
+The action
+[shrink/actions-docker-extract](https://github.com/shrink/actions-docker-extract)
+is used to download and extract the CI tools binaries into your CI
+workflow. The set of tools being provided can be adjusted in
+[docker/tools/latest/Dockerfile](https://github.com/TykTechnologies/tyk-github-actions/blob/main/docker/tools/latest/Dockerfile).
+
+A local Taskfile is available in `docker/tools/` that allows you to build
+the tools image locally. Changes are tested in PRs.
+
+Adoption: Internal use for PR workflows on the repository.
+
+Source: [/.github/workflows/ci-docker-tools.yml](/.github/workflows/ci-docker-tools.yml)
+
+## CI lint
+
+In order to ensure some standard of quality, a lint action is being run
+that checks for syntax issues, yaml issues and validates github actions
+in the repository. It's not complete or fully accurate by any measure,
+but it enforces conventions for the work being added in PRs.
+
+It's generally incomplete, but extensions are welcome.
+
+To invoke the linter locally, use `task lint`.
+
+Adoption: Internal use for PR workflows on the repository.
+
+Source: [/.github/workflows/ci-lint.yml](/.github/workflows/ci-lint.yml)
+
+# create-update-comment
+
+Undocumented action.
+
+Source: [/.github/workflows/create-update-comment.yaml](/.github/workflows/create-update-comment.yaml)
+
 ## Print Go API Changes
 
 For a PR, the action will print the changes in `go doc` output. This
@@ -34,21 +127,60 @@ jobs:
       ORG_GH_TOKEN: ${{ secrets.ORG_GH_TOKEN }}
 ```
 
-## OWASP scanner
+Adoption: Gateway, Dashboard.
+
+Source: [/.github/workflows/godoc.yml](/.github/workflows/godoc.yml)
+
+## Golang CI
+
+Popular linter for Go lang with good defaults.
+
 Example usage:
 
 ```
 jobs:
-  owasp:
-    uses: TykTechnologies/github-actions/.github/workflows/owasp.yaml@main
-    with:
-      target: http://staging-url.com
+  golangci:
+    uses: TykTechnologies/github-actions/.github/workflows/golangci.yaml@main
+  with:
+    main_branch: master
 ```
 
+Source: [/.github/workflows/golangci.yaml](/.github/workflows/golangci.yaml)
+
+# Go test
+
+Undocumented action.
+
+Source: [/.github/workflows/gotest.yaml](/.github/workflows/gotest.yaml)
+
+## Go govulncheck
+
+Official Go Vulnerability Management.
+
+See: https://go.dev/blog/vuln
+
+Example usage:
+
+```
+jobs:
+  govulncheck:
+    uses: TykTechnologies/github-actions/.github/workflows/govulncheck.yaml@main
+```
+
+Source: [/.github/workflows/govulncheck.yaml](/.github/workflows/govulncheck.yaml)
+
+# jira-lint
+
+Undocumented action.
+
+Source: [/.github/workflows/jira-lint.yaml](/.github/workflows/jira-lint.yaml)
+
 ## Nancy Scan
+
 OSS scanner which helps find CVEs in Go dependencies
 
 Example usage:
+
 ```
 jobs:
   nancy:
@@ -68,34 +200,83 @@ jobs:
     secrets: inherit
 ```
 
+Source: [/.github/workflows/nancy.yaml](/.github/workflows/nancy.yaml)
+
+## OWASP scanner
+
+Example usage:
+
+```
+jobs:
+  owasp:
+    uses: TykTechnologies/github-actions/.github/workflows/owasp.yaml@main
+    with:
+      target: http://staging-url.com
+```
+
+Source: [/.github/workflows/owasp.yaml](/.github/workflows/owasp.yaml)
+
+# PR Agent
+
+Undocumented action.
+
+Source: [/.github/workflows/pr-agent.yaml](/.github/workflows/pr-agent.yaml)
+
+# Sbom
+
+Undocumented action.
+
+Source: [/.github/workflows/sbom.yaml](/.github/workflows/sbom.yaml)
+
 ## Semgrep
+
 CodeQL like OSS linter
 
 Example usage:
+
 ```
 jobs:
   semgrep:
     uses: TykTechnologies/github-actions/.github/workflows/semgrep.yaml@main
 ```
 
+Usage: unknown; Status: a bit out of date.
 
-## Golang CI
-Popular linter for Go lang with good defaults
+Recent images use `semgrep/semgrep`, while this workflow still uses
+`returntocorp/semgrep`. Looks to be compatible at time of writing.
 
-Example usage:
-```
-jobs:
-  golangci:
-    uses: TykTechnologies/github-actions/.github/workflows/golangci.yaml@main
-  with:
-    main_branch: master
-```
+### Core: We are looking at semgrep for refactorings.
+
+If you'd like to use semgrep:
+
+- reach out to @titpetric,
+- https://blog.semgrep-ci.com/
+- https://github.com/TykTechnologies/exp/tree/main/lsc
+- https://github.com/TykTechnologies/exp/actions/workflows/semgrep.yml
+
+The current state allows to automate refactorings with semgrep, by using
+github actions automation to open up PR's against target repositories.
+
+Example outputs:
+
+- https://github.com/TykTechnologies/tyk/pull/6380
+- https://github.com/TykTechnologies/tyk-analytics/pull/4051
+
+We experience several problems where semgrep could be used more extensively:
+
+- code cleanups to enforce consistent style
+- large scale refactorings
+- ensuring code style compliance with new contributions
+- detecting bugs based on our own rules/bugs occuring
+
+Source: [/.github/workflows/semgrep.yaml](/.github/workflows/semgrep.yaml)
 
 ## SonarCloud
 
-Put it after Golang CI to automatically upload its reports to SonarCloud
+Put it after Golang CI to automatically upload its reports to SonarCloud.
 
 Example usage:
+
 ```
 jobs:
   golangci:
@@ -106,13 +287,5 @@ jobs:
   secrets: inherit  
 ```
 
-## Go govulncheck
-Official Go Vulnerability Management
-See https://go.dev/blog/vuln
+Source: [/.github/workflows/sonarcloud.yaml](/.github/workflows/sonarcloud.yaml)
 
-Example usage:
-```
-jobs:
-  govulncheck:
-    uses: TykTechnologies/github-actions/.github/workflows/govulncheck.yaml@main
-```
