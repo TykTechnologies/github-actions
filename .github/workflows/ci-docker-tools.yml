@@ -1,6 +1,6 @@
 # yamllint disable rule:line-length
 ---
-name: Docker - CI tools
+name: CI tooling
 
 # This workflow builds the CI tooling from docker/tools/
 # within this repository. It runs whenever a file inside

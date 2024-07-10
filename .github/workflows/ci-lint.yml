@@ -1,6 +1,6 @@
 # yamllint disable rule:line-length
 ---
-name: Lint changes
+name: CI lint
 
 # This workflow runs the taskfile in the root to ensure
 # that the changes added to the repository do not trigger

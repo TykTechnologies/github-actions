@@ -1,4 +1,4 @@
-## CI tools
+## CI tooling
 
 We build a docker image from the CI pipeline in this repository that
 builds and installs all the CI tooling needed for the test pipelines.
