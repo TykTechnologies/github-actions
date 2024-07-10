@@ -18,7 +18,7 @@ tasks:
       - for: {var: actions}
         task: have:docs
         vars:
-          filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml"}}.md'
+          filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml" | trimSuffix "/action" }}.md'
 
       - for: {var: workflows}
         task: have:lint

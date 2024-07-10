@@ -1,4 +1,4 @@
-## Lint
+## CI lint
 
 In order to ensure some standard of quality, a lint action is being run
 that checks for syntax issues, yaml issues and validates github actions
@@ -10,3 +10,5 @@ It's generally incomplete, but extensions are welcome.
 To invoke the linter locally, use `task lint`.
 
 Adoption: Internal use for PR workflows on the repository.
+
+Source: [ci-lint.yaml](/.github/workflows/ci-lint.yml)
