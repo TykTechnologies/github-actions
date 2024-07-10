@@ -2,7 +2,7 @@
 
 Example usage:
 
-```
+```yaml
 jobs:
   owasp:
     uses: TykTechnologies/github-actions/.github/workflows/owasp.yaml@main

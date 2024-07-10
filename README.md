@@ -121,7 +121,7 @@ comment changes.
 
 Example usage:
 
-```
+```yaml
 jobs:
   godoc:
     uses: TykTechnologies/github-actions/.github/workflows/godoc.yml@main
@@ -139,7 +139,7 @@ Popular linter for Go lang with good defaults.
 
 Example usage:
 
-```
+```yaml
 jobs:
   golangci:
     uses: TykTechnologies/github-actions/.github/workflows/golangci.yaml@main
@@ -163,7 +163,7 @@ See: https://go.dev/blog/vuln
 
 Example usage:
 
-```
+```yaml
 jobs:
   govulncheck:
     uses: TykTechnologies/github-actions/.github/workflows/govulncheck.yaml@main
@@ -183,7 +183,7 @@ OSS scanner which helps find CVEs in Go dependencies
 
 Example usage:
 
-```
+```yaml
 jobs:
   nancy:
     strategy:
@@ -208,7 +208,7 @@ Source: [/.github/workflows/nancy.yaml](/.github/workflows/nancy.yaml)
 
 Example usage:
 
-```
+```yaml
 jobs:
   owasp:
     uses: TykTechnologies/github-actions/.github/workflows/owasp.yaml@main
@@ -236,7 +236,7 @@ CodeQL like OSS linter
 
 Example usage:
 
-```
+```yaml
 jobs:
   semgrep:
     uses: TykTechnologies/github-actions/.github/workflows/semgrep.yaml@main
@@ -276,7 +276,7 @@ Put it after Golang CI to automatically upload its reports to SonarCloud.
 
 Example usage:
 
-```
+```yaml
 jobs:
   golangci:
     uses: TykTechnologies/github-actions/.github/workflows/sonarcloud.yaml@main

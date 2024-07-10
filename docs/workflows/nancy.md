@@ -4,7 +4,7 @@ OSS scanner which helps find CVEs in Go dependencies
 
 Example usage:
 
-```
+```yaml
 jobs:
   nancy:
     strategy:
