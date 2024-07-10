@@ -33,13 +33,13 @@ tasks:
           filename: '{{.ITEM}}'
 
   markdown:
-    desc: "List actions and workflows"
+    desc: "Display markdown"
     silent: true
     vars:
       actions:
-        sh: ls ../.github/actions/*/*.{yml,yaml}
+        sh: ls ../.github/actions/*/*.{yml,yaml} | sort
       workflows:
-        sh: ls ../.github/workflows/*.{yml,yaml}
+        sh: ls ../.github/workflows/*.{yml,yaml} | sort
     cmds:
       - echo "# Composite actions" && echo
       - for: {var: actions}
@@ -55,6 +55,33 @@ tasks:
           source: '{{.ITEM}}'
           filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml"}}.md'
 
+  toc:
+    desc: "Display markdown TOC"
+    silent: true
+    vars:
+      actions:
+        sh: ls ../.github/actions/*/*.{yml,yaml} | sort
+      workflows:
+        sh: ls ../.github/workflows/*.{yml,yaml} | sort
+    cmds:
+      - echo "# Composite actions"
+      - echo
+      - for: {var: actions}
+        task: cat:docs-toc
+        vars:
+          source: '{{.ITEM}}'
+          filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml" | trimSuffix "/action" }}.md'
+      - echo
+
+      - echo "# Reusable workflows"
+      - echo
+      - for: {var: workflows}
+        task: cat:docs-toc
+        vars:
+          source: '{{.ITEM}}'
+          filename: 'docs/{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml"}}.md'
+
+
   # This target ensures that every action and workflow
   # should have documentation, and reports if it doesn't.
   have:docs:
@@ -69,7 +96,7 @@ tasks:
 
   # This target reads a file for markdown output.
   cat:docs:
-    desc: "Read docs filename"
+    internal: true
     silent: true
     requires:
       vars: [filename, source]
@@ -90,6 +117,19 @@ tasks:
           echo
           echo "Source: [{{.link}}]({{.link}})"
           echo
+
+  # This target reads a file for markdown output.
+  cat:docs-toc:
+    internal: true
+    silent: true
+    requires:
+      vars: [filename, source]
+    vars:
+      link: '{{.source | replace "../" "/"}}'
+    cmds:
+      - |-
+          name=$(yq '.name' {{.source}})
+          echo "- $name [documentation]({{.filename}}) [source]({{.link}})"
 
   # This target ensures that every action and workflow
   # should have a `name` field present (poor mans schema).
