@@ -6,7 +6,7 @@ comment changes.
 
 Example usage:
 
-```
+```yaml
 jobs:
   godoc:
     uses: TykTechnologies/github-actions/.github/workflows/godoc.yml@main

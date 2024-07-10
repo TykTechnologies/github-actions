@@ -4,7 +4,7 @@ CodeQL like OSS linter
 
 Example usage:
 
-```
+```yaml
 jobs:
   semgrep:
     uses: TykTechnologies/github-actions/.github/workflows/semgrep.yaml@main
