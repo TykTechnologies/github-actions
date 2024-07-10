@@ -1,0 +1,23 @@
+# yamllint disable rule:line-length
+---
+version: "3"
+
+vars:
+  image: internal/ci-tools
+  platform: '{{.BUILD_PLATFORM | default "linux/amd64"}}'
+
+env:
+  DOCKER_BUILDKIT: 1
+  BUILDX_EXPERIMENTAL: 1
+
+tasks:
+  default:
+    desc: "Build docker images"
+    vars:
+      tags: latest
+      args: --rm --platform {{.platform}} --progress=plain --no-cache --pull
+    cmds:
+      - for:
+          var: tags
+          as: tag
+        cmd: docker build {{.args}} -t {{.image}}:{{.tag}} -f {{.tag}}/Dockerfile {{.tag}}/

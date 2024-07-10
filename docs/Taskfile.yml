@@ -1,0 +1,56 @@
+---
+version: "3"
+
+tasks:
+  default:
+    desc: "List actions and workflows"
+    vars:
+      actions:
+        sh: ls ../.github/actions/*/*.{yml,yaml}
+      workflows:
+        sh: ls ../.github/workflows/*.{yml,yaml}
+    cmds:
+      - for: {var: workflows}
+        task: have:docs
+        vars:
+          filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml"}}.md'
+
+      - for: {var: actions}
+        task: have:docs
+        vars:
+          filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml"}}.md'
+
+      - for: {var: workflows}
+        task: have:lint
+        vars:
+          want: name
+          filename: '{{.ITEM}}'
+
+      - for: {var: actions}
+        task: have:lint
+        vars:
+          want: name description
+          filename: '{{.ITEM}}'
+
+  # This target ensures that every action and workflow
+  # should have documentation, and reports if it doesn't.
+  have:docs:
+    desc: "Check docs exists"
+    silent: true
+    requires:
+      vars: [filename]
+    status:
+      - test -e ./{{.filename}}
+    cmds:
+      - echo "❌ Action not documented in {{.filename}}"
+
+  # This target ensures that every action and workflow
+  # should have a `name` field present (poor mans schema).
+  have:lint:
+    desc: "Check lint pass"
+    silent: true
+    requires:
+      vars: [filename, want]
+    cmds:
+      - for: {var: want}
+        cmd: yq -o props {{.filename}} | grep -q '^{{.ITEM}} ' || echo "❌ Missing '{{.ITEM}}' in {{.filename}}"
