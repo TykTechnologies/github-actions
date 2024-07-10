@@ -112,7 +112,7 @@ tasks:
             if [ "$description" = "null" ] || [ -z "$description" ]; then
               description="Undocumented action."
             fi
-            echo -e "# $name\n\n$description"
+            echo -e "## $name\n\n$description"
           fi
           echo
           echo "Source: [{{.link}}]({{.link}})"

@@ -30,13 +30,13 @@ Adoption: gateway, dashboard, reuse in shared CI workflows.
 
 Source: [/.github/actions/checkout-pr/action.yml](/.github/actions/checkout-pr/action.yml)
 
-# Github to slack
+## Github to slack
 
 Maps github email with slack user, based on a key value map. Maps needs to be mantained manually.
 
 Source: [/.github/actions/github-to-slack/action.yaml](/.github/actions/github-to-slack/action.yaml)
 
-# Calculate tests tags
+## Calculate tests tags
 
 Calculates corresponding CI image tags based on github events for a group of tyk repositories
 
@@ -107,7 +107,7 @@ Adoption: Internal use for PR workflows on the repository.
 
 Source: [/.github/workflows/ci-lint.yml](/.github/workflows/ci-lint.yml)
 
-# create-update-comment
+## Create or update a GitHub comment
 
 Undocumented action.
 
@@ -149,7 +149,7 @@ jobs:
 
 Source: [/.github/workflows/golangci.yaml](/.github/workflows/golangci.yaml)
 
-# Go test
+## Go test
 
 Undocumented action.
 
@@ -171,7 +171,7 @@ jobs:
 
 Source: [/.github/workflows/govulncheck.yaml](/.github/workflows/govulncheck.yaml)
 
-# jira-lint
+## jira-lint
 
 Undocumented action.
 
@@ -218,13 +218,13 @@ jobs:
 
 Source: [/.github/workflows/owasp.yaml](/.github/workflows/owasp.yaml)
 
-# PR Agent
+## PR Agent
 
 Undocumented action.
 
 Source: [/.github/workflows/pr-agent.yaml](/.github/workflows/pr-agent.yaml)
 
-# Sbom
+## SBOM - source bill of materials
 
 Undocumented action.
 
@@ -247,12 +247,9 @@ Usage: unknown; Status: a bit out of date.
 Recent images use `semgrep/semgrep`, while this workflow still uses
 `returntocorp/semgrep`. Looks to be compatible at time of writing.
 
-### Core: We are looking at semgrep for refactorings.
-
 If you'd like to use semgrep:
 
-- reach out to @titpetric,
-- https://blog.semgrep-ci.com/
+- reach out to @titpetric if you need working-user assistance,
 - https://github.com/TykTechnologies/exp/tree/main/lsc
 - https://github.com/TykTechnologies/exp/actions/workflows/semgrep.yml
 

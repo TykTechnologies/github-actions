@@ -1,4 +1,5 @@
-name: create-update-comment
+name: Create or update a GitHub comment
+
 on:
   workflow_call:
     inputs:
@@ -14,6 +15,7 @@ on:
         required: true
         type: string
         description: "The text to add to the comment body."
+
 jobs:
   create-update-comment:
     runs-on: ubuntu-latest

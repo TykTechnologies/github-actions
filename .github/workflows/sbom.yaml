@@ -1,4 +1,4 @@
-name: Sbom
+name: SBOM - source bill of materials
 
 on:
   workflow_call:
