@@ -1,4 +1,5 @@
-name: jira-lint
+name: JIRA linter
+
 on:
   workflow_call:
     secrets:
