@@ -5,6 +5,7 @@ on:
 
 jobs:
   govulncheck:
+    name: Go Vulnerability detection
     runs-on: ubuntu-latest
 
     steps:
