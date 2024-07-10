@@ -41,5 +41,3 @@ A local Taskfile is available in `docker/tools/` that allows you to build
 the tools image locally. Changes are tested in PRs.
 
 Adoption: Internal use for PR workflows on the repository.
-
-Source: [ci-docker-tools.yml](/.github/workflows/ci-docker-tools.yml)

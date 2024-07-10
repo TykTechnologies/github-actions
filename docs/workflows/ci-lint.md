@@ -10,5 +10,3 @@ It's generally incomplete, but extensions are welcome.
 To invoke the linter locally, use `task lint`.
 
 Adoption: Internal use for PR workflows on the repository.
-
-Source: [ci-lint.yml](/.github/workflows/ci-lint.yml)

@@ -32,6 +32,29 @@ tasks:
           want: name description
           filename: '{{.ITEM}}'
 
+  markdown:
+    desc: "List actions and workflows"
+    silent: true
+    vars:
+      actions:
+        sh: ls ../.github/actions/*/*.{yml,yaml}
+      workflows:
+        sh: ls ../.github/workflows/*.{yml,yaml}
+    cmds:
+      - echo "# Composite actions" && echo
+      - for: {var: actions}
+        task: cat:docs
+        vars:
+          source: '{{.ITEM}}'
+          filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml" | trimSuffix "/action" }}.md'
+
+      - echo "# Reusable workflows" && echo
+      - for: {var: workflows}
+        task: cat:docs
+        vars:
+          source: '{{.ITEM}}'
+          filename: '{{.ITEM | trimPrefix "../.github/" | trimSuffix ".yaml" | trimSuffix ".yml"}}.md'
+
   # This target ensures that every action and workflow
   # should have documentation, and reports if it doesn't.
   have:docs:
@@ -43,6 +66,30 @@ tasks:
       - test -e ./{{.filename}}
     cmds:
       - echo "❌ Action not documented in {{.filename}}"
+
+  # This target reads a file for markdown output.
+  cat:docs:
+    desc: "Read docs filename"
+    silent: true
+    requires:
+      vars: [filename, source]
+    vars:
+      link: '{{.source | replace "../" "/"}}'
+    cmds:
+      - |-
+          if [ -e ./{{.filename}} ]; then
+            cat ./{{.filename}}
+          else
+            name=$(yq '.name' {{.source}})
+            description=$(yq '.description' {{.source}})
+            if [ "$description" = "null" ] || [ -z "$description" ]; then
+              description="Undocumented action."
+            fi
+            echo -e "# $name\n\n$description"
+          fi
+          echo
+          echo "Source: [{{.link}}]({{.link}})"
+          echo
 
   # This target ensures that every action and workflow
   # should have a `name` field present (poor mans schema).
