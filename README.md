@@ -171,9 +171,9 @@ jobs:
 
 Source: [/.github/workflows/govulncheck.yaml](/.github/workflows/govulncheck.yaml)
 
-## jira-lint
+## JIRA linter
 
-Undocumented action.
+Adoption: Gateway, Dashboard.
 
 Source: [/.github/workflows/jira-lint.yaml](/.github/workflows/jira-lint.yaml)
 
@@ -226,7 +226,7 @@ Source: [/.github/workflows/pr-agent.yaml](/.github/workflows/pr-agent.yaml)
 
 ## SBOM - source bill of materials
 
-Undocumented action.
+Adoption: Gateway, Dashboard.
 
 Source: [/.github/workflows/sbom.yaml](/.github/workflows/sbom.yaml)
 

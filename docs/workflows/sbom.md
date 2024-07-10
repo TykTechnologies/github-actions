@@ -1,3 +1,3 @@
-# SBOM - source bill of materials
+## SBOM - source bill of materials
 
 Adoption: Gateway, Dashboard.

@@ -1,3 +1,3 @@
-# JIRA linter
+## JIRA linter
 
 Adoption: Gateway, Dashboard.
