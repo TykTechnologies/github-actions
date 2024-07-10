@@ -1,9 +1,10 @@
+name: Go Vulnerability detection
+
 on:
   workflow_call:
 
 jobs:
   govulncheck:
-    name: Go Vulnerability detection
     runs-on: ubuntu-latest
 
     steps:
