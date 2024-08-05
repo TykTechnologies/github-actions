@@ -1,10 +1,11 @@
-FROM golang:1.21 AS tools-build
+FROM golang:1.23 AS tools-build
 
 ENV CGO_ENABLED=0
 ENV GOBIN=/usr/local/bin
 ENV GOPROXY=direct
 WORKDIR /usr/local/bin
 
+RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/cli/cli/v2/cmd/gh@latest
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/TykTechnologies/exp/cmd/httpbin-logserver@main
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/TykTechnologies/exp/cmd/schema-gen@main
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/TykTechnologies/exp/cmd/summary@main
