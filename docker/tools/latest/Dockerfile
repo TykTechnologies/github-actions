@@ -15,6 +15,7 @@ RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/golang
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/fatih/faillint@latest
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install gotest.tools/gotestsum@latest
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/wadey/gocovmerge@latest
+RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install go install github.com/cli/cli/v2/cmd/gh@latest
 
 ARG TASK_VERSION=v3.27.1
 RUN curl -sSL https://github.com/go-task/task/releases/download/${TASK_VERSION}/task_linux_amd64.tar.gz | tar -zxv
