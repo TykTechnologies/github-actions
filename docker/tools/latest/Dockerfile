@@ -1,4 +1,4 @@
-FROM golang:1.21 AS tools-build
+FROM golang:1.23 AS tools-build
 
 ENV CGO_ENABLED=0
 ENV GOBIN=/usr/local/bin
