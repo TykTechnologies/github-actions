@@ -6,9 +6,9 @@ tasks:
     desc: "List actions and workflows"
     vars:
       actions:
-        sh: ls ../.github/actions/*/*.{yml,yaml}
+        sh: ls ../.github/actions/*/*.{yml,yaml} | grep -v "\-dev"
       workflows:
-        sh: ls ../.github/workflows/*.{yml,yaml}
+        sh: ls ../.github/workflows/*.{yml,yaml} | grep -v "\-dev"
     cmds:
       - for: {var: workflows}
         task: have:docs
