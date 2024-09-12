@@ -1,0 +1,140 @@
+name: SBOM - source bill of materials (dev)
+
+on:
+  workflow_call:
+    secrets:
+      # Remove this as soon as this is removed from release wf.
+      TF_API_TOKEN:
+        required: false
+      DOCKER_IMAGE:
+        required: false
+      DEPDASH_URL:
+        required: true
+      DEPDASH_KEY:
+        required: true
+      ORG_GH_TOKEN:
+        required: true
+    
+jobs:
+  changedfiles:
+    runs-on: ubuntu-latest
+    # Map a step output to a job output
+    outputs:
+      go: ${{ steps.changes.outputs.go }}
+      npm: ${{ steps.changes.outputs.npm }}
+      ci: ${{ steps.changes.outputs.ci }}
+      docker: ${{ steps.changes.outputs.docker }}
+      github: ${{ steps.changes.outputs.github }}
+    steps:
+      # Make sure we have some code to diff.
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 50
+
+      - name: Get changed files
+        id: changes
+        # Set outputs using the command.
+        run: |
+          if [ -n "${{ github.event.pull_request.head.sha }}" ]; then
+            # If pull request event is available, use the PR commit SHA
+            COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            # If pull request event is not available, use the push commit SHA
+            COMMIT_SHA="${{ github.sha }}"
+          fi
+          
+          echo $COMMIT_SHA
+          FILES=$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} $COMMIT_SHA)
+          
+          echo "go=$(echo $FILES | grep go.mod | xargs )" >> $GITHUB_OUTPUT
+          echo "npm=$(echo $FILES | grep npm | xargs )" >> $GITHUB_OUTPUT
+          echo "ci=$(echo $FILES | grep ci | xargs )" >> $GITHUB_OUTPUT
+          echo "docker=$(echo $FILES | grep Dockerfile | xargs )" >> $GITHUB_OUTPUT
+          echo "github=$(echo $FILES | grep github | xargs )" >> $GITHUB_OUTPUT
+          
+          echo $FILES | grep github | xargs
+  sbom:
+    name: SBOM
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # This is required for requesting the JWT
+      contents: read    # This is required for actions/checkout
+    needs: changedfiles
+    if: contains(github.ref, 'release-') || contains(github.ref, 'master') || contains(github.base_ref, 'release-') || contains(github.base_ref, 'master') || needs.changedfiles.outputs.go || needs.changedfiles.outputs.npm || needs.changedfiles.outputs.ci || needs.changedfiles.outputs.docker || needs.changedfiles.outputs.github
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+          token: ${{ secrets.ORG_GH_TOKEN }}
+          submodules: true
+          
+      - name: Configure AWS credentials for use
+        uses: aws-actions/configure-aws-credentials@v1
+        env:
+          DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
+        if: env.DOCKER_IMAGE == null
+        with:
+          role-to-assume: arn:aws:iam::754489498669:role/ecr_rw_tyk
+          role-session-name: cipush
+          aws-region: eu-central-1
+          
+      - name: Login to Amazon ECR
+        env:
+          DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
+        if: env.DOCKER_IMAGE == null
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Generate Source code SBOM
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: 'fs'
+          format: 'cyclonedx'
+          output: 'source.sbom.json'
+          image-ref: '.'
+
+      - name: Generate Docker SBOM
+        uses: aquasecurity/trivy-action@0.20.0
+        env:
+          DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
+        if: env.DOCKER_IMAGE == null
+        with:
+          format: 'cyclonedx'
+          output: 'docker.sbom.json'
+          image-ref: '${{ steps.login-ecr.outputs.registry }}/${{ github.event.repository.name}}:sha-${{ github.sha }}'
+          
+      - name: Generate Docker SBOM
+        uses: aquasecurity/trivy-action@0.20.0
+        env:
+          DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
+        if: env.DOCKER_IMAGE
+        with:
+          format: 'cyclonedx'
+          output: 'docker.sbom.json'
+          image-ref: '${{ secrets.DOCKER_IMAGE }}'
+
+
+      - name: Generate Dependencies SBOM
+        run: |
+          curl https://raw.githubusercontent.com/TykTechnologies/github-actions/main/sbom/gen_dep.py > gen_dep.py
+          python3 gen_dep.py service.yaml > deps.sbom.json
+
+      - name: Merge SBOM
+        run: |
+          curl https://raw.githubusercontent.com/TykTechnologies/github-actions/main/sbom/merge.py > merge.py
+          python3 merge.py source.sbom.json docker.sbom.json deps.sbom.json > sbom.json
+      
+      - name: Upload SBOM
+        run: |
+           if [ -n "$GITHUB_HEAD_REF" ]; then
+             BRANCH_NAME="${GITHUB_HEAD_REF##*/}"
+           else
+             BRANCH_NAME="${GITHUB_REF##*/}"
+           fi
+            
+           curl '${{secrets.DEPDASH_URL}}/api/v1/bom' -X 'POST' -H 'X-API-Key: ${{secrets.DEPDASH_KEY}}' -H "Content-Type: multipart/form-data" -F "autoCreate=true" -F "projectName=${GITHUB_REPOSITORY##*/}" -F "projectVersion=${BRANCH_NAME}" -F "bom=@./sbom.json" -vvv
+           
+           # curl -vvv '${{secrets.DEPDASH_URL}}/api/v1/project/lookup?name=${GITHUB_REPOSITORY##*/}&version=${BRANCH_NAME}' -H 'X-API-Key: ${{secrets.DEPDASH_KEY}}
+           # PROJECT_UUID=$(curl --silent '${{secrets.DEPDASH_URL}}/api/v1/project/lookup?name=${GITHUB_REPOSITORY##*/}&version=${BRANCH_NAME}' -H 'X-API-Key: ${{secrets.DEPDASH_KEY}}' | jq -r .uuid)

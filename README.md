@@ -224,6 +224,12 @@ Undocumented action.
 
 Source: [/.github/workflows/pr-agent.yaml](/.github/workflows/pr-agent.yaml)
 
+## SBOM - source bill of materials (dev)
+
+Undocumented action.
+
+Source: [/.github/workflows/sbom-dev.yaml](/.github/workflows/sbom-dev.yaml)
+
 ## SBOM - source bill of materials
 
 Adoption: Gateway, Dashboard.
