@@ -1,0 +1,116 @@
+name: Cherry-pick to Release Branch
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  cherry_pick:
+    if: ${{ github.event.issue.pull_request && startsWith(github.event.comment.body, '/release to ') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract release branch
+        id: extract_branch
+        run: |
+          RELEASE_BRANCH=$(echo "${{ github.event.comment.body }}" | sed -n 's/^\/release to \(.*\)$/\1/p')
+          echo "RELEASE_BRANCH=${RELEASE_BRANCH}" >> $GITHUB_OUTPUT
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Git
+        run: |
+          git config --global user.email "bot@tyk.io"
+          git config --global user.name "Tyk Bot"
+
+      - name: Install GitHub CLI
+        run: |
+          type -p curl >/dev/null || sudo apt install curl -y
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+          && sudo apt update \
+          && sudo apt install gh -y
+
+      - name: Get PR details
+        id: pr_details
+        run: |
+          PR_NUMBER=${{ github.event.issue.number }}
+          PR_DATA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${PR_NUMBER}")
+          COMMIT_SHA=$(echo $PR_DATA | jq -r .head.sha)
+          echo "COMMIT_SHA=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Cherry-pick commit
+        id: cherry_pick
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PAT: ${{ secrets.PAT }}
+          GITHUB_REPO: ${{ github.repository }}
+          GITHUB_BRANCH: ${{ steps.extract_branch.outputs.RELEASE_BRANCH }}
+          GITHUB_CHERRY_PICK_COMMIT: ${{ steps.pr_details.outputs.COMMIT_SHA }}
+        run: |
+          set -e  # Exit immediately if a command exits with a non-zero status
+
+          export FOLDER=$(echo $GITHUB_REPO | cut -d '/' -f2)
+          rm -rf $FOLDER
+          git clone https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPO || { echo "Failed to clone repository"; exit 1; }
+          cd $FOLDER
+          git checkout $GITHUB_BRANCH || { echo "Failed to checkout branch $GITHUB_BRANCH"; exit 1; }
+          git pull
+
+          BRANCH_NAME="merge/${GITHUB_BRANCH}/${GITHUB_CHERRY_PICK_COMMIT}"
+          git checkout -b $BRANCH_NAME
+
+          if ! git cherry-pick -x $GITHUB_CHERRY_PICK_COMMIT; then
+            echo "Cherry-pick failed. Manual intervention required."
+            git add -A
+            git -c core.editor=true cherry-pick --continue --no-edit || true
+            MERGE_FAILED=1
+          else
+            MERGE_FAILED=0
+          fi
+
+          git push origin $BRANCH_NAME --force || { echo "Failed to push branch"; exit 1; }
+
+          TITLE=$(git log --format=%B -n 1 $GITHUB_CHERRY_PICK_COMMIT | head -n 1)
+          MESSAGE=$(git log --format=%B -n 1 $GITHUB_CHERRY_PICK_COMMIT | tail -n +3)  # Skip the first two lines
+          
+          # Try with GITHUB_TOKEN first, fallback to PAT if available
+          if ! echo $GITHUB_TOKEN | gh auth login --with-token; then
+            if [ -n "$PAT" ]; then
+              echo $PAT | gh auth login --with-token
+            else
+              echo "Failed to authenticate with GitHub CLI"
+              exit 1
+            fi
+          fi
+
+          if [ $MERGE_FAILED -eq 1 ]; then
+              PR_URL=$(gh pr create --draft --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head $BRANCH_NAME)
+          else
+              PR_URL=$(gh pr create --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head $BRANCH_NAME)
+              PR_ID="${PR_URL##*/}"
+              gh pr merge --squash $PR_ID --auto --subject "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" 
+          fi
+
+          echo "PR_URL=$PR_URL" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const prUrl = '${{ steps.cherry_pick.outputs.PR_URL }}';
+            const body = prUrl 
+              ? `Cherry-pick operation completed. New pull request created: ${prUrl}`
+              : 'Cherry-pick operation completed, but no pull request was created. Please check the logs for more information.';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.name,
+              body: body
+            });
