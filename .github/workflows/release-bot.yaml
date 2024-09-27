@@ -113,7 +113,7 @@ jobs:
             }
             
             github.rest.issues.createComment({
-              issue_number: ${{ steps.check_command.outputs.pr_number }},
+              issue_number: '${{ steps.check_command.outputs.pr_number }}',
               owner: context.repo.owner,
               repo: context.repo.name,
               body: body
