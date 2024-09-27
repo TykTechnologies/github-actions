@@ -15,31 +15,23 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            console.log('Starting script');
             const { issue, comment } = context.payload;
-            console.log('Issue:', issue);
-            console.log('Comment:', comment);
             
             if (!issue || !issue.pull_request || !comment || !comment.body.startsWith('/release to ')) {
-              console.log('Not a valid release command');
               core.setFailed('Not a valid release command on a pull request.');
               return;
             }
             
-            console.log('Valid release command');
             const releaseBranch = comment.body.split('/release to ')[1].trim();
-            console.log('Release branch:', releaseBranch);
             core.setOutput('release_branch', releaseBranch);
             core.setOutput('pr_number', issue.number);
             
-            console.log('Creating comment');
             await github.rest.issues.createComment({
               issue_number: issue.number,
               owner: context.repo.owner,
               repo: context.repo.name,
               body: '🔄 Cherry-pick operation started. Please wait...'
             });
-            console.log('Comment created');
 
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -81,7 +73,6 @@ jobs:
           git pull
           git checkout -b $BRANCH_NAME
           if ! git cherry-pick -x $GITHUB_CHERRY_PICK_COMMIT; then
-            echo "Cherry-pick failed. Manual intervention required."
             git add -A
             git -c core.editor=true cherry-pick --continue --no-edit || true
             MERGE_FAILED=1
