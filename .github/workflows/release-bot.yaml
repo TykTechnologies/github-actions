@@ -119,7 +119,7 @@ jobs:
           echo "Extract PR ID"
           PR_ID="${PR_URL##*/}"
 
-          ehco "If no merge failure, auto-merge the PR"
+          echo "If no merge failure, auto-merge the PR"
           if [ $MERGE_FAILED -eq 0 ]; then
             gh pr merge --squash $PR_ID --auto --subject "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" 
           fi
