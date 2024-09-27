@@ -27,6 +27,12 @@ jobs:
             core.setOutput('release_branch', releaseBranch);
             core.setOutput('pr_number', issue.number);
 
+      - name: Set default branch variable
+        if: steps.check_command.outputs.release_valid == 'true'
+        run: |
+          # Set the default branch (master or main) dynamically based on the repo default branch
+          echo "DEFAULT_BRANCH=${{ github.event.repository.default_branch }}" >> $GITHUB_ENV
+
       # Conditionally skip jobs if not a valid release command
       - name: Skip jobs if not a valid release command
         if: steps.check_command.outputs.release_valid == 'false'
@@ -54,9 +60,9 @@ jobs:
           git clone https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPO || true
           cd $FOLDER
 
-          # Reset and checkout master
+          # Reset and checkout default branch (master or main)
           git reset --hard
-          git checkout master
+          git checkout $DEFAULT_BRANCH
           git pull
           git checkout $GITHUB_BRANCH
           git reset --hard
