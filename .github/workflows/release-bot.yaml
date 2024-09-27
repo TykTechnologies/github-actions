@@ -48,6 +48,8 @@ jobs:
 
       - name: Get PR details
         id: pr_details
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_DATA=$(gh pr view ${{ steps.check_command.outputs.pr_number }} --json headRefOid)
           COMMIT_SHA=$(echo $PR_DATA | jq -r .headRefOid)
