@@ -46,6 +46,13 @@ jobs:
           git config --global user.email "bot@tyk.io"
           git config --global user.name "Tyk Bot"
 
+      - name: Get PR details
+        id: pr_details
+        run: |
+          PR_DATA=$(gh pr view ${{ steps.check_command.outputs.pr_number }} --json headRefOid)
+          COMMIT_SHA=$(echo $PR_DATA | jq -r .headRefOid)
+          echo "COMMIT_SHA=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+
       - name: Clone repository and cherry-pick commit
         if: steps.check_command.outputs.release_valid == 'true'
         env:
@@ -129,10 +136,13 @@ jobs:
             } else {
               body = '❌ Cherry-pick operation failed. Please check the action logs for more information.';
             }
+
+            const owner = context.repo.owner || '${{ github.repository_owner }}';
+            const repo = context.repo.name || '${{ github.event.repository.name }}';
             
             github.rest.issues.createComment({
               issue_number: ${{ steps.check_command.outputs.pr_number }},
-              owner: context.repo.owner,
-              repo: context.repo.name,
+              owner: owner,
+              repo: name,
               body: body
             });
