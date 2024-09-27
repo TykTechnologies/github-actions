@@ -27,13 +27,17 @@ jobs:
             core.setOutput('release_branch', releaseBranch);
             core.setOutput('pr_number', issue.number);
 
+      - name: Checkout repository
+        if: steps.check_command.outputs.release_valid == 'true'
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
       - name: Set default branch variable
         if: steps.check_command.outputs.release_valid == 'true'
         run: |
-          # Set the default branch (master or main) dynamically based on the repo default branch
           echo "DEFAULT_BRANCH=${{ github.event.repository.default_branch }}" >> $GITHUB_ENV
 
-      # Conditionally skip jobs if not a valid release command
       - name: Skip jobs if not a valid release command
         if: steps.check_command.outputs.release_valid == 'false'
         run: |
@@ -48,6 +52,7 @@ jobs:
 
       - name: Get PR details
         id: pr_details
+        if: steps.check_command.outputs.release_valid == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -119,6 +124,10 @@ jobs:
             gh pr merge --squash $PR_ID --auto --subject "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" 
           fi
 
+          # Set outputs for use in the next step
+          echo "PR_URL=${PR_URL}" >> $GITHUB_OUTPUT
+          echo "MERGE_FAILED=${MERGE_FAILED}" >> $GITHUB_OUTPUT
+
       - name: Comment on PR
         if: steps.check_command.outputs.release_valid == 'true' && always()
         uses: actions/github-script@v6
@@ -140,11 +149,11 @@ jobs:
             }
 
             const owner = context.repo.owner || '${{ github.repository_owner }}';
-            const repo = context.repo.name || '${{ github.event.repository.name }}';
+            const repo = context.repo.repo || '${{ github.event.repository.name }}';
             
             github.rest.issues.createComment({
               issue_number: ${{ steps.check_command.outputs.pr_number }},
               owner: owner,
-              repo: name,
+              repo: repo,
               body: body
             });
