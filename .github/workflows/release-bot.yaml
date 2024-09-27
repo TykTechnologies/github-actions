@@ -3,17 +3,34 @@ name: Cherry-pick to Release Branch
 on:
   issue_comment:
     types: [created]
+  workflow_call:
 
 jobs:
   cherry_pick:
-    if: ${{ github.event.issue.pull_request && startsWith(github.event.comment.body, '/release to ') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Extract release branch
-        id: extract_branch
-        run: |
-          RELEASE_BRANCH=$(echo "${{ github.event.comment.body }}" | sed -n 's/^\/release to \(.*\)$/\1/p')
-          echo "RELEASE_BRANCH=${RELEASE_BRANCH}" >> $GITHUB_OUTPUT
+      - name: Check for release command
+        id: check_command
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const { issue, comment } = context.payload;
+            if (!issue.pull_request || !comment.body.startsWith('/release to ')) {
+              core.setFailed('Not a valid release command on a pull request.');
+              return;
+            }
+            const releaseBranch = comment.body.split('/release to ')[1].trim();
+            core.setOutput('release_branch', releaseBranch);
+            core.setOutput('pr_number', issue.number);
+            
+            // Add a "working" comment
+            await github.rest.issues.createComment({
+              issue_number: issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.name,
+              body: '🔄 Cherry-pick operation started. Please wait...'
+            });
 
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -37,33 +54,23 @@ jobs:
       - name: Get PR details
         id: pr_details
         run: |
-          PR_NUMBER=${{ github.event.issue.number }}
-          PR_DATA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/${PR_NUMBER}")
-          COMMIT_SHA=$(echo $PR_DATA | jq -r .head.sha)
+          PR_DATA=$(gh pr view ${{ steps.check_command.outputs.pr_number }} --json headRefOid)
+          COMMIT_SHA=$(echo $PR_DATA | jq -r .headRefOid)
           echo "COMMIT_SHA=${COMMIT_SHA}" >> $GITHUB_OUTPUT
 
       - name: Cherry-pick commit
         id: cherry_pick
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PAT: ${{ secrets.PAT }}
           GITHUB_REPO: ${{ github.repository }}
-          GITHUB_BRANCH: ${{ steps.extract_branch.outputs.RELEASE_BRANCH }}
+          GITHUB_BRANCH: ${{ steps.check_command.outputs.release_branch }}
           GITHUB_CHERRY_PICK_COMMIT: ${{ steps.pr_details.outputs.COMMIT_SHA }}
         run: |
-          set -e  # Exit immediately if a command exits with a non-zero status
-
-          export FOLDER=$(echo $GITHUB_REPO | cut -d '/' -f2)
-          rm -rf $FOLDER
-          git clone https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPO || { echo "Failed to clone repository"; exit 1; }
-          cd $FOLDER
+          set -e
+          BRANCH_NAME="merge/${GITHUB_BRANCH}/${GITHUB_CHERRY_PICK_COMMIT}"
           git checkout $GITHUB_BRANCH || { echo "Failed to checkout branch $GITHUB_BRANCH"; exit 1; }
           git pull
-
-          BRANCH_NAME="merge/${GITHUB_BRANCH}/${GITHUB_CHERRY_PICK_COMMIT}"
           git checkout -b $BRANCH_NAME
-
           if ! git cherry-pick -x $GITHUB_CHERRY_PICK_COMMIT; then
             echo "Cherry-pick failed. Manual intervention required."
             git add -A
@@ -72,44 +79,41 @@ jobs:
           else
             MERGE_FAILED=0
           fi
-
           git push origin $BRANCH_NAME --force || { echo "Failed to push branch"; exit 1; }
-
           TITLE=$(git log --format=%B -n 1 $GITHUB_CHERRY_PICK_COMMIT | head -n 1)
-          MESSAGE=$(git log --format=%B -n 1 $GITHUB_CHERRY_PICK_COMMIT | tail -n +3)  # Skip the first two lines
-          
-          # Try with GITHUB_TOKEN first, fallback to PAT if available
-          if ! echo $GITHUB_TOKEN | gh auth login --with-token; then
-            if [ -n "$PAT" ]; then
-              echo $PAT | gh auth login --with-token
-            else
-              echo "Failed to authenticate with GitHub CLI"
-              exit 1
-            fi
-          fi
-
+          MESSAGE=$(git log --format=%B -n 1 $GITHUB_CHERRY_PICK_COMMIT | tail -n +3)
           if [ $MERGE_FAILED -eq 1 ]; then
-              PR_URL=$(gh pr create --draft --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head $BRANCH_NAME)
+              PR_URL=$(gh pr create --draft --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --base $GITHUB_BRANCH --head $BRANCH_NAME)
           else
-              PR_URL=$(gh pr create --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head $BRANCH_NAME)
+              PR_URL=$(gh pr create --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --base $GITHUB_BRANCH --head $BRANCH_NAME)
               PR_ID="${PR_URL##*/}"
               gh pr merge --squash $PR_ID --auto --subject "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" 
           fi
-
           echo "PR_URL=$PR_URL" >> $GITHUB_OUTPUT
+          echo "MERGE_FAILED=$MERGE_FAILED" >> $GITHUB_OUTPUT
 
       - name: Comment on PR
+        if: always()
         uses: actions/github-script@v6
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
             const prUrl = '${{ steps.cherry_pick.outputs.PR_URL }}';
-            const body = prUrl 
-              ? `Cherry-pick operation completed. New pull request created: ${prUrl}`
-              : 'Cherry-pick operation completed, but no pull request was created. Please check the logs for more information.';
+            const mergeFailed = '${{ steps.cherry_pick.outputs.MERGE_FAILED }}' === '1';
+            let body;
+            
+            if ('${{ job.status }}' === 'success') {
+              if (mergeFailed) {
+                body = `⚠️ Cherry-pick operation completed with conflicts. A draft pull request has been created: ${prUrl}\n\nPlease resolve the conflicts manually.`;
+              } else {
+                body = `✅ Cherry-pick operation completed successfully. New pull request created: ${prUrl}`;
+              }
+            } else {
+              body = '❌ Cherry-pick operation failed. Please check the action logs for more information.';
+            }
             
             github.rest.issues.createComment({
-              issue_number: context.issue.number,
+              issue_number: ${{ steps.check_command.outputs.pr_number }},
               owner: context.repo.owner,
               repo: context.repo.name,
               body: body
