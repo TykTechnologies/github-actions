@@ -232,8 +232,6 @@ jobs:
     uses: TykTechnologies/github-actions/.github/workflows/release-bot.yaml@main
 ```
 
-test
-
 ## PR Agent
 
 Undocumented action.
