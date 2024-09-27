@@ -98,17 +98,17 @@ jobs:
             git add -A && git -c core.editor=true cherry-pick --continue --no-edit || true
           fi
 
-          # Push the new branch
+          echo "Push the new branch"
           git push origin merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT --force || true
 
-          # Prepare the message and title for the PR
+          echo "Prepare the message and title for the PR"
           MESSAGE=$(git log --format=%B -n 1 $GITHUB_CHERRY_PICK_COMMIT)
           TITLE=$(git log --format=%B -n 1 $GITHUB_CHERRY_PICK_COMMIT | head -n 1)
           
-          # Check GH token
+          echo "Check GH token"
           echo $GITHUB_TOKEN || gh auth login --with-token
 
-          # Create the PR
+          echo "Create the PR"
           PR_URL=
           if ! [ $MERGE_FAILED -eq 0 ]; then
             PR_URL=$(gh pr create --draft --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT)
@@ -116,15 +116,15 @@ jobs:
             PR_URL=$(gh pr create --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT)
           fi
 
-          # Extract PR ID
+          echo "Extract PR ID"
           PR_ID="${PR_URL##*/}"
 
-          # If no merge failure, auto-merge the PR
+          ehco "If no merge failure, auto-merge the PR"
           if [ $MERGE_FAILED -eq 0 ]; then
             gh pr merge --squash $PR_ID --auto --subject "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" 
           fi
 
-          # Set outputs for use in the next step
+          echo "Set outputs for use in the next step"
           echo "PR_URL=${PR_URL}" >> $GITHUB_OUTPUT
           echo "MERGE_FAILED=${MERGE_FAILED}" >> $GITHUB_OUTPUT
 
