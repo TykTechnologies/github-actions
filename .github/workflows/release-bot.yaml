@@ -15,35 +15,59 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
+            console.log('Starting script');
             const { issue, comment } = context.payload;
             
-            if (!issue || !issue.pull_request || !comment || !comment.body.startsWith('/release to ')) {
-              core.setFailed('Not a valid release command on a pull request.');
+            // Debugging the values of issue and comment
+            console.log('Issue:', JSON.stringify(issue, null, 2));
+            console.log('Comment:', JSON.stringify(comment, null, 2));
+            
+            if (!issue) {
+              console.log('No issue object found in the payload.');
+              core.setOutput('release_valid', 'false');
               return;
             }
             
+            if (!issue.pull_request) {
+              console.log('This issue is not related to a pull request.');
+              core.setOutput('release_valid', 'false');
+              return;
+            }
+
+            if (!comment || !comment.body.startsWith('/release to ')) {
+              console.log(`Comment body does not start with '/release to '. Comment: ${comment ? comment.body : 'undefined'}`);
+              core.setOutput('release_valid', 'false');
+              return;
+            }
+            
+            console.log('Valid release command');
             const releaseBranch = comment.body.split('/release to ')[1].trim();
+            console.log('Release branch:', releaseBranch);
+            core.setOutput('release_valid', 'true');
             core.setOutput('release_branch', releaseBranch);
             core.setOutput('pr_number', issue.number);
-            
-            await github.rest.issues.createComment({
-              issue_number: issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.name,
-              body: '🔄 Cherry-pick operation started. Please wait...'
-            });
+
+      # Conditionally skip subsequent steps if the release command is not valid
+      - name: Skip jobs if not a valid release command
+        if: steps.check_command.outputs.release_valid == 'false'
+        run: |
+          echo "Skipping cherry-pick as the release command is not valid."
+        continue-on-error: true
 
       - name: Checkout repository
+        if: steps.check_command.outputs.release_valid == 'true'
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
       - name: Setup Git
+        if: steps.check_command.outputs.release_valid == 'true'
         run: |
           git config --global user.email "bot@tyk.io"
           git config --global user.name "Tyk Bot"
 
       - name: Install GitHub CLI
+        if: steps.check_command.outputs.release_valid == 'true'
         run: |
           type -p curl >/dev/null || sudo apt install curl -y
           curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
@@ -53,6 +77,7 @@ jobs:
           && sudo apt install gh -y
 
       - name: Get PR details
+        if: steps.check_command.outputs.release_valid == 'true'
         id: pr_details
         run: |
           PR_DATA=$(gh pr view ${{ steps.check_command.outputs.pr_number }} --json headRefOid)
@@ -60,6 +85,7 @@ jobs:
           echo "COMMIT_SHA=${COMMIT_SHA}" >> $GITHUB_OUTPUT
 
       - name: Cherry-pick commit
+        if: steps.check_command.outputs.release_valid == 'true'
         id: cherry_pick
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -93,7 +119,7 @@ jobs:
           echo "MERGE_FAILED=$MERGE_FAILED" >> $GITHUB_OUTPUT
 
       - name: Comment on PR
-        if: always()
+        if: steps.check_command.outputs.release_valid == 'true' && always()
         uses: actions/github-script@v6
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
@@ -113,7 +139,7 @@ jobs:
             }
             
             github.rest.issues.createComment({
-              issue_number: '${{ steps.check_command.outputs.pr_number }}',
+              issue_number: ${{ steps.check_command.outputs.pr_number }},
               owner: context.repo.owner,
               repo: context.repo.name,
               body: body
