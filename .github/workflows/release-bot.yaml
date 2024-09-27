@@ -77,8 +77,9 @@ jobs:
           && sudo apt install gh -y
 
       - name: Get PR details
-        if: steps.check_command.outputs.release_valid == 'true'
         id: pr_details
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
         run: |
           PR_DATA=$(gh pr view ${{ steps.check_command.outputs.pr_number }} --json headRefOid)
           COMMIT_SHA=$(echo $PR_DATA | jq -r .headRefOid)
@@ -137,10 +138,15 @@ jobs:
             } else {
               body = '❌ Cherry-pick operation failed. Please check the action logs for more information.';
             }
+
+            // Ensure the repo owner and name are correct
+            const owner = context.repo.owner || '${{ github.repository_owner }}';
+            const repo = context.repo.name || '${{ github.event.repository.name }}';
+
             
             github.rest.issues.createComment({
               issue_number: ${{ steps.check_command.outputs.pr_number }},
-              owner: context.repo.owner,
-              repo: context.repo.name,
+              owner: owner,
+              repo: repo,
               body: body
             });
