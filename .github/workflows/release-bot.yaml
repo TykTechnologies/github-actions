@@ -15,50 +15,24 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            console.log('Starting script');
             const { issue, comment } = context.payload;
             
-            // Debugging the values of issue and comment
-            console.log('Issue:', JSON.stringify(issue, null, 2));
-            console.log('Comment:', JSON.stringify(comment, null, 2));
-            
-            if (!issue) {
-              console.log('No issue object found in the payload.');
+            if (!issue || !issue.pull_request || !comment || !comment.body.startsWith('/release to ')) {
               core.setOutput('release_valid', 'false');
               return;
             }
             
-            if (!issue.pull_request) {
-              console.log('This issue is not related to a pull request.');
-              core.setOutput('release_valid', 'false');
-              return;
-            }
-
-            if (!comment || !comment.body.startsWith('/release to ')) {
-              console.log(`Comment body does not start with '/release to '. Comment: ${comment ? comment.body : 'undefined'}`);
-              core.setOutput('release_valid', 'false');
-              return;
-            }
-            
-            console.log('Valid release command');
             const releaseBranch = comment.body.split('/release to ')[1].trim();
-            console.log('Release branch:', releaseBranch);
             core.setOutput('release_valid', 'true');
             core.setOutput('release_branch', releaseBranch);
             core.setOutput('pr_number', issue.number);
 
-      # Conditionally skip subsequent steps if the release command is not valid
+      # Conditionally skip jobs if not a valid release command
       - name: Skip jobs if not a valid release command
         if: steps.check_command.outputs.release_valid == 'false'
         run: |
           echo "Skipping cherry-pick as the release command is not valid."
         continue-on-error: true
-
-      - name: Checkout repository
-        if: steps.check_command.outputs.release_valid == 'true'
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       - name: Setup Git
         if: steps.check_command.outputs.release_valid == 'true'
@@ -66,58 +40,69 @@ jobs:
           git config --global user.email "bot@tyk.io"
           git config --global user.name "Tyk Bot"
 
-      - name: Install GitHub CLI
+      - name: Clone repository and cherry-pick commit
         if: steps.check_command.outputs.release_valid == 'true'
-        run: |
-          type -p curl >/dev/null || sudo apt install curl -y
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
-          && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
-          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-          && sudo apt update \
-          && sudo apt install gh -y
-
-      - name: Get PR details
-        id: pr_details
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
-        run: |
-          PR_DATA=$(gh pr view ${{ steps.check_command.outputs.pr_number }} --json headRefOid)
-          COMMIT_SHA=$(echo $PR_DATA | jq -r .headRefOid)
-          echo "COMMIT_SHA=${COMMIT_SHA}" >> $GITHUB_OUTPUT
-
-      - name: Cherry-pick commit
-        if: steps.check_command.outputs.release_valid == 'true'
-        id: cherry_pick
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
           GITHUB_BRANCH: ${{ steps.check_command.outputs.release_branch }}
           GITHUB_CHERRY_PICK_COMMIT: ${{ steps.pr_details.outputs.COMMIT_SHA }}
         run: |
-          set -e
-          BRANCH_NAME="merge/${GITHUB_BRANCH}/${GITHUB_CHERRY_PICK_COMMIT}"
-          git checkout $GITHUB_BRANCH || { echo "Failed to checkout branch $GITHUB_BRANCH"; exit 1; }
+          # Clone the repository
+          export FOLDER=$(echo $GITHUB_REPO | cut -d '/' -f2)
+          rm -rf $FOLDER
+          git clone https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPO || true
+          cd $FOLDER
+
+          # Reset and checkout master
+          git reset --hard
+          git checkout master
           git pull
-          git checkout -b $BRANCH_NAME
-          if ! git cherry-pick -x $GITHUB_CHERRY_PICK_COMMIT; then
-            git add -A
-            git -c core.editor=true cherry-pick --continue --no-edit || true
-            MERGE_FAILED=1
-          else
-            MERGE_FAILED=0
+          git checkout $GITHUB_BRANCH
+          git reset --hard
+          git pull
+
+          # Delete old branch if it exists
+          git branch -d merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT || true
+          git push origin --delete merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT || true
+
+          # Create and checkout the new branch
+          git checkout -b merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT
+
+          # Cherry-pick the commit
+          MERGE_FAILED=0
+          git cherry-pick -x $GITHUB_CHERRY_PICK_COMMIT || MERGE_FAILED=$?
+
+          # If the cherry-pick failed, resolve conflicts
+          if ! [ $MERGE_FAILED -eq 0 ]; then
+            git add -A && git -c core.editor=true cherry-pick --continue --no-edit || true
           fi
-          git push origin $BRANCH_NAME --force || { echo "Failed to push branch"; exit 1; }
+
+          # Push the new branch
+          git push origin merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT --force || true
+
+          # Prepare the message and title for the PR
+          MESSAGE=$(git log --format=%B -n 1 $GITHUB_CHERRY_PICK_COMMIT)
           TITLE=$(git log --format=%B -n 1 $GITHUB_CHERRY_PICK_COMMIT | head -n 1)
-          MESSAGE=$(git log --format=%B -n 1 $GITHUB_CHERRY_PICK_COMMIT | tail -n +3)
-          if [ $MERGE_FAILED -eq 1 ]; then
-              PR_URL=$(gh pr create --draft --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --base $GITHUB_BRANCH --head $BRANCH_NAME)
+          
+          # Check GH token
+          echo $GITHUB_TOKEN || gh auth login --with-token
+
+          # Create the PR
+          PR_URL=
+          if ! [ $MERGE_FAILED -eq 0 ]; then
+            PR_URL=$(gh pr create --draft --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT)
           else
-              PR_URL=$(gh pr create --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --base $GITHUB_BRANCH --head $BRANCH_NAME)
-              PR_ID="${PR_URL##*/}"
-              gh pr merge --squash $PR_ID --auto --subject "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" 
+            PR_URL=$(gh pr create --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT)
           fi
-          echo "PR_URL=$PR_URL" >> $GITHUB_OUTPUT
-          echo "MERGE_FAILED=$MERGE_FAILED" >> $GITHUB_OUTPUT
+
+          # Extract PR ID
+          PR_ID="${PR_URL##*/}"
+
+          # If no merge failure, auto-merge the PR
+          if [ $MERGE_FAILED -eq 0 ]; then
+            gh pr merge --squash $PR_ID --auto --subject "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" 
+          fi
 
       - name: Comment on PR
         if: steps.check_command.outputs.release_valid == 'true' && always()
@@ -128,7 +113,7 @@ jobs:
             const prUrl = '${{ steps.cherry_pick.outputs.PR_URL }}';
             const mergeFailed = '${{ steps.cherry_pick.outputs.MERGE_FAILED }}' === '1';
             let body;
-            
+
             if ('${{ job.status }}' === 'success') {
               if (mergeFailed) {
                 body = `⚠️ Cherry-pick operation completed with conflicts. A draft pull request has been created: ${prUrl}\n\nPlease resolve the conflicts manually.`;
@@ -138,15 +123,10 @@ jobs:
             } else {
               body = '❌ Cherry-pick operation failed. Please check the action logs for more information.';
             }
-
-            // Ensure the repo owner and name are correct
-            const owner = context.repo.owner || '${{ github.repository_owner }}';
-            const repo = context.repo.name || '${{ github.event.repository.name }}';
-
             
             github.rest.issues.createComment({
               issue_number: ${{ steps.check_command.outputs.pr_number }},
-              owner: owner,
-              repo: repo,
+              owner: context.repo.owner,
+              repo: context.repo.name,
               body: body
             });
