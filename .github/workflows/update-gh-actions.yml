@@ -1,0 +1,25 @@
+# yamllint disable rule:line-length
+---
+name: GitHub Actions Version Updater
+
+on:  # yamllint disable-line rule:truthy
+  workflow_dispatch:
+  schedule:
+    # Automatically run on every Sunday
+    - cron: '0 0 * * 0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # [Required] Access token with `workflow` scope.
+          token: ${{ secrets.ORG_GH_TOKEN }}
+
+      - name: Run GitHub Actions Version Updater
+        uses: saadmk11/github-actions-version-updater@v0.8.1
+        with:
+          # [Required] Access token with `workflow` scope.
+          token: ${{ secrets.ORG_GH_TOKEN }}
