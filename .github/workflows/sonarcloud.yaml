@@ -17,17 +17,17 @@ jobs:
     name: Sonarcloud
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4.2.1
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4.1.8
         with:
           name: coverage
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4.1.8
         with:
           name: golangci-report
       - name: SonarCloud Scan
-        uses: sonarsource/sonarcloud-github-action@master
+        uses: sonarsource/sonarcloud-github-action@v3.1.0
         with:
           args: >
             -Dsonar.organization=tyktechnologies
