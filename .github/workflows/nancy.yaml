@@ -17,10 +17,10 @@ jobs:
 
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.2.2
 
       - name: Set up Go 1.x in order to write go.list file
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5.2.0
         with:
           go-version: 1.17
 
@@ -36,6 +36,6 @@ jobs:
         working-directory: ./${{ inputs.dir }}
 
       - name: Nancy scan
-        uses: sonatype-nexus-community/nancy-github-action@main
+        uses: sonatype-nexus-community/nancy-github-action@v1.0.2
         with:
           goListFile: ${{ inputs.dir }}/go.list
