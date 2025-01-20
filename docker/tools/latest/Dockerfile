@@ -9,6 +9,7 @@ RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/TykTec
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/TykTechnologies/exp/cmd/workflow-lint@main
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/TykTechnologies/exp/cmd/schema-gen@main
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/TykTechnologies/exp/cmd/summary@main
+RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/TykTechnologies/exp/cmd/modcheck@main
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/TykTechnologies/exp/cmd/go-fsck@main
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install go.uber.org/mock/mockgen@v0.4.0
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install golang.org/x/tools/cmd/goimports@latest
