@@ -19,25 +19,25 @@ jobs:
     name: Go Test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/setup-go@v3
+    - uses: actions/setup-go@v5.3.0
       with:
         go-version: ${{ inputs.go }}
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4.2.2
     
     - name: Start Redis
       if: ${{ inputs.redis != '' }}
-      uses: supercharge/redis-github-action@1.2.0
+      uses: supercharge/redis-github-action@1.8.0
       with:
         redis-version: '${{ inputs.redis }}'
 
     - name: Start MongoDB
       if: ${{ inputs.mongo != '' }}
-      uses: supercharge/mongodb-github-action@1.2.0
+      uses: supercharge/mongodb-github-action@1.12.0
       with:
         mongodb-version: '${{ inputs.mongo }}'    
         
     - name: Cache
-      uses: actions/cache@v2
+      uses: actions/cache@v4.2.0
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -67,18 +67,18 @@ jobs:
             gotestsum --junitfile ${coveragefile}.xml --raw-command go test ${OPTS} --json -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
         done
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4.6.0
       with:
         name: coverage
         path: "*cov"
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4.6.0
       if: ${{ always() }}
       with:
         name: junit
         path: "*xml"
     - name: Github report view
       if: ${{ always() }}
-      uses: phoenix-actions/test-reporting@v8
+      uses: phoenix-actions/test-reporting@v15
       with:
         name: Unit Test Results
         path: "*.xml"
