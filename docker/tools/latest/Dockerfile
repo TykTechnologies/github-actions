@@ -18,6 +18,7 @@ RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/fatih/
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install gotest.tools/gotestsum@latest
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/wadey/gocovmerge@latest
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/evilmartians/lefthook@latest
+RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/ovh/venom/cmd/venom@latest
 
 ARG TASK_VERSION=v3.27.1
 RUN curl -sSL https://github.com/go-task/task/releases/download/${TASK_VERSION}/task_linux_amd64.tar.gz | tar -zxv
