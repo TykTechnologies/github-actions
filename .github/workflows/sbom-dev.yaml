@@ -28,7 +28,7 @@ jobs:
     steps:
       # Make sure we have some code to diff.
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 50
 
@@ -64,14 +64,14 @@ jobs:
     if: contains(github.ref, 'release-') || contains(github.ref, 'master') || contains(github.base_ref, 'release-') || contains(github.base_ref, 'master') || needs.changedfiles.outputs.go || needs.changedfiles.outputs.npm || needs.changedfiles.outputs.ci || needs.changedfiles.outputs.docker || needs.changedfiles.outputs.github
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 1
           token: ${{ secrets.ORG_GH_TOKEN }}
           submodules: true
           
       - name: Configure AWS credentials for use
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v4.1.0
         env:
           DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
         if: env.DOCKER_IMAGE == null
@@ -85,10 +85,10 @@ jobs:
           DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
         if: env.DOCKER_IMAGE == null
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+        uses: aws-actions/amazon-ecr-login@v2.0.1
 
       - name: Generate Source code SBOM
-        uses: aquasecurity/trivy-action@0.20.0
+        uses: aquasecurity/trivy-action@0.29.0
         with:
           scan-type: 'fs'
           format: 'cyclonedx'
@@ -96,7 +96,7 @@ jobs:
           image-ref: '.'
 
       - name: Generate Docker SBOM
-        uses: aquasecurity/trivy-action@0.20.0
+        uses: aquasecurity/trivy-action@0.29.0
         env:
           DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
         if: env.DOCKER_IMAGE == null
@@ -106,7 +106,7 @@ jobs:
           image-ref: '${{ steps.login-ecr.outputs.registry }}/${{ github.event.repository.name}}:sha-${{ github.sha }}'
           
       - name: Generate Docker SBOM
-        uses: aquasecurity/trivy-action@0.20.0
+        uses: aquasecurity/trivy-action@0.29.0
         env:
           DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
         if: env.DOCKER_IMAGE
