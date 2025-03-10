@@ -1,0 +1,67 @@
+name: Run Open Api specifications contract tests with a live dashboard
+on:
+  workflow_call:
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  run-test-with-live-dashboard:
+    runs-on: ubuntu-latest
+    name: Run Open Api specifications contract tests
+    steps:
+      # AWS Configuration
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-session-name: cipush
+          aws-region: eu-central-1
+
+      # Amazon ECR login
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          mask-password: 'true'
+
+      # Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # Checkout current repository
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+
+      # Checkout tyk-pro repository
+      - name: Checkout tyk-pro repository
+        uses: actions/checkout@v4
+        with:
+          repository: tyklabs/tyk-pro
+          path: tyk-pro
+
+      - name: Append env variables
+        run: |
+          cd tyk-pro
+          echo >> local-mongo44.env
+          echo "TYK_DB_SECURITY_OPENPOLICY_ENABLEAPI=true" >> local-mongo44.env
+          echo "TYK_DB_ENABLEHASHEDKEYSLISTING=true" >> local-mongo44.env
+      # Install go-stask
+      - name: Install go-stask
+        uses: arduino/setup-task@v1
+        with:
+          version: '3.39.0'
+
+      # Run dashboard containers
+      - name: Run Dashboard containers
+        env:
+          pull_policy: 'always'
+          GH_TOKEN: ${{ secrets.ORG_GH_TOKEN }}
+          TYK_DB_LICENSEKEY: ${{ secrets.DASH_LICENSE }}
+          TYK_MDCB_LICENSE: ${{ secrets.MDCB_LICENSE }}
+
+
+
+      - name: Clean up
+        run: |
+          cd tyk-pro
+          task clean FLAVOUR=pro-ha DB=mongo44 VARIATION=murmur128
