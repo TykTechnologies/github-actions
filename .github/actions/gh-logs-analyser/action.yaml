@@ -1,5 +1,5 @@
 name: 'Upload Failed Job Logs'
-description: 'On workflow job failure, fetch and send relevant logs to an external API'
+description: 'On workflow job failure, fetch and send relevant logs with branch information to an external API'
 author: 'Your Name'
 inputs:
   run_id:
@@ -19,3 +19,4 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         TARGET_RUN_ID: ${{ inputs.run_id || github.run_id }}
         TARGET_REPO: ${{ github.repository }}
+        GITHUB_REF: ${{ github.ref }}

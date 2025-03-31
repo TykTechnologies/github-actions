@@ -5,6 +5,17 @@ set -e
 RUN_ID="${TARGET_RUN_ID:-$GITHUB_RUN_ID}"
 REPO="${TARGET_REPO:-$GITHUB_REPOSITORY}"
 
+# Extract branch name from GITHUB_REF (format: refs/heads/branch-name)
+if [[ -n "$GITHUB_REF" ]]; then
+  # Extract branch name from refs/heads/branch-name
+  BRANCH=$(echo "$GITHUB_REF" | sed -e 's,.*/\(.*\),\1,')
+else
+  # Default to empty string if not available
+  BRANCH=""
+fi
+
+echo "Branch: $BRANCH"
+
 # 1. List all jobs for the workflow run and filter for failures
 echo "Fetching jobs for run $RUN_ID in $REPO..."
 JOBS_JSON=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
@@ -28,18 +39,31 @@ echo "$FAILED_JOBS" | while IFS= read -r job; do
        "https://api.github.com/repos/$REPO/actions/jobs/$job_id/logs" \
        -o "job_${job_id}.log"
 
+  # Preprocess the log to reduce size
+  echo "Preprocessing log for job '$job_name'..."
+  
+  # Remove ANSI color codes
+  sed -i 's/\x1b\[[0-9;]*m//g' "job_${job_id}.log"
+  
+  # Remove timestamp patterns (optional, but helps reduce size)
+  sed -i -E 's/^\[?[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})\]? //g' "job_${job_id}.log"
+  
+  # Remove debug/trace lines (optional)
+  grep -v "^DEBUG:" "job_${job_id}.log" | grep -v "^TRACE:" > "preprocessed_${job_id}.log" || cp "job_${job_id}.log" "preprocessed_${job_id}.log"
+  
   # 3. Format the JSON payload with required fields
   payload=$(jq -n \
     --arg repo "$REPO" \
     --arg run_id "$RUN_ID" \
     --arg job_name "$job_name" \
     --arg step_name "${step_name:-}" \
+    --arg branch "$BRANCH" \
     --arg timestamp "$timestamp" \
-    --rawfile raw_log "job_${job_id}.log" \
-    '{ repo: $repo, run_id: $run_id, job_name: $job_name, step_name: $step_name, timestamp: $timestamp, raw_log: $raw_log }')
+    --rawfile raw_log "preprocessed_${job_id}.log" \
+    '{ repo: $repo, run_id: $run_id, job_name: $job_name, step_name: $step_name, branch: $branch, timestamp: $timestamp, raw_log: $raw_log }')
 
   # 4. Send the JSON to the external API
-  echo "Sending log for '$job_name' (step '$step_name')..."
+  echo "Sending log for '$job_name' (step '$step_name', branch '$BRANCH')..."
   curl -s -X POST -H "Content-Type: application/json" \
        -d "$payload" "https://d61b-81-18-84-142.ngrok-free.app/api/v1/logs" || \
        echo "Warning: Failed to send log to API."
