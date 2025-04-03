@@ -62,9 +62,11 @@ echo "$FAILED_JOBS" | while IFS= read -r job; do
     --rawfile raw_log "preprocessed_${job_id}.log" \
     '{ repo: $repo, run_id: $run_id, job_name: $job_name, step_name: $step_name, branch: $branch, timestamp: $timestamp, raw_log: $raw_log }')
 
-  # 4. Send the JSON to the external API
+  # 4. Send the JSON to the external API with Authorization header using GH_LOGS_ANALYSER secret
   echo "Sending log for '$job_name' (step '$step_name', branch '$BRANCH')..."
-  curl -s -X POST -H "Content-Type: application/json" \
+  curl -s -X POST \
+       -H "Content-Type: application/json" \
+       -H "Authorization: Bearer $GH_LOGS_ANALYSER" \
        -d "$payload" "https://d61b-81-18-84-142.ngrok-free.app/api/v1/logs" || \
        echo "Warning: Failed to send log to API."
 

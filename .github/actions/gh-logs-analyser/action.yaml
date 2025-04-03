@@ -8,6 +8,9 @@ inputs:
   github_token:
     description: 'GitHub token for API access'
     required: true
+  gh_logs_analyser_token:
+    description: 'Authentication token for the gh-logs-analyser API'
+    required: true
 runs:
   using: "composite"
   steps:
@@ -17,6 +20,7 @@ runs:
       run: bash ${{ github.action_path }}/log-collector.sh
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
+        GH_LOGS_ANALYSER: ${{ inputs.gh_logs_analyser_token }}
         TARGET_RUN_ID: ${{ inputs.run_id || github.run_id }}
         TARGET_REPO: ${{ github.repository }}
         GITHUB_REF: ${{ github.ref }}
