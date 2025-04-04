@@ -1,4 +1,4 @@
-name: Force Merge PR
+name: Force Merge PR (Reusable)
 
 on:
   workflow_call:
@@ -32,9 +32,23 @@ jobs:
               return;
             }
 
-            // Check if the comment is exactly "/force-merge"
-            if (comment.body.trim() !== '/force-merge') {
-              console.log('Comment is not "/force-merge"');
+            // Check if the comment starts with "/force-merge" and extract the reason
+            const commentBody = comment.body.trim();
+            const forceMergePrefix = '/force-merge';
+            if (!commentBody.startsWith(forceMergePrefix)) {
+              console.log('Comment does not start with "/force-merge"');
+              return;
+            }
+
+            const reason = commentBody.substring(forceMergePrefix.length).trim();
+            if (!reason) {
+              await octokit.rest.issues.createComment({
+                owner: repo.owner,
+                repo: repo.repo,
+                issue_number: issue.number,
+                body: 'Error: A reason must be provided after "/force-merge" (e.g., "/force-merge CI failing tests not related").'
+              });
+              console.log('No reason provided after "/force-merge"');
               return;
             }
 
@@ -57,14 +71,14 @@ jobs:
                 owner: repo.owner,
                 repo: repo.repo,
                 pull_number: issue.number,
-                commit_title: `Force merge via GitHub Action by ${username}`
+                commit_title: `Force merge by ${username}: ${reason}`
               });
               console.log(`PR #${issue.number} merged successfully`);
 
               // Send Slack notification
               const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL;
               const message = {
-                text: `User ${username} force-merged PR #${issue.number} in ${repo.owner}/${repo.repo}`
+                text: `User ${username} force-merged PR #${issue.number} in ${repo.owner}/${repo.repo} with reason: "${reason}"`
               };
               await fetch(slackWebhookUrl, {
                 method: 'POST',
