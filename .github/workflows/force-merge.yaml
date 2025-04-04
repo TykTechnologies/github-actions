@@ -65,20 +65,30 @@ jobs:
               return;
             }
 
-            // Attempt to merge the pull request
+            // Fetch the pull request details to get the description (body)
+            const pr = await octokit.rest.pulls.get({
+              owner: repo.owner,
+              repo: repo.repo,
+              pull_number: issue.number
+            });
+            const prDescription = pr.data.body || 'No description provided';
+
+            // Attempt to squash merge the pull request
             try {
               await octokit.rest.pulls.merge({
                 owner: repo.owner,
                 repo: repo.repo,
                 pull_number: issue.number,
-                commit_title: `Force merge by ${username}: ${reason}`
+                merge_method: 'squash',
+                commit_title: `${pr.data.title} (#${issue.number})`,
+                commit_message: `${prDescription}\n\nForce merged by ${username} with reason: ${reason}`
               });
-              console.log(`PR #${issue.number} merged successfully`);
+              console.log(`PR #${issue.number} squash merged successfully`);
 
               // Send Slack notification
               const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL;
               const message = {
-                text: `User ${username} force-merged PR #${issue.number} in ${repo.owner}/${repo.repo} with reason: "${reason}"`
+                text: `User ${username} force-merged PR #${issue.number} in ${repo.owner}/${repo.repo} with reason: "${reason}" (squash merge)`
               };
               await fetch(slackWebhookUrl, {
                 method: 'POST',
@@ -87,11 +97,11 @@ jobs:
               });
               console.log('Slack notification sent');
             } catch (error) {
-              console.error('Merge failed:', error.message);
+              console.error('Squash merge failed:', error.message);
               await octokit.rest.issues.createComment({
                 owner: repo.owner,
                 repo: repo.repo,
                 issue_number: issue.number,
-                body: `Failed to force-merge the pull request: ${error.message}`
+                body: `Failed to force-merge the pull request (squash): ${error.message}`
               });
             }
