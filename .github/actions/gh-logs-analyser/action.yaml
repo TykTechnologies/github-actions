@@ -24,3 +24,4 @@ runs:
         TARGET_RUN_ID: ${{ inputs.run_id || github.run_id }}
         TARGET_REPO: ${{ github.repository }}
         GITHUB_REF: ${{ github.ref }}
+        GITHUB_BASE_REF: ${{ github.base_ref }}

@@ -5,9 +5,12 @@ set -e
 RUN_ID="${TARGET_RUN_ID:-$GITHUB_RUN_ID}"
 REPO="${TARGET_REPO:-$GITHUB_REPOSITORY}"
 
-# Extract branch name from GITHUB_REF (format: refs/heads/branch-name)
-if [[ -n "$GITHUB_REF" ]]; then
-  # Extract branch name from refs/heads/branch-name
+# Extract branch name - prioritize base_ref for PRs
+if [[ -n "$GITHUB_BASE_REF" ]]; then
+  # For Pull Requests, use the destination branch directly
+  BRANCH="$GITHUB_BASE_REF"
+elif [[ -n "$GITHUB_REF" ]]; then
+  # For direct pushes, extract from refs/heads/branch-name
   BRANCH=$(echo "$GITHUB_REF" | sed -e 's,.*/\(.*\),\1,')
 else
   # Default to empty string if not available
