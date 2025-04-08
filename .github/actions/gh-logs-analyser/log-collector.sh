@@ -70,7 +70,7 @@ echo "$FAILED_JOBS" | while IFS= read -r job; do
   curl -s -X POST \
        -H "Content-Type: application/json" \
        -H "Authorization: Bearer $GH_LOGS_ANALYSER" \
-       -d "$payload" "https://d61b-81-18-84-142.ngrok-free.app/api/v1/logs" || \
+       -d "$payload" "https://gh-logs-analyser.dokku.tyk.technology/api/v1/logs" || \
        echo "Warning: Failed to send log to API."
 
 done
