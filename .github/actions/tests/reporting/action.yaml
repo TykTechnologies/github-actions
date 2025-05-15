@@ -10,9 +10,6 @@ inputs:
     description: 'Should docker logs be uploaded'
     required: false
     default: 'true'
-  api_markers:
-    description: 'Markers to filter tests'
-    required: true
 runs:
   using: "composite"
   steps:
