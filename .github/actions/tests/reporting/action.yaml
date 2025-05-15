@@ -44,9 +44,6 @@ runs:
       shell: bash
       env:
         pull_policy: 'if_not_present'
-        GH_TOKEN: ${{ secrets.ORG_GH_TOKEN }}
-        TYK_DB_LICENSEKEY: ${{ secrets.DASH_LICENSE }}
-        TYK_MDCB_LICENSE: ${{ secrets.MDCB_LICENSE }}
         ECR: ${{ steps.ecr.outputs.registry }}
       run: |
         docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile all logs | sort > ${{ github.workspace }}/docker-compose.log
