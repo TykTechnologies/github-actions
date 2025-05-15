@@ -1,0 +1,66 @@
+name: 'Upload Failed Job Logs'
+description: 'On workflow job failure, fetch and send relevant logs with branch information to an external API'
+author: 'konrad'
+inputs:
+  report_xml:
+    description: 'Should xunit report be uploaded'
+    required: false
+    default: 'true'
+  docker_logs:
+    description: 'Should docker logs be uploaded'
+    required: false
+    default: 'true'
+  api_markers:
+    description: 'Markers to filter tests'
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Generate metadata and upload test reports
+      shell: bash
+      id: metadata_report
+      if: always() && (steps.test_execution.conclusion != 'skipped') && (inputs.report_xml == 'true')
+      env:
+        REPORT_NAME: ${{ github.repository }}_${{ github.run_id }}_${{ github.run_attempt }}-${{steps.env_up.outputs.ts}}
+        METADATA_REPORT_PATH: metadata.toml
+      run: |
+        # Generate metadata report
+        set -eo pipefail
+        echo "[metadata]
+        repo = ${{ github.repository }}
+        branch = ${{ github.ref }}
+        commit = ${{ github.sha }}
+        test_suite_version = $BASE_REF
+        test_suite_name = ${{ github.job }}
+        test_suite_run = ${{ github.run_id }}-${{ github.run_attempt }}
+        db = ${{ matrix.envfiles.db }}
+        conf = ${{ matrix.envfiles.config }}
+        cache = ${{ matrix.envfiles.cache }}
+        pump_compatibility = ${{ matrix.pump }}
+        sink_compatibility = ${{ matrix.sink }}
+        " | tee ${METADATA_REPORT_PATH}
+        aws s3 cp ${XUNIT_REPORT_PATH}  s3://assets.dev.tyk.technology/testreports/${REPORT_NAME#*/}.xml
+        aws s3 cp ${METADATA_REPORT_PATH} s3://assets.dev.tyk.technology/testreports/${REPORT_NAME#*/}.metadata.toml
+    - name: Docker logs for all components
+      if: failure() && (steps.test_execution.outcome != 'success' || steps.env_up.outcome != 'success') && (inputs.docker_logs == 'true')
+      working-directory: auto
+      shell: bash
+      env:
+        pull_policy: 'if_not_present'
+        GH_TOKEN: ${{ secrets.ORG_GH_TOKEN }}
+        TYK_DB_LICENSEKEY: ${{ secrets.DASH_LICENSE }}
+        TYK_MDCB_LICENSE: ${{ secrets.MDCB_LICENSE }}
+        ECR: ${{ steps.ecr.outputs.registry }}
+      run: |
+        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile all logs | sort > ${{ github.workspace }}/docker-compose.log
+        echo "::group::DockerLogs"
+        cat ${{ github.workspace }}/docker-compose.log
+        echo "::endgroup::"
+    - name: Upload compose logs
+      uses: actions/upload-artifact@v4
+      if: failure() && (steps.test_execution.outcome != 'success' || steps.env_up.outcome != 'success') && (inputs.docker_logs == 'true')
+      with:
+        name: docker-compose-logs-${{ github.job }}-${{ matrix.envfiles.db }}-${{ matrix.envfiles.conf }}-${{ github.run_id }}
+        path: ${{ github.workspace }}/docker-compose.log
+        retention-days: 3
+        overwrite: true
