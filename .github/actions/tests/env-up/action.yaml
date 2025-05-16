@@ -15,6 +15,9 @@ inputs:
     description: 'ECR repo for the gateway'
     required: false
     default: 'tyk-ee'
+  matrix:
+    description: 'Matrix for the test'
+    required: true
 runs:
   using: "composite"
   steps:
