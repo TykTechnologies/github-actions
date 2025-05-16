@@ -1,0 +1,53 @@
+name: 'Upload Failed Job Logs'
+description: 'On workflow job failure, fetch and send relevant logs with branch information to an external API'
+author: 'konrad'
+inputs:
+  base_ref:
+    description: 'Base ref for the test'
+    required: true
+  gw_ecr_repo:
+    description: 'ECR repo for the gateway'
+    required: false
+    default: 'tyk-ee'
+runs:
+  using: "composite"
+  steps:
+    - name: Starting environment
+      shell: bash
+      id: env_up
+      env:
+        ECR: ${{ steps.ecr.outputs.registry }}
+        GW_ECR_REPO: $ {{ inputs.gw_ecr_repo }}s
+        REPO_NAME: ${{ github.event.repository.name }}
+        TAGS: ${{ needs.goreleaser.outputs.std_tags }}
+        BASE_REF: ${{ inputs.base_ref }}
+        PUMP_COMPATIBILITY: ${{ matrix.pump }}
+        SINK_COMPATIBILITY: ${{ matrix.sink }}
+        pull_policy: 'if_not_present'
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        MATRIX: ${{ toJson(matrix) }}
+      run: |
+        match_tag=$ECR/$REPO_NAME:$BASE_REF
+        tags=$TAGS
+        set -eaxo pipefail
+        docker run -q --rm -v ~/.docker/config.json:/root/.docker/config.json tykio/gromit policy match ${tags[0]} ${match_tag} 2>versions.env
+        echo '# alfa and beta have to come after the override
+
+        tyk_image="$ECR/tyk-ee"
+        tyk_alfa_image=$tyk_image
+        tyk_beta_image=$tyk_image
+        tyk_pump_image=${{env.MATRIX.pump}}
+
+        tyk_sink_image=${{matrix.sink}}
+        confs_dir=./pro-ha
+        env_file=local.env' >> versions.env
+        cat ./confs/${{ matrix.envfiles.config }}.env local-${{ matrix.envfiles.db }}.env > local.env
+        echo "::group::versions"
+        cat versions.env local.env
+        echo "::endgroup::"
+        # bring up env, the project name is important
+        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile master-datacenter up --quiet-pull -d
+        ./dash-bootstrap.sh http://localhost:3000
+        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile slave-datacenter up --quiet-pull -d
+        echo "$(cat pytest.env | grep USER_API_SECRET)" >> $GITHUB_OUTPUT
+        echo "ts=$(date +%s%N)" >> $GITHUB_OUTPUT
