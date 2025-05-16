@@ -8,6 +8,9 @@ inputs:
   tags:
     description: 'Tags for the test'
     required: true
+  github_token:
+    description: 'GitHub token for API access'
+    required: true
   gw_ecr_repo:
     description: 'ECR repo for the gateway'
     required: false
@@ -27,7 +30,7 @@ runs:
         PUMP_COMPATIBILITY: ${{ matrix.pump }}
         SINK_COMPATIBILITY: ${{ matrix.sink }}
         pull_policy: 'if_not_present'
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
         MATRIX: ${{ toJson(matrix) }}
       run: |
         match_tag=$ECR/$REPO_NAME:$BASE_REF
