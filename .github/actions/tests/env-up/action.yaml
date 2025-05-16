@@ -5,6 +5,9 @@ inputs:
   base_ref:
     description: 'Base ref for the test'
     required: true
+  tags:
+    description: 'Tags for the test'
+    required: true
   gw_ecr_repo:
     description: 'ECR repo for the gateway'
     required: false
@@ -19,7 +22,7 @@ runs:
         ECR: ${{ steps.ecr.outputs.registry }}
         GW_ECR_REPO: $ {{ inputs.gw_ecr_repo }}s
         REPO_NAME: ${{ github.event.repository.name }}
-        TAGS: ${{ needs.goreleaser.outputs.std_tags }}
+        TAGS: ${{ inputs.tags }}
         BASE_REF: ${{ inputs.base_ref }}
         PUMP_COMPATIBILITY: ${{ matrix.pump }}
         SINK_COMPATIBILITY: ${{ matrix.sink }}
