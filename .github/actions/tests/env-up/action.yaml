@@ -34,10 +34,10 @@ runs:
         SINK_COMPATIBILITY: ${{ matrix.sink }}
         pull_policy: 'if_not_present'
         GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
-        MATRIX: ${{ toJson(matrix) }}
       run: |
         match_tag=$ECR/$REPO_NAME:$BASE_REF
         tags=$TAGS
+        matrix=${{ inputs.matrix }}
         set -eaxo pipefail
         docker run -q --rm -v ~/.docker/config.json:/root/.docker/config.json tykio/gromit policy match ${tags[0]} ${match_tag} 2>versions.env
         echo '# alfa and beta have to come after the override
@@ -45,7 +45,7 @@ runs:
         tyk_image="$ECR/tyk-ee"
         tyk_alfa_image=$tyk_image
         tyk_beta_image=$tyk_image
-        tyk_pump_image=${{env.MATRIX.pump}}
+        tyk_pump_image=${{matrix.pump}}
 
         tyk_sink_image=${{matrix.sink}}
         confs_dir=./pro-ha
