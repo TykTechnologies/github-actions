@@ -17,7 +17,7 @@ inputs:
     default: 'tyk-ee'
   matrix:
     description: 'Matrix for the test'
-    required: true
+    required: false
 runs:
   using: "composite"
   steps:
@@ -37,7 +37,6 @@ runs:
       run: |
         match_tag=$ECR/$REPO_NAME:$BASE_REF
         tags=$TAGS
-        matrix=${{ inputs.matrix }}
         set -eaxo pipefail
         docker run -q --rm -v ~/.docker/config.json:/root/.docker/config.json tykio/gromit policy match ${tags[0]} ${match_tag} 2>versions.env
         echo '# alfa and beta have to come after the override
