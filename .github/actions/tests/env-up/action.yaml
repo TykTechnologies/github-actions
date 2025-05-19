@@ -25,8 +25,8 @@ runs:
       shell: bash
       id: env_up
       env:
-        ECR: ${{ steps.ecr.outputs.registry }}
-        GW_ECR_REPO: "754489498669.dkr.ecr.eu-central-1.amazonaws.com"
+        ECR: "754489498669.dkr.ecr.eu-central-1.amazonaws.com"
+        GW_ECR_REPO: "754489498669.dkr.ecr.eu-central-1.amazonaws.com/tyk-ee"
         REPO_NAME: ${{ github.event.repository.name }}
         TAGS: ${{ inputs.tags }}
         BASE_REF: ${{ inputs.base_ref }}
