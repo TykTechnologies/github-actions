@@ -18,6 +18,12 @@ inputs:
   matrix:
     description: 'Matrix for the test'
     required: false
+  TYK_DB_LICENSEKEY:
+    description: 'Tyk DB license key'
+    required: true
+  TYK_MDCB_LICENSE:
+    description: 'Tyk MDCB license key'
+    required: true
 runs:
   using: "composite"
   steps:
@@ -35,6 +41,8 @@ runs:
         SINK_COMPATIBILITY: ${{ matrix.sink }}
         pull_policy: 'if_not_present'
         GITHUB_TOKEN: ${{ inputs.github_token }}
+        TYK_DB_LICENSEKEY: ${{ inputs.TYK_DB_LICENSEKEY }}
+        TYK_MDCB_LICENSE: ${{ inputs.TYK_DB_LICENSEKEY }}
       run: |
         match_tag=$ECR/$REPO_NAME:$BASE_REF
         tags=$TAGS
