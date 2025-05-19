@@ -26,14 +26,14 @@ runs:
       id: env_up
       env:
         ECR: ${{ steps.ecr.outputs.registry }}
-        GW_ECR_REPO: $ {{ inputs.gw_ecr_repo }}s
+        GW_ECR_REPO: $ {{ inputs.gw_ecr_repo }}
         REPO_NAME: ${{ github.event.repository.name }}
         TAGS: ${{ inputs.tags }}
         BASE_REF: ${{ inputs.base_ref }}
         PUMP_COMPATIBILITY: ${{ matrix.pump }}
         SINK_COMPATIBILITY: ${{ matrix.sink }}
         pull_policy: 'if_not_present'
-        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
       run: |
         match_tag=$ECR/$REPO_NAME:$BASE_REF
         tags=$TAGS
