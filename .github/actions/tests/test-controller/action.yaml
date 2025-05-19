@@ -32,9 +32,10 @@ runs:
         VARIATION: ${{ inputs.variation }}
         REPO_NAME: ${{ github.event.repository.name }}
         TEST_TYPE: ${{ inputs.test_type }}
+        TRIGGER: ${{ github.event_name }}
       run: |
         set -eo pipefail
-        curl -s --retry 5 --retry-delay 10 --fail-with-body "http://tui.internal.dev.tyk.technology/v2/$VARIATION/$REPO_NAME/$BASE_REF/{{`${{ github.event_name}}`}}/$TEST_TYPE.gho" | tee -a "$GITHUB_OUTPUT"
+        curl -s --retry 5 --retry-delay 10 --fail-with-body "http://tui.internal.dev.tyk.technology/v2/$VARIATION/$REPO_NAME/$BASE_REF/$TRIGGER/$TEST_TYPE.gho" | tee -a "$GITHUB_OUTPUT"
         if ! [[ $VARIATION =~ prod ]] ;then  
           echo "::warning file=.github/workflows/release.yml,line=24,col=1,endColumn=8::Using non-prod variation"
           echo "### :warning: You are using VARIATION=${VARIATION} in test-controller-{{ .test }}" >> $GITHUB_STEP_SUMMARY
