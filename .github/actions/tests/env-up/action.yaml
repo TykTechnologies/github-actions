@@ -22,6 +22,7 @@ runs:
   using: "composite"
   steps:
     - name: Starting environment
+      working-directory: auto
       shell: bash
       id: env_up
       env:
