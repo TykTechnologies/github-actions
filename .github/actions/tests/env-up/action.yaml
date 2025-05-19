@@ -24,6 +24,11 @@ inputs:
   TYK_MDCB_LICENSE:
     description: 'Tyk MDCB license key'
     required: true
+outputs:
+  USER_API_SECRET:
+    description: 'User API secret for the test'
+    value: ${{ steps.env_up.outputs.USER_API_SECRET }}
+
 runs:
   using: "composite"
   steps:

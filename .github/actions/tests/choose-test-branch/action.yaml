@@ -1,0 +1,51 @@
+name: 'Checkout test code'
+description: 'On workflow job failure, fetch and send relevant logs with branch information to an external API'
+author: 'konrad'
+inputs:
+  test_folder: 
+    description: 'Folder with tests: api or ui'
+    required: true
+  branch: 
+    description: 'Branch with code. If not provided it will be taken from the event'
+    required: false
+  org_gh_token:
+    description: 'GitHub token for API access'
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        repository: TykTechnologies/tyk-analytics
+        path: tyk-analytics
+        token: ${{ inputs.org_gh_token }}
+        fetch-depth: 0
+        sparse-checkout: tests/${{ inputs.test_folder }}
+    - name: Checkout proper branch
+      shell: bash
+      run: |
+        if [[ ${{ github.event_name }} == "pull_request" ]]; then
+          PR_BRANCH=${{ github.event.pull_request.head.ref }}
+          TARGET_BRANCH=${{ github.event.pull_request.base.ref }}
+          echo "Looking for PR_BRANCH:$PR_BRANCH or TARGET_BRANCH:$TARGET_BRANCH..."
+          if git rev-parse --verify "origin/$PR_BRANCH" >/dev/null 2>&1; then
+            echo "PR branch $PR_BRANCH exists. Checking out..."
+            git checkout "$PR_BRANCH"
+          elif git rev-parse --verify "origin/$TARGET_BRANCH" >/dev/null 2>&1; then
+            echo "Target branch $TARGET_BRANCH exists. Checking out..."
+            git checkout "$TARGET_BRANCH"
+          fi
+        fi
+        if [[ ${{ github.event_name }} == "push" ]]; then
+          PUSH_BRANCH=${{ github.ref_name }}
+          echo "Looking for PUSH_BRANCH:$PUSH_BRANCH..."
+          if git rev-parse --verify "origin/$PUSH_BRANCH" >/dev/null 2>&1; then
+            echo "Push branch $PUSH_BRANCH exists. Checking out..."
+            git checkout "$PUSH_BRANCH"
+          fi
+        fi
+        if [[ -n "${{ inputs.branch }}" ]]; then
+          echo "Checking out branch ${{ inputs.branch }}..."
+          git checkout "${{ inputs.branch }}"
+        fi
+        echo "Current commit: $(git rev-parse HEAD)"
