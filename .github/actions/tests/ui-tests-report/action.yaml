@@ -1,0 +1,34 @@
+name: 'Upload Report to S3'
+description: 'On workflow job failure, fetch and send relevant logs with branch information to an external API'
+author: 'konrad'
+inputs:
+  aws_acces_key_id: 
+    description: 'AWS access key ID'
+    required: true
+  aws_secret_access_key:
+    description: 'AWS secret access key'
+    required: true
+  matrix:
+    description: 'Matrix for the test'
+    required: false  
+runs:
+  using: "composite"
+  steps:
+    - name: Upload Playwright Test Report to S3
+      shell: bash
+      if: failure() && steps.test_execution.outcome != 'success' && steps.env_up.outcome == 'success'
+      run:
+        npm run upload_report_to_s3
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_acces_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        RUN_ID: 'tyk-analytics/${{ github.run_id }}'
+      working-directory: tyk-analytics/tests/ui
+
+    - name: Share S3 report link into summary
+      if: failure() && steps.test_execution.outcome != 'success' && steps.env_up.outcome == 'success'
+      shell: bash
+      run: |
+        echo "# :clipboard: S3 UI Test REPORT: {{`${{ inputs.matrix.envfiles.db }}`}}-{{`${{ inputs.matrix.envfiles.conf }}`}}" >> $GITHUB_STEP_SUMMARY
+        echo "- Status: {{`${{ steps.test_execution.outcome == 'success' && ':white_check_mark:' || ':no_entry_sign:' }}`}}" >> $GITHUB_STEP_SUMMARY
+        echo "- [Link to report](https://tyk-qa-reports.s3.eu-central-1.amazonaws.com/tyk-analytics/{{`${{ github.run_id }}`}}/index.html)" >> $GITHUB_STEP_SUMMARY
