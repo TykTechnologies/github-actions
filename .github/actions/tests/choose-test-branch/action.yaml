@@ -22,8 +22,11 @@ runs:
         fetch-depth: 0
         sparse-checkout: tests/${{ inputs.test_folder }}
     - name: Checkout proper branch
+      if: ${{ github.event.repository.name != 'tyk-analytics' }}
+      working-directory: tyk-analytics/tests/${{ inputs.test_folder }}
       shell: bash
       run: |
+        echo "Checking out proper branch..."
         if [[ ${{ github.event_name }} == "pull_request" ]]; then
           PR_BRANCH=${{ github.event.pull_request.head.ref }}
           TARGET_BRANCH=${{ github.event.pull_request.base.ref }}
