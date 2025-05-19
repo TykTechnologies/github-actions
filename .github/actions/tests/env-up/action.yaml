@@ -42,7 +42,7 @@ runs:
         pull_policy: 'if_not_present'
         GITHUB_TOKEN: ${{ inputs.github_token }}
         TYK_DB_LICENSEKEY: ${{ inputs.TYK_DB_LICENSEKEY }}
-        TYK_MDCB_LICENSE: ${{ inputs.TYK_DB_LICENSEKEY }}
+        TYK_MDCB_LICENSE: ${{ inputs.TYK_MDCB_LICENSE }}
       run: |
         match_tag=$ECR/$REPO_NAME:$BASE_REF
         tags=$TAGS
