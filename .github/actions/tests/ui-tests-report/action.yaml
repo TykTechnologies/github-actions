@@ -16,7 +16,6 @@ runs:
   steps:
     - name: Upload Playwright Test Report to S3
       shell: bash
-      if: failure() && steps.test_execution.outcome != 'success' && steps.env_up.outcome == 'success'
       run:
         npm run upload_report_to_s3
       env:
@@ -26,7 +25,6 @@ runs:
       working-directory: tyk-analytics/tests/ui
 
     - name: Share S3 report link into summary
-      if: failure() && steps.test_execution.outcome != 'success' && steps.env_up.outcome == 'success'
       shell: bash
       run: |
         echo "# :clipboard: S3 UI Test REPORT: ${{ inputs.matrix.envfiles.db }}-${{ inputs.matrix.envfiles.conf }}" >> $GITHUB_STEP_SUMMARY
