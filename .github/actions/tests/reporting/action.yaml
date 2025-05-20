@@ -33,11 +33,11 @@ runs:
         test_suite_version = $BASE_REF
         test_suite_name = ${{ github.job }}
         test_suite_run = ${{ github.run_id }}-${{ github.run_attempt }}
-        db = ${{ inputs.matrix.envfiles.db }}
-        conf = ${{ inputs.matrix.envfiles.config }}
-        cache = ${{ inputs.matrix.envfiles.cache }}
-        pump_compatibility = ${{ inputs.matrix.pump }}
-        sink_compatibility = ${{ inputs.matrix.sink }}
+        db = ${{ matrix.envfiles.db }}
+        conf = ${{ matrix.envfiles.config }}
+        cache = ${{ matrix.envfiles.cache }}
+        pump_compatibility = ${{ matrix.pump }}
+        sink_compatibility = ${{ matrix.sink }}
         " | tee ${METADATA_REPORT_PATH}
         aws s3 cp ${XUNIT_REPORT_PATH}  s3://assets.dev.tyk.technology/testreports/${REPORT_NAME#*/}.xml
         aws s3 cp ${METADATA_REPORT_PATH} s3://assets.dev.tyk.technology/testreports/${REPORT_NAME#*/}.metadata.toml
@@ -57,7 +57,7 @@ runs:
       uses: actions/upload-artifact@v4
       if: inputs.execution_status != 'success'
       with:
-        name: docker-compose-logs-${{ github.job }}-${{ inputs.matrix.envfiles.db }}-${{ inputs.matrix.envfiles.conf }}-${{ github.run_id }}
+        name: docker-compose-logs-${{ github.job }}-${{ matrix.envfiles.db }}-${{ matrix.envfiles.conf }}-${{ github.run_id }}
         path: ${{ github.workspace }}/docker-compose.log
         retention-days: 10
         overwrite: true
