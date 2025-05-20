@@ -10,6 +10,10 @@ inputs:
     description: 'Should docker logs be uploaded'
     required: false
     default: 'true'
+  matrix:
+    description: 'Matrix for the test'
+    required: false
+    default: ${{ toJson(env.MATRIX) }}
 runs:
   using: "composite"
   steps:
@@ -20,6 +24,7 @@ runs:
       env:
         REPORT_NAME: ${{ github.repository }}_${{ github.run_id }}_${{ github.run_attempt }}-${{steps.env_up.outputs.ts}}
         METADATA_REPORT_PATH: metadata.toml
+        MATRIX: ${{ inputs.matrix }}
       run: |
         # Generate metadata report
         set -eo pipefail
@@ -30,11 +35,11 @@ runs:
         test_suite_version = $BASE_REF
         test_suite_name = ${{ github.job }}
         test_suite_run = ${{ github.run_id }}-${{ github.run_attempt }}
-        db = ${{ matrix.envfiles.db }}
-        conf = ${{ matrix.envfiles.config }}
-        cache = ${{ matrix.envfiles.cache }}
-        pump_compatibility = ${{ matrix.pump }}
-        sink_compatibility = ${{ matrix.sink }}
+        db = ${{ env.MATRIX.envfiles.db }}
+        conf = ${{ env.MATRIX.envfiles.config }}
+        cache = ${{ env.MATRIX.envfiles.cache }}
+        pump_compatibility = ${{ env.MATRIX.pump }}
+        sink_compatibility = ${{ env.MATRIX.sink }}
         " | tee ${METADATA_REPORT_PATH}
         aws s3 cp ${XUNIT_REPORT_PATH}  s3://assets.dev.tyk.technology/testreports/${REPORT_NAME#*/}.xml
         aws s3 cp ${METADATA_REPORT_PATH} s3://assets.dev.tyk.technology/testreports/${REPORT_NAME#*/}.metadata.toml
@@ -54,7 +59,7 @@ runs:
       uses: actions/upload-artifact@v4
       if: failure() && (steps.test_execution.outcome != 'success' || steps.env_up.outcome != 'success') && (inputs.docker_logs == 'true')
       with:
-        name: docker-compose-logs-${{ github.job }}-${{ matrix.envfiles.db }}-${{ matrix.envfiles.conf }}-${{ github.run_id }}
+        name: docker-compose-logs-${{ github.job }}-${{ env.MATRIX.envfiles.db }}-${{ env.MATRIX.envfiles.conf }}-${{ github.run_id }}
         path: ${{ github.workspace }}/docker-compose.log
         retention-days: 3
         overwrite: true
