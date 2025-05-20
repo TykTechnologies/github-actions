@@ -7,7 +7,8 @@ inputs:
     required: true
   api_markers:
     description: 'Markers to filter tests'
-    required: true
+    required: false
+    default: ${{ matrix.envfiles.apimarkers }}
 runs:
   using: "composite"
   steps:
