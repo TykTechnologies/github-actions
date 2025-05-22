@@ -8,13 +8,15 @@ inputs:
   tags:
     description: 'Tags for the test'
     required: true
+  pump_image:
+    description: 'Pump version for the test'
+    required: false
+  sink_image:
+    description: 'Sink image for the test'
+    required: false
   github_token:
     description: 'GitHub token for API access'
     required: true
-  gw_ecr_repo:
-    description: 'ECR repo for the gateway'
-    required: false
-    default: 'tyk-ee'
   matrix:
     description: 'Matrix for the test'
     required: false
@@ -38,12 +40,11 @@ runs:
       id: env_up
       env:
         ECR: "754489498669.dkr.ecr.eu-central-1.amazonaws.com"
-        GW_ECR_REPO: "754489498669.dkr.ecr.eu-central-1.amazonaws.com/tyk-ee"
         REPO_NAME: ${{ github.event.repository.name }}
         TAGS: ${{ inputs.tags }}
         BASE_REF: ${{ inputs.base_ref }}
-        PUMP_COMPATIBILITY: ${{ matrix.pump }}
-        SINK_COMPATIBILITY: ${{ matrix.sink }}
+        tyk_pump_image: ${{ inputs.pump_image }}
+        tyk_sink_image: ${{ inputs.sink_image }}
         pull_policy: 'if_not_present'
         GITHUB_TOKEN: ${{ inputs.github_token }}
         TYK_DB_LICENSEKEY: ${{ inputs.TYK_DB_LICENSEKEY }}
@@ -54,13 +55,11 @@ runs:
         set -eaxo pipefail
         docker run -q --rm -v ~/.docker/config.json:/root/.docker/config.json tykio/gromit policy match ${tags[0]} ${match_tag} 2>versions.env
         echo '# alfa and beta have to come after the override
-
+    
         tyk_image="$ECR/tyk-ee"
         tyk_alfa_image=$tyk_image
-        tyk_beta_image=$tyk_image
-        tyk_pump_image=${{matrix.pump}}
+        tyk_beta_image=$tyk_image      
 
-        tyk_sink_image=${{matrix.sink}}
         confs_dir=./pro-ha
         env_file=local.env' >> versions.env
         cat ./confs/${{ matrix.envfiles.config }}.env local-${{ matrix.envfiles.db }}.env > local.env
