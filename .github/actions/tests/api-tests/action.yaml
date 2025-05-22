@@ -1,5 +1,5 @@
-name: 'Upload Failed Job Logs'
-description: 'On workflow job failure, fetch and send relevant logs with branch information to an external API'
+name: 'Run API Tests'
+description: 'Sets up Python environment and executes API tests with pytest using specified markers'
 author: 'konrad'
 inputs:
   user_api_secret:

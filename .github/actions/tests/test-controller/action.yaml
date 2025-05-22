@@ -1,9 +1,9 @@
-name: 'Checkout test code'
-description: 'On workflow job failure, fetch and send relevant logs with branch information to an external API'
+name: 'Test Configuration Controller'
+description: 'Fetches test configuration parameters from an internal API based on variation, repository, and test type'
 author: 'konrad'
 inputs:
   variation:
-    description: 'Variation of sata configs, e.g. prod-variations'
+    description: 'Variation of data configs, e.g. prod-variations'
     required: true
   base_ref:
     description: 'Base ref for the test'

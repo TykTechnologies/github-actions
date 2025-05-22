@@ -1,5 +1,5 @@
-name: 'Upload Failed Job Logs'
-description: 'On workflow job failure, fetch and send relevant logs with branch information to an external API'
+name: 'Set Up Test Environment'
+description: 'Configures and starts the test environment with Docker Compose, setting up master and slave datacenters'
 author: 'konrad'
 inputs:
   base_ref:

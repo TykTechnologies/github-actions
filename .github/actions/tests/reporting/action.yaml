@@ -1,5 +1,5 @@
-name: 'Upload Failed Job Logs'
-description: 'On workflow job failure, fetch and send relevant logs with branch information to an external API'
+name: 'Test Reporting and Logs'
+description: 'Generates metadata reports, uploads test reports to S3, and collects Docker logs when tests fail'
 author: 'konrad'
 inputs:
   report_xml:

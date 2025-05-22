@@ -1,5 +1,5 @@
-name: 'Upload Failed Job Logs'
-description: 'On workflow job failure, fetch and send relevant logs with branch information to an external API'
+name: 'Run UI Tests'
+description: 'Sets up Node.js environment and executes UI tests with Playwright using specified markers'
 author: 'konrad'
 inputs:
   ui_markers:

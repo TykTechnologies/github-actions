@@ -1,5 +1,5 @@
-name: 'Upload Report to S3'
-description: 'On workflow job failure, fetch and send relevant logs with branch information to an external API'
+name: 'Upload UI Test Report to S3'
+description: 'Uploads Playwright UI test reports to S3 and shares the report link in GitHub step summary'
 author: 'konrad'
 inputs:
   aws_acces_key_id: 
