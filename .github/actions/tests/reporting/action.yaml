@@ -57,7 +57,7 @@ runs:
       uses: actions/upload-artifact@v4
       if: inputs.execution_status != 'success'
       with:
-        name: docker-compose-logs-${{ github.job }}-${{ matrix.envfiles.db }}-${{ matrix.envfiles.conf }}-${{ github.run_id }}
+        name: docker-compose-logs-${{ github.job }}-${{ matrix.envfiles.db }}-${{ matrix.envfiles.config }}-${{ github.run_id }}
         path: ${{ github.workspace }}/docker-compose.log
         retention-days: 10
         overwrite: true
