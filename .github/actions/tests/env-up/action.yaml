@@ -58,15 +58,16 @@ runs:
         tyk_alfa_image=$tyk_image
         tyk_beta_image=$tyk_image
 
+
+
+        confs_dir=./pro-ha
+        env_file=local.env' >> versions.env
         if [[ $REPO_NAME != "tyk-pump" ]]; then
           tyk_pump_image=${{ matrix.pump }}
         fi
         if [[ $REPO_NAME != "tyk-sink" ]]; then
           tyk_sink_image=${{ matrix.sink }}
         fi
-
-        confs_dir=./pro-ha
-        env_file=local.env' >> versions.env
         cat ./confs/${{ matrix.envfiles.config }}.env local-${{ matrix.envfiles.db }}.env > local.env
         echo "::group::versions"
         cat versions.env local.env
