@@ -58,11 +58,11 @@ runs:
         tyk_alfa_image=$tyk_image
         tyk_beta_image=$tyk_image
 
-        if [ -n "${{ inputs.pump_image }}" ]; then
-          tyk_pump_image="${{ inputs.pump_image }}"
+        if [ -n ${{ inputs.pump_image }} ]; then
+          tyk_pump_image=${{ inputs.pump_image }}
         fi
         if [ -n "${{ inputs.sink_image }}" ]; then
-          tyk_sink_image="${{ inputs.sink_image }}"
+          tyk_sink_image=${{ inputs.sink_image }}
         fi
 
         confs_dir=./pro-ha
