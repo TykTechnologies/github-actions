@@ -8,18 +8,9 @@ inputs:
   tags:
     description: 'Tags for the test'
     required: true
-  pump_image:
-    description: 'Pump version for the test'
-    required: false
-  sink_image:
-    description: 'Sink image for the test'
-    required: false
   github_token:
     description: 'GitHub token for API access'
     required: true
-  matrix:
-    description: 'Matrix for the test'
-    required: false
   TYK_DB_LICENSEKEY:
     description: 'Tyk DB license key'
     required: true
@@ -53,13 +44,9 @@ runs:
         set -eaxo pipefail
         docker run -q --rm -v ~/.docker/config.json:/root/.docker/config.json tykio/gromit policy match ${tags[0]} ${match_tag} 2>versions.env
         echo '# alfa and beta have to come after the override
-        ECR= ${{ env.ECR }}
         tyk_image="$ECR/tyk-ee"
         tyk_alfa_image=$tyk_image
         tyk_beta_image=$tyk_image
-
-
-
         confs_dir=./pro-ha
         env_file=local.env' >> versions.env
         if [[ $REPO_NAME != "tyk-pump" ]]; then
@@ -78,3 +65,4 @@ runs:
         docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile slave-datacenter up --quiet-pull -d
         echo "$(cat pytest.env | grep USER_API_SECRET)" >> $GITHUB_OUTPUT
         echo "ts=$(date +%s%N)" >> $GITHUB_OUTPUT
+        docker ps
