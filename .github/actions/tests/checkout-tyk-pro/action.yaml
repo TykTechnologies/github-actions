@@ -1,17 +1,11 @@
 name: 'Checkout test code'
 description: 'On workflow job failure, fetch and send relevant logs with branch information to an external API'
 author: 'konrad'
-inputs:
-  org_gh_token:
-    description: 'GitHub token for API access'
-    required: false
 runs:
   using: "composite"
   steps:
     - name: fetch env from tyk-pro
       shell: bash
-      env:
-        GH_TOKEN: ${{ secrets.ORG_GH_TOKEN }}
       run: |
         gh release download --repo github.com/TykTechnologies/tyk-pro --archive tar.gz -O env.tgz
         mkdir auto && tar --strip-components=1 -C auto -xzvf env.tgz
