@@ -61,12 +61,12 @@ runs:
         PUMP_IMAGE=${{ inputs.pump_image }}
         SINK_IMAGE=${{ inputs.sink_image }}
 
-        if [[ -n '${PUMP_IMAGE:-}' ]]; then
-          tyk_pump_image=${PUMP_IMAGE}
+        if [[ -n ${{PUMP_IMAGE:-}} ]]; then
+          tyk_pump_image=PUMP_IMAGE
         fi
 
-        if [[ -n '${SINK_IMAGE:-}' ]]; then
-          tyk_sink_image=${SINK_IMAGE}
+        if [[ -n ${{SINK_IMAGE:-}} ]]; then
+          tyk_sink_image=$SINK_IMAGE
         fi
 
         confs_dir=./pro-ha
