@@ -68,3 +68,4 @@ runs:
         echo "::group::Docker images"
         docker ps -a --format '{{.Names}}\t{{.Image}}'
         echo "::endgroup::"
+        
