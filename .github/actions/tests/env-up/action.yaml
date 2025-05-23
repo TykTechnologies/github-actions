@@ -58,15 +58,11 @@ runs:
         tyk_alfa_image=$tyk_image
         tyk_beta_image=$tyk_image
 
-        PUMP_IMAGE=${{ inputs.pump_image }}
-        SINK_IMAGE=${{ inputs.sink_image }}
-
-        if [[ -n ${{inputs.pump_image}} ]]; then
-          tyk_pump_image=PUMP_IMAGE
+        if [[ $REPO_NAME != "tyk-pump" ]]; then
+          tyk_pump_image=${{ matrix.pump }}
         fi
-
-        if [[ -n ${{inputs.sink_image}} ]]; then
-          tyk_sink_image=$SINK_IMAGE
+        if [[ $REPO_NAME != "tyk-sink" ]]; then
+          tyk_sink_image=${{ matrix.sink }}
         fi
 
         confs_dir=./pro-ha
