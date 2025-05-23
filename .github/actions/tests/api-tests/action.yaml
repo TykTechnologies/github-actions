@@ -1,0 +1,46 @@
+name: 'Run API Tests'
+description: 'Sets up Python environment and executes API tests with pytest using specified markers'
+author: 'konrad'
+inputs:
+  user_api_secret:
+    description: 'API secret of created user'
+    required: true
+  api_markers:
+    description: 'Markers to filter tests'
+    required: false
+    default: ${{ matrix.envfiles.apimarkers }}
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python      
+      uses: actions/setup-python@v5
+      with:
+        cache: 'pip'
+        python-version: '3.10'
+    - name: Execute API tests
+      id: test_execution
+      shell: bash
+      working-directory: tyk-analytics/tests/api
+      env:
+        USER_API_SECRET: ${{ inputs.user_api_secret }}
+        API_MARKERS: ${{ inputs.api_markers }}
+      run: |
+          pytest="pytest --ci --random-order --force-flaky --no-success-flaky-report --maxfail=3 --junitxml=${XUNIT_REPORT_PATH} --cache-clear --ignore=./tests/mdcb -v --log-cli-level=ERROR"
+          pip install -r requirements.txt
+          cat >pytest.env <<-EOF
+          TYK_TEST_BASE_URL=http://localhost:3000/
+          TYK_TEST_GW_URL=https://localhost:8080/
+          TYK_TEST_GW_1_ALFA_URL=https://localhost:8181/
+          TYK_TEST_GW_1_BETA_URL=https://localhost:8182/
+          TYK_TEST_GW_2_ALFA_URL=https://localhost:8281/
+          TYK_TEST_GW_2_BETA_URL=https://localhost:8282/
+          TYK_TEST_MONGODB=localhost:27017
+          TYK_TEST_REDIS=localhost
+          TYK_TEST_DB_ADMIN=12345
+          TYK_TEST_GW_SECRET=352d20ee67be67f6340b4c0605b044b7
+          TYK_TEST_DB_NAME=tyk_analytics
+          TYK_TEST_FEDERATION_HOST=federation
+          TYK_TEST_GRAPHQL_FAKER_HOST=graphql-faker
+          GATEWAY_CONTAINER_NAME=tyk
+          EOF
+          env $(cat pytest.env | xargs) $pytest -m "${{ inputs.api_markers }}"
