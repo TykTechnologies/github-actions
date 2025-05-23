@@ -57,9 +57,17 @@ runs:
         tyk_image="$ECR/tyk-ee"
         tyk_alfa_image=$tyk_image
         tyk_beta_image=$tyk_image
-        
-        tyk_pump_image=${{ matrix.pump }}
-        tyk_sink_image="${{ inputs.sink_image }}"
+
+        PUMP_IMAGE="${{ inputs.pump_image }}"
+        SINK_IMAGE="${{ inputs.sink_image }}"
+
+        if [[ -n "${PUMP_IMAGE:-}" ]]; then
+          tyk_pump_image="${PUMP_IMAGE}"
+        fi
+
+        if [[ -n "${SINK_IMAGE:-}" ]]; then
+          tyk_sink_image="${SINK_IMAGE}"
+        fi
 
         confs_dir=./pro-ha
         env_file=local.env' >> versions.env
