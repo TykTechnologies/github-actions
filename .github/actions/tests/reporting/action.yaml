@@ -61,4 +61,3 @@ runs:
         path: ${{ github.workspace }}/docker-compose.log
         retention-days: 10
         overwrite: true
-        
