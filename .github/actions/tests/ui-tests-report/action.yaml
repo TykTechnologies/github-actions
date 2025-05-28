@@ -1,0 +1,32 @@
+name: 'Upload UI Test Report to S3'
+description: 'Uploads Playwright UI test reports to S3 and shares the report link in GitHub step summary'
+author: 'konrad'
+inputs:
+  aws_acces_key_id: 
+    description: 'AWS access key ID'
+    required: true
+  aws_secret_access_key:
+    description: 'AWS secret access key'
+    required: true
+  matrix:
+    description: 'Matrix for the test'
+    required: false  
+runs:
+  using: "composite"
+  steps:
+    - name: Upload Playwright Test Report to S3
+      shell: bash
+      run:
+        npm run upload_report_to_s3
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_acces_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        RUN_ID: '${{ github.event.repository.name }}/${{ github.run_id }}'
+      working-directory: tyk-analytics/tests/ui
+
+    - name: Share S3 report link into summary
+      shell: bash
+      run: |
+        echo "# :clipboard: S3 UI Test REPORT" >> $GITHUB_STEP_SUMMARY
+        echo "- Status: :no_entry_sign:" >> $GITHUB_STEP_SUMMARY
+        echo "- [Link to report](https://tyk-qa-reports.s3.eu-central-1.amazonaws.com/${{ github.event.repository.name }}/${{ github.run_id }}/index.html)" >> $GITHUB_STEP_SUMMARY

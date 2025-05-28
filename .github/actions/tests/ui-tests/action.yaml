@@ -1,0 +1,29 @@
+name: 'Run UI Tests'
+description: 'Sets up Node.js environment and executes UI tests with Playwright using specified markers'
+author: 'konrad'
+inputs:
+  ui_markers:
+    description: 'Markers to filter tests'
+    required: false
+    default: ${{ matrix.envfiles.uimarkers }}
+runs:
+  using: "composite"
+  steps:
+    - name: Install Node.js 18.16
+      uses: actions/setup-node@v4
+      with:
+        node-version: "18.16"
+        cache-dependency-path: tyk-analytics/tests/ui
+        cache: 'npm'
+    - name: Execute UI tests
+      working-directory: tyk-analytics/tests/ui
+      id: test_execution
+      shell: bash
+      env:
+        GW_URL: 'https://localhost:8080/'
+        NODE_TLS_REJECT_UNAUTHORIZED: 0
+        UI_MARKERS: ${{ inputs.ui_markers && format('--grep {0}', inputs.ui_markers ) || '' }}
+      run: |
+        npm ci
+        npx playwright install --with-deps chromium
+        PLAYWRIGHT_JUNIT_OUTPUT_NAME=${XUNIT_REPORT_PATH} npx playwright test --project=chromium --reporter=junit,html $UI_MARKERS

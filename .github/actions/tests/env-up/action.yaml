@@ -1,0 +1,70 @@
+name: 'Set Up Test Environment'
+description: 'Configures and starts the test environment with Docker Compose, setting up master and slave datacenters'
+author: 'konrad'
+inputs:
+  base_ref:
+    description: 'Base ref for the test'
+    required: true
+  tags:
+    description: 'Tags for the test'
+    required: true
+  github_token:
+    description: 'GitHub token for API access'
+    required: true
+  TYK_DB_LICENSEKEY:
+    description: 'Tyk DB license key'
+    required: true
+  TYK_MDCB_LICENSE:
+    description: 'Tyk MDCB license key'
+    required: true
+outputs:
+  USER_API_SECRET:
+    description: 'User API secret for the test'
+    value: ${{ steps.env_up.outputs.USER_API_SECRET }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Starting environment
+      working-directory: auto
+      shell: bash
+      id: env_up
+      env:
+        ECR: "754489498669.dkr.ecr.eu-central-1.amazonaws.com"
+        REPO_NAME: ${{ github.event.repository.name }}
+        TAGS: ${{ inputs.tags }}
+        BASE_REF: ${{ inputs.base_ref }}
+        pull_policy: 'if_not_present'
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        TYK_DB_LICENSEKEY: ${{ inputs.TYK_DB_LICENSEKEY }}
+        TYK_MDCB_LICENSE: ${{ inputs.TYK_MDCB_LICENSE }}
+      run: |
+        match_tag=$ECR/$REPO_NAME:$BASE_REF
+        tags=$TAGS
+        set -eaxo pipefail
+        docker run -q --rm -v ~/.docker/config.json:/root/.docker/config.json tykio/gromit policy match ${tags[0]} ${match_tag} 2>versions.env
+        echo '# alfa and beta have to come after the override
+        tyk_image="$ECR/tyk-ee"
+        tyk_alfa_image=$tyk_image
+        tyk_beta_image=$tyk_image
+        confs_dir=./pro-ha
+        env_file=local.env' >> versions.env
+        if [[ $REPO_NAME != "tyk-pump" ]]; then
+          tyk_pump_image=${{ matrix.pump }}
+        fi
+        if [[ $REPO_NAME != "tyk-sink" ]]; then
+          tyk_sink_image=${{ matrix.sink }}
+        fi
+        cat ./confs/${{ matrix.envfiles.config }}.env local-${{ matrix.envfiles.db }}.env > local.env
+        echo "::group::versions"
+        cat versions.env local.env
+        echo "::endgroup::"
+        # bring up env, the project name is important
+        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile master-datacenter up --quiet-pull -d
+        ./dash-bootstrap.sh http://localhost:3000
+        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile slave-datacenter up --quiet-pull -d
+        echo "$(cat pytest.env | grep USER_API_SECRET)" >> $GITHUB_OUTPUT
+        echo "ts=$(date +%s%N)" >> $GITHUB_OUTPUT
+        echo "::group::Docker images"
+        docker ps -a --format '{{.Names}}\t{{.Image}}'
+        echo "::endgroup::"
