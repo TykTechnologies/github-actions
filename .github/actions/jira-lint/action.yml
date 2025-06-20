@@ -52,6 +52,7 @@ runs:
         cd ${{ github.action_path }}
         go run main.go
       env:
+        GITHUB_EVENT_PATH: ${{ github.event_path }}
         INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
         INPUT_JIRA_TOKEN: ${{ inputs.jira-token }}
         INPUT_JIRA_BASE_URL: ${{ inputs.jira-base-url }}
