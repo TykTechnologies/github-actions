@@ -40,9 +40,41 @@ runs:
         TYK_MDCB_LICENSE: ${{ inputs.TYK_MDCB_LICENSE }}
       run: |
         match_tag=$ECR/$REPO_NAME:$BASE_REF
-        tags=$TAGS
+        
+        # Extract the non-SHA tag from TAGS
+        # Debug: Show the raw TAGS input
+        echo "Raw TAGS input:"
+        echo "$TAGS"
+        
+        # Convert TAGS to an array by splitting on newlines
+        readarray -t tag_array <<< "$TAGS"
+        
+        echo "Found ${#tag_array[@]} tags:"
+        for i in "${!tag_array[@]}"; do
+          # Trim leading/trailing whitespace
+          tag_array[$i]=$(echo "${tag_array[$i]}" | xargs)
+          echo "  $i: ${tag_array[$i]}"
+        done
+        
+        # Find the tag that doesn't contain "sha-"
+        for tag in "${tag_array[@]}"; do
+          if [[ ! $tag == *":sha-"* ]]; then
+            non_sha_tag=$tag
+            echo "Found non-SHA tag: $non_sha_tag"
+            break
+          fi
+        done
+        
+        # If no non-SHA tag found, use the first tag as fallback
+        if [ -z "$non_sha_tag" ]; then
+          non_sha_tag=${tag_array[0]}
+          echo "No non-SHA tag found, using first tag as fallback: $non_sha_tag"
+        fi
+        
+        echo "Using tag: $non_sha_tag"
+        
         set -eaxo pipefail
-        docker run -q --rm -v ~/.docker/config.json:/root/.docker/config.json tykio/gromit policy match ${tags[0]} ${match_tag} 2>versions.env
+        docker run -q --rm -v ~/.docker/config.json:/root/.docker/config.json tykio/gromit policy match ${non_sha_tag} ${match_tag} 2>versions.env
         echo '# alfa and beta have to come after the override
         tyk_image="$ECR/tyk-ee"
         tyk_alfa_image=$tyk_image
