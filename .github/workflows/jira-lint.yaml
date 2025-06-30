@@ -9,15 +9,30 @@ on:
         required: true
 
 jobs:
-  jira-lint:
+  jira-validation:
     runs-on: ubuntu-latest
+    outputs:
+      validation-report: ${{ steps.validate.outputs.report }}
+      validation-status: ${{ steps.validate.outputs.status }}
     steps:
-      - uses: cyrus-za/jira-lint@master 
-        name: jira-lint
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Run Jira Validation
+        id: validate
+        uses: ./.github/actions/jira-lint
         with:
           github-token: ${{ secrets.ORG_GH_TOKEN }}
           jira-token: ${{ secrets.JIRA_TOKEN }}
-          jira-base-url: https://tyktech.atlassian.net/
+          jira-base-url: https://tyktech.atlassian.net
           skip-branches: '^(release-[0-9.-]+(lts)?|master|main)$'
           validate_issue_status: true
-          allowed_issue_statuses: "In Dev,In Code Review,Ready for Testing,In Test,In Progress,In Review"
+          skip-comments: true  # We'll handle comments in the next job
+
+  create-comment:
+    needs: jira-validation
+    if: ${{ needs.jira-validation.outputs.validation-report != '' }}
+    uses: ./.github/workflows/create-update-comment.yaml
+    with:
+      body-includes: "<!-- jira-lint-comment -->"
+      body: ${{ needs.jira-validation.outputs.validation-report }}
