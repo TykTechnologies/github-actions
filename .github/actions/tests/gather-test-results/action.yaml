@@ -1,0 +1,14 @@
+name: 'Run UI Tests'
+description: 'Gather test results'
+author: 'konrad'
+runs:
+  using: "composite"
+  steps:
+    - name: Check test status
+      shell: bash
+      run: |
+        if [ "${{ steps.test_execution.outcome }}" != "success" ]; then
+          echo "Test execution failed"
+          exit 1
+        fi
+    
