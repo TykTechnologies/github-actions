@@ -86,7 +86,7 @@ jobs:
         run: |
           $(go env GOPATH)/bin/golangci-lint run --verbose --out-format 'checkstyle:golangci_lint.xml' --timeout=300s --new=false --new-from-rev= ./...
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: ${{ always() }}
         with:
           name: golangci-report

@@ -22,7 +22,7 @@ jobs:
     - uses: actions/setup-go@v3
       with:
         go-version: ${{ inputs.go }}
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Start Redis
       if: ${{ inputs.redis != '' }}
@@ -37,7 +37,7 @@ jobs:
         mongodb-version: '${{ inputs.mongo }}'    
         
     - name: Cache
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -67,11 +67,11 @@ jobs:
             gotestsum --junitfile ${coveragefile}.xml --raw-command go test ${OPTS} --json -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
         done
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: coverage
         path: "*cov"
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       if: ${{ always() }}
       with:
         name: junit
