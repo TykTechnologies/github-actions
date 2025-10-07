@@ -1,0 +1,15 @@
+name: Aggregated CI Status
+
+# Allows other workflows to call this as a job
+on:
+  workflow_call:
+
+jobs:
+  aggregated-ci-status:
+    name: Aggregated CI Status
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report aggregated status
+        run: echo "All required jobs have completed successfully"
+
+# This job should always pass by design as it will only run once some other required jobs have passed and merging PRs will only be possible once this job has passed
