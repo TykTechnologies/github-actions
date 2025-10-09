@@ -1,0 +1,32 @@
+name: Aggregated CI Status
+on:
+  workflow_call:
+    inputs:
+      jobs:
+        description: "List of job names to aggregate"
+        required: true
+        type: string
+
+jobs:
+  aggregator:
+    name: Aggregated CI Status
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: ${{ fromJson(inputs.jobs) }}
+    steps:
+        - name: Aggregate results
+          run: |
+            failed=()
+            for job in ${{ inputs.jobs }}; do
+              result=$(eval echo '${{ needs.'$job'.result }}')
+              if [ "$result" != "success" ]; then
+                failed+=("$job")
+              fi
+            done
+            
+            if [ ${#failed[@]} -ne 0 ]; then
+              echo "❌ Failed jobs: ${failed[*]}"
+              exit 1
+            fi
+            
+            echo "✅ All required jobs succeeded"
