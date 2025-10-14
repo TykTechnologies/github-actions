@@ -10,6 +10,9 @@ inputs:
     default: ${{ github.job }}
   token:
     description: 'A Github PAT'
+  sparse-checkout:
+    description: 'Do a sparse checkout on given patterns. Each pattern should be separated with new lines.'
+    required: false
 
 runs:
   using: "composite"
@@ -26,6 +29,7 @@ runs:
         fetch-depth: ${{ env.PR_FETCH_DEPTH }}
         submodules: true
         lfs: true
+        sparse-checkout: ${{ inputs.sparse-checkout }}
 
     - name: 'Fetch the other branch with enough history for a common merge-base commit'
       shell: bash
