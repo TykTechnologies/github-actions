@@ -13,6 +13,9 @@ inputs:
   sparse-checkout:
     description: 'Do a sparse checkout on given patterns. Each pattern should be separated with new lines.'
     required: false
+  filter:
+    description: 'Partially clone against a given filter. Overrides sparse-checkout if set'
+    required: false
 
 runs:
   using: "composite"
@@ -30,6 +33,7 @@ runs:
         submodules: true
         lfs: true
         sparse-checkout: ${{ inputs.sparse-checkout }}
+        filter: ${{ inputs.filter }}
 
     - name: 'Fetch the other branch with enough history for a common merge-base commit'
       shell: bash
