@@ -16,6 +16,10 @@ inputs:
   filter:
     description: 'Partially clone against a given filter. Overrides sparse-checkout if set'
     required: false
+  lfs:
+      description: 'Whether to download Git-LFS files'
+      required: false
+      default: 'true'
 
 runs:
   using: "composite"
@@ -31,7 +35,7 @@ runs:
         token: ${{ inputs.token }}
         fetch-depth: ${{ env.PR_FETCH_DEPTH }}
         submodules: true
-        lfs: true
+        lfs: ${{ inputs.lfs }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
         filter: ${{ inputs.filter }}
 
