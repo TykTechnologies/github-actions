@@ -16,12 +16,12 @@ jobs:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
             const { issue, comment } = context.payload;
-            
+
             if (!issue || !issue.pull_request || !comment || !comment.body.startsWith('/release to ')) {
               core.setOutput('release_valid', 'false');
               return;
             }
-            
+
             const releaseBranch = comment.body.split('/release to ')[1].trim();
             core.setOutput('release_valid', 'true');
             core.setOutput('release_branch', releaseBranch);
@@ -56,9 +56,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_DATA=$(gh pr view ${{ steps.check_command.outputs.pr_number }} --json headRefOid)
+          PR_DATA=$(gh pr view ${{ steps.check_command.outputs.pr_number }} --json headRefOid,title)
+          PR_TITLE=$(echo $PR_DATA | jq -r .title 2>/dev/null || echo "")
           COMMIT_SHA=$(echo $PR_DATA | jq -r .headRefOid)
           echo "COMMIT_SHA=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "PR_TITLE=${PR_TITLE}" >> $GITHUB_OUTPUT
 
       - name: Clone repository and cherry-pick commit
         if: steps.check_command.outputs.release_valid == 'true'
@@ -68,7 +70,10 @@ jobs:
           GITHUB_REPO: ${{ github.repository }}
           GITHUB_BRANCH: ${{ steps.check_command.outputs.release_branch }}
           GITHUB_CHERRY_PICK_COMMIT: ${{ steps.pr_details.outputs.COMMIT_SHA }}
+          PR_TITLE: ${{ steps.pr_details.outputs.PR_TITLE }}
         run: |
+          JIRA_ID=$(echo "$PR_TITLE" | grep -oE '[A-Z]{1,10}-[0-9]{1,10}' | head -n 1 2>/dev/null || echo "")
+
           # Clone the repository
           export FOLDER=$(echo $GITHUB_REPO | cut -d '/' -f2)
           rm -rf $FOLDER
@@ -83,12 +88,20 @@ jobs:
           git reset --hard
           git pull
 
-          # Delete old branch if it exists
+          if [ -n "$JIRA_ID" ]; then
+            BRANCH_NAME="merge/$JIRA_ID/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT"
+          else
+            BRANCH_NAME="merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT"
+          fi
+
+          git branch -d $BRANCH_NAME || true
+          git push origin --delete $BRANCH_NAME || true
+          # for backward compatibility.
           git branch -d merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT || true
           git push origin --delete merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT || true
 
           # Create and checkout the new branch
-          git checkout -b merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT
+          git checkout -b $BRANCH_NAME
 
           # Cherry-pick the commit
           MERGE_FAILED=0
@@ -100,21 +113,21 @@ jobs:
           fi
 
           echo "Push the new branch"
-          git push origin merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT --force || true
+          git push origin $BRANCH_NAME --force || true
 
           echo "Prepare the message and title for the PR"
           MESSAGE=$(git log --format=%B -n 1 $GITHUB_CHERRY_PICK_COMMIT)
           TITLE=$(git log --format=%B -n 1 $GITHUB_CHERRY_PICK_COMMIT | head -n 1)
-          
+
           echo "Check GH token"
           echo $GITHUB_TOKEN || gh auth login --with-token
 
           echo "Create the PR"
           PR_URL=
           if ! [ $MERGE_FAILED -eq 0 ]; then
-            PR_URL=$(gh pr create --draft --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT)
+            PR_URL=$(gh pr create --draft --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head $BRANCH_NAME)
           else
-            PR_URL=$(gh pr create --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT)
+            PR_URL=$(gh pr create --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head $BRANCH_NAME)
           fi
 
           echo "$PR_URL"
@@ -155,7 +168,7 @@ jobs:
 
             const owner = context.repo.owner || '${{ github.repository_owner }}';
             const repo = context.repo.repo || '${{ github.event.repository.name }}';
-            
+
             github.rest.issues.createComment({
               issue_number: ${{ steps.check_command.outputs.pr_number }},
               owner: owner,
