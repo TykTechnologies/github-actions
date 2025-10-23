@@ -89,7 +89,7 @@ jobs:
           git pull
 
           if [ -n "$JIRA_ID" ]; then
-            BRANCH_NAME="merge/$JIRA_ID/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT"
+            BRANCH_NAME="merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT/$JIRA_ID"
           else
             BRANCH_NAME="merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT"
           fi
