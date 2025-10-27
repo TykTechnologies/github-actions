@@ -50,4 +50,11 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           BRANCH_NAME: ${{ github.head_ref }}
         run: |
-          visor --config branch_suggestion.yml --tags remote
+          export JIRA_EMAIL="${JIRA_EMAIL}"
+          export JIRA_API_TOKEN="${JIRA_API_TOKEN}"
+          export GITHUB_TOKEN="${GITHUB_TOKEN}"
+          export PR_TITLE="${PR_TITLE}"
+          export PR_NUMBER="${PR_NUMBER}"
+          export REPOSITORY="${REPOSITORY}"
+          export BRANCH_NAME="${BRANCH_NAME}"
+          visor --config branch_suggestion.yml --tags debug
