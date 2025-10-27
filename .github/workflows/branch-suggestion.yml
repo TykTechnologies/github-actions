@@ -21,12 +21,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout REFINE repository
+      - name: Checkout github-actions repository
         uses: actions/checkout@v4
         with:
           repository: TykTechnologies/github-actions
           ref: main
-          path: branch-suggestion-tools
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -34,14 +33,14 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        working-directory: branch-suggestion-tools
+        working-directory: branch-suggestion
         run: npm install
 
       - name: Install Visor
         run: npm install -g @probelabs/visor
 
       - name: Analyze PR and suggest branches
-        working-directory: branch-suggestion-tools
+        working-directory: branch-suggestion
         env:
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
