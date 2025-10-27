@@ -1,0 +1,19 @@
+# Example usage workflow for other repositories
+# Copy this file to your repository as .github/workflows/branch-suggestion.yml
+
+name: PR Branch Suggestions
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  branch-suggestions:
+    uses: TykTechnologies/REFINE/.github/workflows/branch-suggestion.yml@main
+    secrets:
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}

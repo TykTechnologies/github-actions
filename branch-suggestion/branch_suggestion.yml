@@ -1,0 +1,183 @@
+version: "1.0"
+
+# Visor configuration for Branch Suggestion automation
+# Analyzes JIRA fix versions and suggests appropriate merge target branches
+# based on the repository's branching strategy
+
+checks:
+  # ============================================================================
+  # COMBINED STEP: ANALYZE AND SUGGEST BRANCHES
+  # ============================================================================
+  # Combines all steps into one to avoid Visor's output passing limitations:
+  # 1. Extract JIRA ticket from PR title/branch
+  # 2. Fetch fix versions from JIRA
+  # 3. Fetch repository branches
+  # 4. Match and suggest branches
+  # ============================================================================
+  analyze-and-suggest:
+    type: command
+    timeout: 90
+    exec: |
+      set -e
+
+      # Read from environment variables with defaults for local testing
+      PR_TITLE="${PR_TITLE:-TT-12345: Test PR}"
+      BRANCH_NAME="${BRANCH_NAME:-feature/TT-12345-test}"
+      REPO="${REPOSITORY:-TykTechnologies/tyk}"
+
+      echo "========================================" >&2
+      echo "BRANCH SUGGESTION ANALYSIS" >&2
+      echo "========================================" >&2
+      echo "📝 PR Title: $PR_TITLE" >&2
+      echo "🌿 Branch: $BRANCH_NAME" >&2
+      echo "📦 Repository: $REPO" >&2
+      echo "========================================" >&2
+
+      # --- STEP 1: Fetch JIRA Fix Versions ---
+      echo "" >&2
+      echo "🔍 STEP 1: Fetching JIRA ticket and fix versions..." >&2
+
+      # Fetch fix versions (environment variables are already set)
+      set +e
+      JIRA_RESULT=$(node scripts/jira/get-fixedversion.js "$PR_TITLE" "$BRANCH_NAME")
+      JIRA_EXIT_CODE=$?
+      set -e
+
+      # Handle exit codes
+      if [ $JIRA_EXIT_CODE -eq 2 ]; then
+        echo "ℹ️  No JIRA ticket found. Skipping branch suggestions." >&2
+        exit 0
+      fi
+
+      if [ $JIRA_EXIT_CODE -eq 1 ]; then
+        echo "❌ JIRA ticket found but no fix versions set." >&2
+        exit 1
+      fi
+
+      # Parse JIRA data
+      JIRA_TICKET=$(echo "$JIRA_RESULT" | jq -r '.ticket')
+      JIRA_SUMMARY=$(echo "$JIRA_RESULT" | jq -r '.summary')
+      FIX_VERSIONS_COUNT=$(echo "$JIRA_RESULT" | jq '.fixVersions | length')
+
+      echo "✅ JIRA Ticket: $JIRA_TICKET" >&2
+      echo "   Summary: $JIRA_SUMMARY" >&2
+      echo "   Fix Versions: $FIX_VERSIONS_COUNT" >&2
+      echo "$JIRA_RESULT" | jq -r '.fixVersions[] | "     - \(.name) (released: \(.released))"' >&2
+
+      # --- STEP 2: Fetch Repository Branches ---
+      echo "" >&2
+      echo "🔍 STEP 2: Fetching repository branches..." >&2
+
+      # Check if gh CLI is available
+      if command -v gh &> /dev/null; then
+        BRANCHES=$(gh api "repos/$REPO/branches" --paginate | jq -c '[.[] | {name: .name}]')
+      else
+        # Use curl with GitHub API
+        if [ -n "$GITHUB_TOKEN" ]; then
+          BRANCHES=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/$REPO/branches?per_page=100" | \
+            jq -c '[.[] | {name: .name}]')
+        else
+          BRANCHES=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/$REPO/branches?per_page=100" | \
+            jq -c '[.[] | {name: .name}]')
+        fi
+      fi
+
+      BRANCHES_COUNT=$(echo "$BRANCHES" | jq 'length')
+      echo "✅ Branches fetched: $BRANCHES_COUNT" >&2
+      echo "$BRANCHES" | jq -r '.[0:5][]?.name | "     - \(.)"' >&2
+      echo "   ..." >&2
+
+      # --- STEP 3: Match Branches ---
+      echo "" >&2
+      echo "🔍 STEP 3: Matching branches using deterministic rules..." >&2
+
+      MATCH_RESULT=$(node scripts/common/match-branches.js "$JIRA_RESULT" "$BRANCHES")
+
+      # Log results
+      echo "✅ Branch matching complete" >&2
+
+      echo "" >&2
+      echo "========================================" >&2
+      echo "✅ ANALYSIS COMPLETE" >&2
+      echo "========================================" >&2
+
+      # Display results to stderr for visibility in local testing
+      # Save to file first to avoid parsing issues with control characters
+      echo "" >&2
+      echo "$MATCH_RESULT" > /tmp/match_result_$$.json
+      node -e "
+        const fs = require('fs');
+        const content = fs.readFileSync('/tmp/match_result_$$.json', 'utf8');
+        // Parse only the parts we need, avoiding the markdown field
+        const ticketMatch = content.match(/\"ticket\":\\s*\"([^\"]+)\"/);
+        const summaryMatch = content.match(/\"summary\":\\s*\"([^\"]+)\"/);
+
+        console.error('📋 JIRA Ticket:', ticketMatch ? ticketMatch[1] : 'N/A');
+        console.error('   Summary:', summaryMatch ? summaryMatch[1] : 'N/A');
+        console.error('');
+
+        // Extract matchResults array manually to avoid parsing markdown
+        const matchResultsStr = content.match(/\"matchResults\":\\s*\\[([^\\]]+(?:\\][^\\]]*)*?)\\]/s);
+        if (matchResultsStr) {
+          const fixVersionMatches = [...matchResultsStr[0].matchAll(/\"fixVersion\":\\s*\"([^\"]+)\"/g)];
+          const branchMatches = [...matchResultsStr[0].matchAll(/\"branch\":\\s*\"([^\"]+)\"[^}]*\"reason\":\\s*\"([^\"]+)\"[^}]*\"priority\":\\s*\"([^\"]+)\"/g)];
+
+          fixVersionMatches.forEach((fv, i) => {
+            console.error('🎯 Fix Version:', fv[1]);
+            const versionBranches = branchMatches.filter(b => matchResultsStr[0].indexOf(b[0]) > matchResultsStr[0].indexOf(fv[0]));
+            versionBranches.slice(0, 10).forEach(branch => {
+              const icon = branch[3] === 'required' ? '✅' : branch[3] === 'recommended' ? '📌' : '💡';
+              console.error('  ', icon, branch[1], '-', branch[2]);
+            });
+            console.error('');
+          });
+        }
+      " >&2 || true
+      rm -f /tmp/match_result_$$.json
+
+      # Output to stdout (for Visor and PR comment step)
+      echo "$MATCH_RESULT"
+
+  # ============================================================================
+  # STEP 2: POST COMMENT TO PR
+  # ============================================================================
+  # Creates or updates a comment on the PR with branch suggestions
+  # ============================================================================
+  post-pr-comment:
+    type: command
+    depends_on: [analyze-and-suggest]
+    tags: ["remote"]
+    timeout: 30
+    exec: |
+      set -e
+
+      # Read from environment variables with defaults for local testing
+      REPO="${REPOSITORY:-TykTechnologies/tyk}"
+      PR_NUMBER="${PR_NUMBER:-123}"
+
+      echo "=== Posting PR Comment ===" >&2
+      echo "Repository: $REPO" >&2
+      echo "PR Number: $PR_NUMBER" >&2
+
+      # Write markdown to temp file
+      # Extract the markdown field from the JSON output
+      echo '{{ outputs["analyze-and-suggest"] }}' | jq -r '.markdown' > /tmp/branch_suggestion_${PR_NUMBER}.md
+
+      # Show comment size
+      COMMENT_SIZE=$(wc -c < /tmp/branch_suggestion_${PR_NUMBER}.md)
+      echo "Comment size: $COMMENT_SIZE bytes" >&2
+
+      # Post or update the comment
+      echo "Posting comment to GitHub..." >&2
+      node scripts/github/add-pr-comment.js \
+        "$REPO" \
+        "$PR_NUMBER" \
+        --file /tmp/branch_suggestion_${PR_NUMBER}.md
+
+      # Clean up
+      rm -f /tmp/branch_suggestion_${PR_NUMBER}.md
+
+      echo "✅ Successfully posted branch suggestions to PR #$PR_NUMBER in $REPO" >&2
