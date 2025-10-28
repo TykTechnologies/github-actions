@@ -25,16 +25,13 @@ checks:
       BRANCH_NAME="${BRANCH_NAME:-feature/TT-12345-test}"
       REPO="${REPOSITORY:-TykTechnologies/tyk}"
 
-      # Debug: Check if JIRA credentials are available
-      echo "DEBUG: JIRA_EMAIL before export: ${JIRA_EMAIL:+SET}" >&2
+      # Debug: Check if JIRA token is available
       echo "DEBUG: JIRA_TOKEN before export: ${JIRA_TOKEN:+SET}" >&2
 
-      # Export JIRA credentials explicitly for subprocess access
-      export JIRA_EMAIL="${JIRA_EMAIL}"
+      # Export JIRA token explicitly for subprocess access
       export JIRA_TOKEN="${JIRA_TOKEN}"
 
-      # Debug: Verify exports (without exposing values)
-      echo "DEBUG: JIRA_EMAIL after export: ${JIRA_EMAIL:+SET}" >&2
+      # Debug: Verify export (without exposing values)
       echo "DEBUG: JIRA_TOKEN after export: ${JIRA_TOKEN:+SET}" >&2
 
       echo "========================================" >&2

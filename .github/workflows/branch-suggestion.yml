@@ -5,12 +5,9 @@ on:
     types: [opened, synchronize, reopened]
   workflow_call:
     secrets:
-      JIRA_EMAIL:
-        required: true
-        description: 'JIRA account email address'
       JIRA_TOKEN:
         required: true
-        description: 'JIRA API token'
+        description: 'Pre-encoded JIRA token (base64(email:api_token))'
 
 permissions:
   pull-requests: write
@@ -42,7 +39,6 @@ jobs:
       - name: Analyze PR and suggest branches
         working-directory: branch-suggestion
         env:
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_TITLE: ${{ github.event.pull_request.title }}
@@ -50,7 +46,6 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           BRANCH_NAME: ${{ github.head_ref }}
         run: |
-          export JIRA_EMAIL="${JIRA_EMAIL}"
           export JIRA_TOKEN="${JIRA_TOKEN}"
           export GITHUB_TOKEN="${GITHUB_TOKEN}"
           export PR_TITLE="${PR_TITLE}"

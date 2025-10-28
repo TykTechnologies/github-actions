@@ -2,9 +2,9 @@
 import dotenv from 'dotenv';
 import { jiraAPI, getIssue } from './jira-api.js';
 
-// Only load .env if JIRA_EMAIL is not already set (to avoid log output in CI)
+// Only load .env if JIRA_TOKEN is not already set (to avoid log output in CI)
 // Silence dotenv v17+ logging
-if (!process.env.JIRA_EMAIL) {
+if (!process.env.JIRA_TOKEN) {
     process.env.DOTENV_LOG_LEVEL = 'error';
     dotenv.config();
 }
