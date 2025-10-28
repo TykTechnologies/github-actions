@@ -11,12 +11,12 @@ if (!process.env.JIRA_EMAIL) {
 // JIRA configuration
 const JIRA_BASE_URL = 'https://tyktech.atlassian.net';
 const JIRA_EMAIL = process.env.JIRA_EMAIL;
-const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN;
+const JIRA_TOKEN = process.env.JIRA_TOKEN;
 
 // Debug logging (without exposing sensitive data)
 console.error('DEBUG: Environment check:');
 console.error(`  JIRA_EMAIL: ${JIRA_EMAIL ? 'SET' : 'EMPTY'}`);
-console.error(`  JIRA_API_TOKEN: ${JIRA_API_TOKEN ? 'SET' : 'EMPTY'}`);
+console.error(`  JIRA_TOKEN: ${JIRA_TOKEN ? 'SET' : 'EMPTY'}`);
 console.error(`  All JIRA env vars: ${Object.keys(process.env).filter(k => k.includes('JIRA')).join(', ')}`);
 
 // Extract JQL from URL or use directly
@@ -39,11 +39,11 @@ function extractJQL(input) {
 
 // Make JIRA API request
 async function jiraAPI(endpoint, options = {}) {
-  if (!JIRA_EMAIL || !JIRA_API_TOKEN) {
-    throw new Error('JIRA_EMAIL and JIRA_API_TOKEN must be set in .env file');
+  if (!JIRA_EMAIL || !JIRA_TOKEN) {
+    throw new Error('JIRA_EMAIL and JIRA_TOKEN must be set in .env file');
   }
 
-  const auth = Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString('base64');
+  const auth = Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');
   
   const response = await fetch(`${JIRA_BASE_URL}/rest/api/3${endpoint}`, {
     ...options,
@@ -137,7 +137,7 @@ async function main() {
     console.log('  node jira-api.js "https://tyktech.atlassian.net/jira/software/c/projects/TT/issues/?jql=..."');
     console.log('\nMake sure to set in .env:');
     console.log('  JIRA_EMAIL=your-email@example.com');
-    console.log('  JIRA_API_TOKEN=your-api-token');
+    console.log('  JIRA_TOKEN=your-api-token');
     console.log('\nGet your API token from: https://id.atlassian.com/manage-profile/security/api-tokens');
     process.exit(1);
   }
@@ -227,7 +227,7 @@ async function main() {
     
   } catch (error) {
     console.error('\n❌ Error:', error.message);
-    console.error('\nMake sure you have set JIRA_EMAIL and JIRA_API_TOKEN in your .env file');
+    console.error('\nMake sure you have set JIRA_EMAIL and JIRA_TOKEN in your .env file');
     console.error('Get your API token from: https://id.atlassian.com/manage-profile/security/api-tokens');
     process.exit(1);
   }
