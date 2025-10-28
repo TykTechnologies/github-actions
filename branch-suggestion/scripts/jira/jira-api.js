@@ -13,6 +13,12 @@ const JIRA_BASE_URL = 'https://tyktech.atlassian.net';
 const JIRA_EMAIL = process.env.JIRA_EMAIL;
 const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN;
 
+// Debug logging (without exposing sensitive data)
+console.error('DEBUG: Environment check:');
+console.error(`  JIRA_EMAIL: ${JIRA_EMAIL ? 'SET' : 'EMPTY'}`);
+console.error(`  JIRA_API_TOKEN: ${JIRA_API_TOKEN ? 'SET' : 'EMPTY'}`);
+console.error(`  All JIRA env vars: ${Object.keys(process.env).filter(k => k.includes('JIRA')).join(', ')}`);
+
 // Extract JQL from URL or use directly
 function extractJQL(input) {
   // Check if input is a URL
