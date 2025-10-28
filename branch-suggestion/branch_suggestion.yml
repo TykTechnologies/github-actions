@@ -20,6 +20,14 @@ checks:
     exec: |
       set -e
 
+      # Export JIRA credentials explicitly for subprocess access
+      export JIRA_EMAIL="${JIRA_EMAIL}"
+      export JIRA_API_TOKEN="${JIRA_API_TOKEN}"
+
+      # Debug: Verify exports (without exposing values)
+      echo "DEBUG: Exported JIRA_EMAIL: ${JIRA_EMAIL:+SET}" >&2
+      echo "DEBUG: Exported JIRA_API_TOKEN: ${JIRA_API_TOKEN:+SET}" >&2
+
       # Read from environment variables with defaults for local testing
       PR_TITLE="${PR_TITLE:-TT-12345: Test PR}"
       BRANCH_NAME="${BRANCH_NAME:-feature/TT-12345-test}"
