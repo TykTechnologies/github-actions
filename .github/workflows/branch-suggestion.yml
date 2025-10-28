@@ -52,4 +52,4 @@ jobs:
           export PR_NUMBER="${PR_NUMBER}"
           export REPOSITORY="${REPOSITORY}"
           export BRANCH_NAME="${BRANCH_NAME}"
-          visor --config branch_suggestion.yml --debug
+          visor --config branch_suggestion.yml --debug --tags remote
