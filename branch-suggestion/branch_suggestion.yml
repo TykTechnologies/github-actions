@@ -171,9 +171,10 @@ checks:
       echo "Repository: $REPO" >&2
       echo "PR Number: $PR_NUMBER" >&2
 
-      # Write markdown to temp file
-      # Extract the markdown field from the JSON output
-      echo '{{ outputs["analyze-and-suggest"] }}' | jq -r '.markdown' > /tmp/branch_suggestion_${PR_NUMBER}.md
+      # Write markdown to temp file using Visor template syntax
+      cat > /tmp/branch_suggestion_${PR_NUMBER}.md << 'COMMENT_EOF'
+{{ outputs.analyze-and-suggest.markdown }}
+COMMENT_EOF
 
       # Show comment size
       COMMENT_SIZE=$(wc -c < /tmp/branch_suggestion_${PR_NUMBER}.md)
