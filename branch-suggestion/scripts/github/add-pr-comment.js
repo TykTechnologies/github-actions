@@ -66,8 +66,8 @@ function parseRepo(repoString) {
 async function main() {
     const args = process.argv.slice(2);
 
-    if (args.length < 3) {
-        console.log('Usage: node add-pr-comment.js <owner/repo> <pr-number> <comment-body-or-file>');
+    if (args.length < 2) {
+        console.log('Usage: node add-pr-comment.js <owner/repo> <pr-number> [<comment-body>] [options]');
         console.log('\nOptions:');
         console.log('  --file <path>       Read comment body from file');
         console.log('  --marker <marker>   Custom marker (default: <!-- branch-suggestions -->)');
@@ -91,11 +91,11 @@ async function main() {
             throw new Error('PR number must be a positive integer');
         }
 
-        let commentBody = args[2];
+        let commentBody = args[2] || '';
         let marker = COMMENT_MARKER;
 
-        // Parse additional options
-        for (let i = 3; i < args.length; i++) {
+        // Parse options starting from position 2 (to handle --file in that position)
+        for (let i = 2; i < args.length; i++) {
             if (args[i] === '--file' && args[i + 1]) {
                 const filePath = args[i + 1];
                 if (!fs.existsSync(filePath)) {
@@ -110,7 +110,7 @@ async function main() {
         }
 
         if (!commentBody || commentBody.trim() === '') {
-            throw new Error('Comment body cannot be empty');
+            throw new Error('Comment body cannot be empty. Use --file <path> to read from file.');
         }
 
         console.log(`Repository: ${owner}/${repo}`);

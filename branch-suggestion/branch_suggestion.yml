@@ -182,10 +182,7 @@ checks:
 
       # Post or update the comment
       echo "Posting comment to GitHub..." >&2
-      node scripts/github/add-pr-comment.js \
-        "$REPO" \
-        "$PR_NUMBER" \
-        --file /tmp/branch_suggestion_${PR_NUMBER}.md
+      node scripts/github/add-pr-comment.js "$REPO" "$PR_NUMBER" --file /tmp/branch_suggestion_${PR_NUMBER}.md
 
       # Clean up
       rm -f /tmp/branch_suggestion_${PR_NUMBER}.md
