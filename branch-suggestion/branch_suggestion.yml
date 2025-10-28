@@ -173,8 +173,8 @@ checks:
 
       # Write markdown to temp file using Visor template syntax
       cat > /tmp/branch_suggestion_${PR_NUMBER}.md << 'COMMENT_EOF'
-{{ outputs.analyze-and-suggest.markdown }}
-COMMENT_EOF
+      {{ outputs.analyze-and-suggest.markdown }}
+      COMMENT_EOF
 
       # Show comment size
       COMMENT_SIZE=$(wc -c < /tmp/branch_suggestion_${PR_NUMBER}.md)
