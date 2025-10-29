@@ -147,14 +147,14 @@ checks:
       " >&2 || true
       rm -f /tmp/match_result_$$.json
 
-      # Save full JSON result to file first
-      echo "$MATCH_RESULT" > /tmp/branch_suggestion_result.json
+      # Save full JSON result to file first (use printf to avoid echo interpreting escape sequences)
+      printf '%s\n' "$MATCH_RESULT" > /tmp/branch_suggestion_result.json
 
       # Extract markdown from JSON and save to separate file
       jq -r '.markdown' /tmp/branch_suggestion_result.json > /tmp/branch_suggestion_markdown.txt
 
       # Output to stdout (for Visor logging)
-      echo "$MATCH_RESULT"
+      printf '%s\n' "$MATCH_RESULT"
 
   # ============================================================================
   # STEP 2: POST COMMENT TO PR
