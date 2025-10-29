@@ -212,8 +212,9 @@ function formatBranchSuggestions(matchResults, jiraTicket = {}) {
     lines.push('');
     lines.push('### 📋 Workflow');
     lines.push('1. Merge this PR to `master` first');
-    lines.push('2. Use the `/release` bot to backport to release branches');
+    lines.push('2. After merging, comment on the **merged PR** with `/release to <branch>` to cherry-pick to release branches');
     lines.push('3. Example: `/release to release-5.8`');
+    lines.push('4. The bot will automatically create a backport PR to the specified release branch');
     lines.push('');
     lines.push('<!-- branch-suggestions -->');
 
