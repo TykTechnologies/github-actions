@@ -15,5 +15,4 @@ jobs:
   branch-suggestions:
     uses: TykTechnologies/REFINE/.github/workflows/branch-suggestion.yml@main
     secrets:
-      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
