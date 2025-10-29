@@ -147,7 +147,10 @@ checks:
       " >&2 || true
       rm -f /tmp/match_result_$$.json
 
-      # Output to stdout (for Visor and PR comment step)
+      # Save markdown to file for PR comment step
+      echo "$MATCH_RESULT" | jq -r '.markdown' > /tmp/branch_suggestion_markdown.txt
+
+      # Output to stdout (for Visor logging)
       echo "$MATCH_RESULT"
 
   # ============================================================================
@@ -171,20 +174,21 @@ checks:
       echo "Repository: $REPO" >&2
       echo "PR Number: $PR_NUMBER" >&2
 
-      # Write markdown to temp file using Visor template syntax
-      cat > /tmp/branch_suggestion_${PR_NUMBER}.md << 'COMMENT_EOF'
-      {{ outputs.analyze-and-suggest.markdown }}
-      COMMENT_EOF
+      # Check if markdown file exists from previous step
+      if [ ! -f /tmp/branch_suggestion_markdown.txt ]; then
+        echo "❌ Error: Markdown file not found. analyze-and-suggest step may have failed." >&2
+        exit 1
+      fi
 
       # Show comment size
-      COMMENT_SIZE=$(wc -c < /tmp/branch_suggestion_${PR_NUMBER}.md)
+      COMMENT_SIZE=$(wc -c < /tmp/branch_suggestion_markdown.txt)
       echo "Comment size: $COMMENT_SIZE bytes" >&2
 
       # Post or update the comment
       echo "Posting comment to GitHub..." >&2
-      node scripts/github/add-pr-comment.js "$REPO" "$PR_NUMBER" --file /tmp/branch_suggestion_${PR_NUMBER}.md
+      node scripts/github/add-pr-comment.js "$REPO" "$PR_NUMBER" --file /tmp/branch_suggestion_markdown.txt
 
       # Clean up
-      rm -f /tmp/branch_suggestion_${PR_NUMBER}.md
+      rm -f /tmp/branch_suggestion_markdown.txt
 
       echo "✅ Successfully posted branch suggestions to PR #$PR_NUMBER in $REPO" >&2
