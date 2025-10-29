@@ -147,8 +147,11 @@ checks:
       " >&2 || true
       rm -f /tmp/match_result_$$.json
 
-      # Save markdown to file for PR comment step
-      echo "$MATCH_RESULT" | jq -r '.markdown' > /tmp/branch_suggestion_markdown.txt
+      # Save full JSON result to file first
+      echo "$MATCH_RESULT" > /tmp/branch_suggestion_result.json
+
+      # Extract markdown from JSON and save to separate file
+      jq -r '.markdown' /tmp/branch_suggestion_result.json > /tmp/branch_suggestion_markdown.txt
 
       # Output to stdout (for Visor logging)
       echo "$MATCH_RESULT"
