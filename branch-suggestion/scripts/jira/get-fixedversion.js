@@ -143,34 +143,51 @@ async function main() {
 
 
     if (args.length < 1) {
-        console.log('Usage: node get-fixversion.js <ticket-key-or-text>');
+        console.log('Usage: node get-fixversion.js <pr-title> [<branch-name>]');
         console.log('\nExamples:');
-        console.log('  # Direct ticket key');
-        console.log('  node get-fixversion.js TT-12345');
-        console.log('');
-        console.log('  # From PR title');
+        console.log('  # From PR title only');
         console.log('  node get-fixversion.js "TT-12345: Fix authentication bug"');
         console.log('');
-        console.log('  # From branch name');
-        console.log('  node get-fixversion.js "feature/TT-12345-fix-auth"');
+        console.log('  # From PR title and branch name (branch name takes precedence)');
+        console.log('  node get-fixversion.js "TT-12345: Fix bug" "feature/TT-67890-fix-auth"');
+        console.log('');
+        console.log('  # Direct ticket key');
+        console.log('  node get-fixversion.js TT-12345');
         console.log('\nOutput: JSON object with ticket info and fix versions');
         console.log('\nExit codes:');
         console.log('  0 - Success (fix versions found)');
-        console.log('  1 - Error (no ticket found or no fix versions)');
+        console.log('  1 - Error (ticket found but no fix versions set)');
+        console.log('  2 - No JIRA ticket found');
         process.exit(1);
     }
 
-    const input = args[0];
+    const prTitle = args[0];
+    const branchName = args[1]; // Optional
 
-    // Try to extract ticket key if not already in correct format
-    const ticketKey = input.match(/^[A-Z]{2,}-\d+$/) ? input : extractJiraTicket(input);
+    let ticketKey = null;
+
+    // Priority 1: Try to extract from branch name (if provided)
+    if (branchName) {
+        ticketKey = extractJiraTicket(branchName);
+    }
+
+    // Priority 2: Try to extract from PR title (if not found in branch name)
+    if (!ticketKey && prTitle) {
+        // Check if prTitle is already a valid ticket key format
+        if (prTitle.match(/^[A-Z]{2,}-\d+$/)) {
+            ticketKey = prTitle;
+        } else {
+            ticketKey = extractJiraTicket(prTitle);
+        }
+    }
 
     if (!ticketKey) {
         console.error(JSON.stringify({
-            error: 'No JIRA ticket found in input',
-            input: input
+            error: 'No JIRA ticket found in PR title or branch name',
+            prTitle: prTitle,
+            branchName: branchName || 'not provided'
         }));
-        process.exit(1);
+        process.exit(2);
     }
 
     try {
