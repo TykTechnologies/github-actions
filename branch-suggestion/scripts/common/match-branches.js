@@ -48,6 +48,35 @@ function generateBranchCandidates(parsedVersion) {
 }
 
 /**
+ * Filter fix versions by component to only include those relevant to the current repository
+ *
+ * @param {Array} fixVersions - Array of fix version objects with parsed.component field
+ * @param {string} repository - Repository in "owner/repo" format (e.g., "TykTechnologies/tyk")
+ * @returns {Array} Filtered array of fix versions relevant to this repository
+ */
+function filterFixVersionsByRepository(fixVersions, repository) {
+    if (!repository) {
+        // No repository specified - return all fix versions (backward compatibility)
+        return fixVersions;
+    }
+
+    // Extract repo name from "owner/repo" format
+    const repoName = repository.split('/').pop();
+
+    return fixVersions.filter(fixVersion => {
+        const component = fixVersion.parsed?.component;
+
+        // If no component array (empty), include it (applies to all repos)
+        if (!component || component.length === 0) {
+            return true;
+        }
+
+        // Check if current repo is in the component's applicable repos
+        return component.includes(repoName);
+    });
+}
+
+/**
  * Match fix versions to actual branches in the repository
  *
  * @param {Array} fixVersions - Array of fix version objects with parsed field
@@ -226,26 +255,33 @@ async function main() {
     const args = process.argv.slice(2);
 
     if (args.length < 2) {
-        console.log('Usage: node match-branches.js <fix-versions-json> <repo-branches-json>');
+        console.log('Usage: node match-branches.js <fix-versions-json> <repo-branches-json> [<repository>]');
         console.log('\nExample:');
-        console.log('  node match-branches.js \'[{"name":"5.8.1","parsed":{"major":5,"minor":8,"patch":1}}]\' \'[{"name":"master"},{"name":"release-5.8"}]\'');
+        console.log('  node match-branches.js \'[{"name":"5.8.1","parsed":{"major":5,"minor":8,"patch":1}}]\' \'[{"name":"master"},{"name":"release-5.8"}]\' \'TykTechnologies/tyk\'');
         console.log('\nOr pipe from other commands:');
         console.log('  VERSIONS=$(node scripts/jira/get-fixversion.js TT-12345)');
         console.log('  BRANCHES=$(gh api repos/TykTechnologies/tyk/branches | jq -c \'[.[] | {name: .name}]\')');
-        console.log('  node match-branches.js "$VERSIONS" "$BRANCHES"');
+        console.log('  node match-branches.js "$VERSIONS" "$BRANCHES" "TykTechnologies/tyk"');
+        console.log('\nThe repository parameter is optional. If provided, filters fix versions to only show those relevant to the specified repository.');
         process.exit(1);
     }
 
     try {
         const fixVersionsInput = JSON.parse(args[0]);
         const repoBranches = JSON.parse(args[1]);
+        const repository = args[2]; // Optional: filter by repository
 
         // Handle if fixVersionsInput is the full JIRA response
-        const fixVersions = fixVersionsInput.fixVersions || fixVersionsInput;
+        let fixVersions = fixVersionsInput.fixVersions || fixVersionsInput;
         const jiraTicket = fixVersionsInput.ticket ? {
             ticket: fixVersionsInput.ticket,
             summary: fixVersionsInput.summary
         } : {};
+
+        // Filter fix versions by repository if specified
+        if (repository) {
+            fixVersions = filterFixVersionsByRepository(fixVersions, repository);
+        }
 
         const matchResults = matchBranches(fixVersions, repoBranches);
 
@@ -271,7 +307,8 @@ export {
     matchBranches,
     getBranchReason,
     getBranchPriority,
-    formatBranchSuggestions
+    formatBranchSuggestions,
+    filterFixVersionsByRepository
 };
 
 // Run main if executed directly

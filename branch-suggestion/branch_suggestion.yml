@@ -103,7 +103,7 @@ checks:
       echo "" >&2
       echo "🔍 STEP 3: Matching branches using deterministic rules..." >&2
 
-      MATCH_RESULT=$(node scripts/common/match-branches.js "$JIRA_RESULT" "$BRANCHES")
+      MATCH_RESULT=$(node scripts/common/match-branches.js "$JIRA_RESULT" "$BRANCHES" "$REPO")
 
       # Log results
       echo "✅ Branch matching complete" >&2

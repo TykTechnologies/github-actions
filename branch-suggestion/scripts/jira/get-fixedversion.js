@@ -33,19 +33,66 @@ function extractJiraTicket(text) {
 
 
 /**
+ * Detect which component repositories a version applies to based on prefix
+ *
+ * Component Mapping:
+ * - "TIB X.Y.Z" → ['tyk-identity-broker']
+ * - "Tyk X.Y.Z" or "Tyk Gateway X.Y.Z" → ['tyk', 'tyk-analytics', 'tyk-analytics-ui']
+ * - "MDCB X.Y.Z" → ['tyk-sink']
+ * - "Pump X.Y.Z" or "Tyk Pump X.Y.Z" → ['tyk-pump']
+ * - Unknown prefix → [] (empty array - applies to all repos)
+ *
+ * @param {string} versionString - Version string to detect component from
+ * @returns {Array<string>} Array of repository names this version applies to
+ */
+function detectComponent(versionString) {
+    if (!versionString) return [];
+
+    const normalized = versionString.trim();
+
+    // Check for TIB (Tyk Identity Broker)
+    if (/^TIB\s+/i.test(normalized)) {
+        return ['tyk-identity-broker'];
+    }
+
+    // Check for Pump (Tyk Pump)
+    if (/^(Tyk\s+)?Pump\s+/i.test(normalized)) {
+        return ['tyk-pump'];
+    }
+
+    // Check for MDCB
+    if (/^MDCB\s+/i.test(normalized)) {
+        return ['tyk-sink'];
+    }
+
+    // Check for Tyk or Tyk Gateway (shared release cadence)
+    if (/^Tyk(\s+Gateway)?\s+/i.test(normalized)) {
+        return ['tyk', 'tyk-analytics', 'tyk-analytics-ui'];
+    }
+
+    // Unknown prefix - return empty array (no filtering)
+    return [];
+}
+
+/**
  * Parse a version string into semantic version components
  * Handles various formats: "5.8.1", "v5.8.1", "Tyk Gateway 5.8.1", "5.8", "5"
  * @param {string} versionString - Version string to parse
- * @returns {object|null} Object with {major, minor, patch, original} or null if invalid
+ * @returns {object|null} Object with {major, minor, patch, original, component} or null if invalid
  */
 function parseVersion(versionString) {
     if (!versionString) return null;
 
+    // Detect component before removing prefixes
+    const component = detectComponent(versionString);
+
     // Remove common prefixes: "v5.8.1" → "5.8.1", "Tyk 5.8.1" → "5.8.1", "TIB 1.7.0" → "1.7.0"
     const cleaned = versionString
         .replace(/^v/i, '')
-        .replace(/^Tyk\s+/i, '')
+        .replace(/^Tyk(\s+Gateway)?\s+/i, '')
         .replace(/^TIB\s+/i, '')
+        .replace(/^(Tyk\s+)?Pump\s+/i, '')
+        .replace(/^MDCB\s+/i, '')
         .trim();
 
     // Match semantic version: X.Y.Z or X.Y or X
@@ -57,7 +104,8 @@ function parseVersion(versionString) {
         major: parseInt(match[1], 10),
         minor: match[2] ? parseInt(match[2], 10) : null,
         patch: match[3] ? parseInt(match[3], 10) : null,
-        original: versionString
+        original: versionString,
+        component: component
     };
 }
 
@@ -156,7 +204,8 @@ async function main() {
 export {
     extractJiraTicket,
     getFixVersions,
-    parseVersion
+    parseVersion,
+    detectComponent
 };
 
 
