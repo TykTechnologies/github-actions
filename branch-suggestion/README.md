@@ -4,8 +4,7 @@ Automated branch suggestion tool that analyzes JIRA fix versions and suggests ap
 
 ## Features
 
-- Extracts JIRA ticket from PR title or branch name (branch name takes priority)
-- Multi-component filtering: Only shows fix versions relevant to the current repository
+- Extracts JIRA ticket from PR title or branch name
 - Fetches fix versions from JIRA
 - Matches fix versions to repository branches using deterministic rules
 - Posts/updates a comment on PRs with suggested merge targets
@@ -50,30 +49,16 @@ jobs:
 
 ### 1. JIRA Ticket Extraction
 
-The tool looks for JIRA ticket keys in the PR title or branch name with **priority-based extraction**:
-- **Priority 1**: Branch name (e.g., `feature/TT-12345-fix-auth` → `TT-12345`)
-- **Priority 2**: PR title (e.g., `TT-12345: Fix authentication bug` → `TT-12345`)
+The tool looks for JIRA ticket keys in the PR title or branch name:
 - Pattern: `TT-12345`, `TYK-456`, etc.
 - Examples:
-  - "feature/TT-12345-fix-auth" → `TT-12345` (from branch name)
-  - "TT-12345: Fix authentication bug" → `TT-12345` (from PR title)
-  - "Fix auth (TT-12345)" → `TT-12345` (from PR title)
-
-**Note**: If both branch name and PR title contain JIRA ticket keys, the branch name takes precedence.
+  - "TT-12345: Fix authentication bug" → `TT-12345`
+  - "feature/TT-12345-fix-auth" → `TT-12345`
+  - "Fix auth (TT-12345)" → `TT-12345`
 
 ### 2. Fix Version Fetching
 
 Retrieves the "Fix Version/s" field from the JIRA ticket, which determines which product versions the fix should be merged into.
-
-**Multi-component handling**: Some JIRA tickets may have fix versions for multiple components (e.g., "TIB 1.7.0" and "Tyk Gateway 5.10.11"). The tool automatically filters to only show fix versions relevant to the current repository based on component prefixes:
-
-| JIRA Prefix | Repository | Notes |
-|-------------|------------|-------|
-| `TIB X.Y.Z` | `tyk-identity-broker` | Tyk Identity Broker |
-| `Tyk X.Y.Z` or `Tyk Gateway X.Y.Z` | `tyk`, `tyk-analytics`, `tyk-analytics-ui` | Shared release cadence |
-| `MDCB X.Y.Z` | `tyk-sink` | Multi Data Center Bridge |
-| `Pump X.Y.Z` or `Tyk Pump X.Y.Z` | `tyk-pump` | Tyk Pump |
-| No prefix (e.g., `5.8.1`) | All repositories | Applies universally |
 
 ### 3. Branch Matching
 
@@ -127,16 +112,11 @@ export JIRA_API_TOKEN="your-jira-api-token"
 # Direct ticket key
 node scripts/jira/get-fixedversion.js TT-12345
 
-# From PR title only
+# From PR title
 node scripts/jira/get-fixedversion.js "TT-12345: Fix authentication bug"
 
-# From PR title and branch name (branch name takes priority)
-node scripts/jira/get-fixedversion.js "TT-12345: Fix bug" "feature/TT-67890-fix-auth"
-# This will use TT-67890 from the branch name, not TT-12345 from PR title
-
-# Test multi-component filtering (TIB version)
-node scripts/jira/get-fixedversion.js "TT-5433"
-# Returns fix versions with "TIB" prefix
+# From branch name
+node scripts/jira/get-fixedversion.js "feature/TT-12345-fix-auth"
 ```
 
 **Expected output:**
@@ -155,27 +135,7 @@ node scripts/jira/get-fixedversion.js "TT-5433"
         "major": 5,
         "minor": 8,
         "patch": 1,
-        "original": "5.8.1",
-        "component": []
-      }
-    }
-  ]
-}
-```
-
-**Example with component prefix:**
-```json
-{
-  "ticket": "TT-5433",
-  "fixVersions": [
-    {
-      "name": "TIB 1.7.0",
-      "parsed": {
-        "major": 1,
-        "minor": 7,
-        "patch": 0,
-        "original": "TIB 1.7.0",
-        "component": ["tyk-identity-broker"]
+        "original": "5.8.1"
       }
     }
   ]
@@ -194,47 +154,20 @@ node scripts/jira/get-fixedversion.js "TT-5433"
 echo '{
   "ticket": "TT-12345",
   "fixVersions": [
-    {"name": "5.8.1", "parsed": {"major": 5, "minor": 8, "patch": 1, "component": []}}
+    {"name": "5.8.1", "parsed": {"major": 5, "minor": 8, "patch": 1}}
   ]
 }' > /tmp/jira.json
 
 echo '[
-  {"name": "master"},
+  {"name": "main"},
   {"name": "release-5.8"},
   {"name": "release-5.8.1"}
 ]' > /tmp/branches.json
 
-# Run matcher without repository filtering
+# Run matcher
 node scripts/common/match-branches.js \
   "$(cat /tmp/jira.json)" \
   "$(cat /tmp/branches.json)"
-
-# Run matcher with repository filtering
-node scripts/common/match-branches.js \
-  "$(cat /tmp/jira.json)" \
-  "$(cat /tmp/branches.json)" \
-  "TykTechnologies/tyk"
-
-# Test multi-component filtering (simulates a ticket with both TIB and Tyk versions)
-echo '{
-  "ticket": "TT-12345",
-  "fixVersions": [
-    {"name": "TIB 1.7.0", "parsed": {"major": 1, "minor": 7, "patch": 0, "component": ["tyk-identity-broker"]}},
-    {"name": "Tyk 5.8.1", "parsed": {"major": 5, "minor": 8, "patch": 1, "component": ["tyk", "tyk-analytics", "tyk-analytics-ui"]}}
-  ]
-}' > /tmp/jira-multi.json
-
-# When running in tyk repo, only Tyk 5.8.1 should be processed
-node scripts/common/match-branches.js \
-  "$(cat /tmp/jira-multi.json)" \
-  "$(cat /tmp/branches.json)" \
-  "TykTechnologies/tyk"
-
-# When running in tyk-identity-broker repo, only TIB 1.7.0 should be processed
-node scripts/common/match-branches.js \
-  "$(cat /tmp/jira-multi.json)" \
-  "$(cat /tmp/branches.json)" \
-  "TykTechnologies/tyk-identity-broker"
 ```
 
 #### Test PR Comment Posting
@@ -339,13 +272,10 @@ BRANCH SUGGESTION ANALYSIS
 - `JIRA_EMAIL`: JIRA account email
 - `JIRA_API_TOKEN`: JIRA API token
 
-#### Optional (for PR comment posting and component filtering)
+#### Optional (for PR comment posting)
 - `GITHUB_TOKEN`: GitHub token (automatically provided in GitHub Actions)
 - `PR_NUMBER`: Pull request number
-- `REPOSITORY`: Repository in format `owner/repo` (e.g., `TykTechnologies/tyk`)
-  - Used for multi-component filtering to show only fix versions relevant to the current repository
-  - Without this parameter, all fix versions from JIRA will be processed
-  - See "Multi-component handling" in the "How It Works" section for details
+- `REPOSITORY`: Repository in format `owner/repo`
 
 ### Visor Configuration
 
@@ -416,24 +346,6 @@ The tool automatically adapts to different branching strategies:
 **Symptom:** `[dotenv@17.2.1]` messages in output
 
 **Solution:** Already fixed by setting `DOTENV_LOG_LEVEL=error` before loading dotenv. Update to the latest version.
-
-### Missing fix versions for my repository
-
-**Symptom:** PR comment shows "No fix versions found" or suggests only some versions
-
-**Possible causes:**
-1. The JIRA ticket has fix versions with component prefixes (e.g., "TIB 1.7.0") that don't match the current repository
-2. Multi-component ticket where fix versions apply to different repositories
-
-**Solution:**
-1. Check the "Fix Version/s" field in JIRA to see the exact version names
-2. Verify the component prefix matches your repository:
-   - For `tyk-identity-broker`: version should start with "TIB"
-   - For `tyk`, `tyk-analytics`, `tyk-analytics-ui`: version should start with "Tyk" or "Tyk Gateway"
-   - For `tyk-sink`: version should start with "MDCB"
-   - For `tyk-pump`: version should start with "Pump" or "Tyk Pump"
-3. If the version has no prefix (e.g., "5.8.1"), it applies to all repositories
-4. For multi-component fixes, create separate PRs in each repository with the same JIRA ticket
 
 ## Output Schema
 
