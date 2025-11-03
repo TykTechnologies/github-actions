@@ -1,5 +1,5 @@
-# Example usage workflow for other repositories
-# Copy this file to your repository as .github/workflows/branch-suggestion.yml
+# Branch Suggestion Workflow
+# Documentation: https://github.com/TykTechnologies/github-actions/tree/main/branch-suggestion
 
 name: PR Branch Suggestions
 

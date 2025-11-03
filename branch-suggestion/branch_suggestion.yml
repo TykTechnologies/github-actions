@@ -25,15 +25,6 @@ checks:
       BRANCH_NAME="${BRANCH_NAME:-feature/TT-12345-test}"
       REPO="${REPOSITORY:-TykTechnologies/tyk}"
 
-      # Debug: Check if JIRA token is available
-      echo "DEBUG: JIRA_TOKEN before export: ${JIRA_TOKEN:+SET}" >&2
-
-      # Export JIRA token explicitly for subprocess access
-      export JIRA_TOKEN="${JIRA_TOKEN}"
-
-      # Debug: Verify export (without exposing values)
-      echo "DEBUG: JIRA_TOKEN after export: ${JIRA_TOKEN:+SET}" >&2
-
       echo "========================================" >&2
       echo "BRANCH SUGGESTION ANALYSIS" >&2
       echo "========================================" >&2
@@ -46,7 +37,6 @@ checks:
       echo "" >&2
       echo "🔍 STEP 1: Fetching JIRA ticket and fix versions..." >&2
 
-      # Fetch fix versions (environment variables are already set)
       set +e
       JIRA_RESULT=$(node scripts/jira/get-fixedversion.js "$PR_TITLE" "$BRANCH_NAME")
       JIRA_EXIT_CODE=$?
