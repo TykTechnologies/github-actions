@@ -10,11 +10,6 @@ if (!process.env.JIRA_TOKEN) {
 
 /**
  * Generate candidate branch names based on a parsed version
- * According to the branching strategy:
- * - For 5.8.1: try release-5.8, release-5, master
- * - For 5.8.0: try release-5.8, release-5, master
- * - For 5.0.0: try release-5, master
- *
  * @param {object} parsedVersion - {major, minor, patch, original}
  * @returns {Array} Array of branch name candidates in priority order
  */
@@ -49,9 +44,8 @@ function generateBranchCandidates(parsedVersion) {
 
 /**
  * Filter fix versions by component to only include those relevant to the current repository
- *
  * @param {Array} fixVersions - Array of fix version objects with parsed.component field
- * @param {string} repository - Repository in "owner/repo" format (e.g., "TykTechnologies/tyk")
+ * @param {string} repository - Repository in "owner/repo" format
  * @returns {Array} Filtered array of fix versions relevant to this repository
  */
 function filterFixVersionsByRepository(fixVersions, repository) {
@@ -78,7 +72,6 @@ function filterFixVersionsByRepository(fixVersions, repository) {
 
 /**
  * Match fix versions to actual branches in the repository
- *
  * @param {Array} fixVersions - Array of fix version objects with parsed field
  * @param {Array} repoBranches - Array of branch objects from GitHub API
  * @returns {Array} Array of match results with branch suggestions

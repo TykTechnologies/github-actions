@@ -16,13 +16,11 @@ const COMMENT_MARKER = '<!-- branch-suggestions -->';
 
 /**
  * Add or update a comment on a GitHub PR
- * If a comment with the same marker exists, it will be updated instead of creating a new one
- *
- * @param {string} owner - Repository owner (e.g., 'TykTechnologies')
- * @param {string} repo - Repository name (e.g., 'tyk')
+ * @param {string} owner - Repository owner
+ * @param {string} repo - Repository name
  * @param {number} prNumber - Pull request number
  * @param {string} body - Comment body (markdown)
- * @param {string} marker - Unique marker to identify the comment (default: COMMENT_MARKER)
+ * @param {string} marker - Unique marker to identify the comment
  * @returns {Promise<object>} Created or updated comment
  */
 async function addOrUpdateComment(owner, repo, prNumber, body, marker = COMMENT_MARKER) {

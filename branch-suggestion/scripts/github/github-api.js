@@ -44,9 +44,9 @@ async function githubAPI(endpoint, options = {}) {
 
 /**
  * Get all branches for a repository
- * @param {string} owner - Repository owner (e.g., 'TykTechnologies')
- * @param {string} repo - Repository name (e.g., 'tyk')
- * @returns {Promise<Array>} Array of branch objects with 'name' property
+ * @param {string} owner - Repository owner
+ * @param {string} repo - Repository name
+ * @returns {Promise<Array>} Array of branch objects
  */
 async function getRepoBranches(owner, repo) {
     const branches = await githubAPI(`/repos/${owner}/${repo}/branches`);
@@ -58,7 +58,7 @@ async function getRepoBranches(owner, repo) {
  * @param {string} owner - Repository owner
  * @param {string} repo - Repository name
  * @param {number} prNumber - PR number
- * @returns {Promise<object>} PR object with title, body, user, etc.
+ * @returns {Promise<object>} PR object
  */
 async function getPullRequest(owner, repo, prNumber) {
     const pr = await githubAPI(`/repos/${owner}/${repo}/pulls/${prNumber}`);
@@ -70,7 +70,7 @@ async function getPullRequest(owner, repo, prNumber) {
  * @param {string} owner - Repository owner
  * @param {string} repo - Repository name
  * @param {number} prNumber - PR number
- * @param {string} body - Comment body (markdown supported)
+ * @param {string} body - Comment body
  * @returns {Promise<object>} Created comment object
  */
 async function createPRComment(owner, repo, prNumber, body) {

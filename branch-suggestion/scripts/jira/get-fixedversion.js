@@ -11,14 +11,7 @@ if (!process.env.JIRA_TOKEN) {
 
 /**
  * Extract JIRA ticket key from text (e.g., PR title, branch name)
- * Looks for patterns like TT-12345, TYK-456, etc.
- *
- * Examples:
- *   "TT-12345: Fix authentication bug" → "TT-12345"
- *   "feature/TT-12345-fix-auth" → "TT-12345"
- *   "Fix auth (TT-12345)" → "TT-12345"
- *
- * @param {string} text - Text to search (PR title, branch name, etc.)
+ * @param {string} text - Text to search
  * @returns {string|null} First JIRA ticket key found, or null
  */
 function extractJiraTicket(text) {
@@ -34,14 +27,6 @@ function extractJiraTicket(text) {
 
 /**
  * Detect which component repositories a version applies to based on prefix
- *
- * Component Mapping:
- * - "TIB X.Y.Z" → ['tyk-identity-broker']
- * - "Tyk X.Y.Z" or "Tyk Gateway X.Y.Z" → ['tyk', 'tyk-analytics', 'tyk-analytics-ui']
- * - "MDCB X.Y.Z" → ['tyk-sink']
- * - "Pump X.Y.Z" or "Tyk Pump X.Y.Z" → ['tyk-pump']
- * - Unknown prefix → [] (empty array - applies to all repos)
- *
  * @param {string} versionString - Version string to detect component from
  * @returns {Array<string>} Array of repository names this version applies to
  */
@@ -76,7 +61,6 @@ function detectComponent(versionString) {
 
 /**
  * Parse a version string into semantic version components
- * Handles various formats: "5.8.1", "v5.8.1", "Tyk Gateway 5.8.1", "5.8", "5"
  * @param {string} versionString - Version string to parse
  * @returns {object|null} Object with {major, minor, patch, original, component} or null if invalid
  */
@@ -111,7 +95,7 @@ function parseVersion(versionString) {
 
 /**
  * Get fix versions from a JIRA ticket
- * @param {string} ticketKey - JIRA ticket key (e.g., 'TT-12345')
+ * @param {string} ticketKey - JIRA ticket key
  * @returns {Promise<object>} Object with ticket info and fix versions
  */
 async function getFixVersions(ticketKey) {
