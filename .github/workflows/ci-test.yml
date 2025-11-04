@@ -1,0 +1,46 @@
+name: CI Tests
+
+on:
+  push:
+    branches:
+      - main
+      - 'release-*'
+  pull_request:
+    paths:
+      - 'branch-suggestion/**'
+      - '.github/workflows/ci-test.yml'
+
+defaults:
+  run:
+    working-directory: branch-suggestion
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: branch-suggestion/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Generate coverage report
+        run: npm run test:coverage
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./branch-suggestion/coverage/coverage-final.json
+          flags: branch-suggestion
