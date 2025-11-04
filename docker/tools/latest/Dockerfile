@@ -1,8 +1,8 @@
-FROM golang:1.24 AS tools-build
+FROM golang:1.25 AS tools-build
 
 ENV CGO_ENABLED=0
 ENV GOBIN=/usr/local/bin
-ENV GOPROXY=direct
+ENV GOPROXY=https://proxy.golang.org,direct
 WORKDIR /usr/local/bin
 
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/TykTechnologies/exp/cmd/httpbin-logserver@main
@@ -11,7 +11,7 @@ RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/TykTec
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/TykTechnologies/exp/cmd/summary@main
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/TykTechnologies/exp/cmd/modcheck@main
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/TykTechnologies/exp/cmd/go-fsck@main
-RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install go.uber.org/mock/mockgen@v0.4.0
+RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install go.uber.org/mock/mockgen@v0.6.0
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install golang.org/x/tools/cmd/goimports@latest
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 RUN --mount=type=cache,mode=0755,target=/go/pkg/mod go install github.com/fatih/faillint@latest
