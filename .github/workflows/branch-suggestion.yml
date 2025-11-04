@@ -2,7 +2,7 @@ name: Branch Suggestion for PRs
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_call:
     secrets:
       JIRA_TOKEN:
