@@ -20,17 +20,22 @@ function generateBranchCandidates(parsedVersion) {
     const { major, minor, patch } = parsedVersion;
     const candidates = [];
 
-    // For patch releases (X.Y.Z where Z > 0): need release-X.Y
+    // First priority: exact match for the full version (X.Y.Z)
+    if (patch !== null && minor !== null) {
+        candidates.push(`release-${major}.${minor}.${patch}`);
+    }
+
+    // Second priority: minor version branch (X.Y) for patch releases
     if (patch !== null && patch > 0 && minor !== null) {
         candidates.push(`release-${major}.${minor}`);
     }
 
-    // For minor releases (X.Y.0 or X.Y): need release-X.Y
+    // Third priority: minor version branch for minor releases (X.Y.0 or X.Y)
     if (minor !== null) {
         candidates.push(`release-${major}.${minor}`);
     }
 
-    // For any version: might need release-X (major version branch)
+    // Fourth priority: major version branch (X)
     if (major !== null) {
         candidates.push(`release-${major}`);
     }
@@ -133,6 +138,12 @@ function getBranchReason(branch, fixVersion) {
         return 'Main development branch - ensures fix is in all future releases';
     }
 
+    // Exact patch version match (e.g., release-5.10.1)
+    if (patch !== null && branch === `release-${major}.${minor}.${patch}`) {
+        return `Exact version branch for ${fixVersion.name} - specific patch release`;
+    }
+
+    // Minor version branch (e.g., release-5.10)
     if (branch === `release-${major}.${minor}`) {
         if (patch > 0) {
             return `Minor version branch for ${major}.${minor}.x patches - required for creating ${fixVersion.name}`;
@@ -141,6 +152,7 @@ function getBranchReason(branch, fixVersion) {
         }
     }
 
+    // Major version branch (e.g., release-5)
     if (branch === `release-${major}`) {
         return `Major version branch for all ${major}.x releases`;
     }
@@ -159,6 +171,11 @@ function getBranchPriority(branch, fixVersion) {
 
     // Master is always required
     if (branch === 'master') {
+        return 'required';
+    }
+
+    // Exact patch version match is required (e.g., release-5.10.1 for version 5.10.1)
+    if (patch !== null && branch === `release-${major}.${minor}.${patch}`) {
         return 'required';
     }
 
@@ -233,10 +250,31 @@ function formatBranchSuggestions(matchResults, jiraTicket = {}) {
     lines.push('---');
     lines.push('');
     lines.push('### 📋 Workflow');
-    lines.push('1. Merge this PR to `master` first');
-    lines.push('2. After merging, comment on the **merged PR** with `/release to <branch>` to cherry-pick to release branches');
-    lines.push('3. Example: `/release to release-5.8`');
-    lines.push('4. The bot will automatically create a backport PR to the specified release branch');
+    lines.push('');
+    lines.push('1. **Merge this PR to `master` first**');
+    lines.push('');
+
+    // Collect all non-master branches that need cherry-picking using Set for O(1) operations
+    const releaseBranchesSet = new Set();
+    for (const result of matchResults) {
+        for (const branch of result.branches) {
+            if (branch.branch !== 'master') {
+                releaseBranchesSet.add(branch.branch);
+            }
+        }
+    }
+    const releaseBranches = Array.from(releaseBranchesSet);
+
+    if (releaseBranches.length > 0) {
+        lines.push('2. **Cherry-pick to release branches** by commenting on the **merged PR**:');
+        lines.push('');
+        for (const branch of releaseBranches) {
+            lines.push(`   - \`/release to ${branch}\``);
+        }
+        lines.push('');
+        lines.push('3. **Automated backport** - The bot will automatically create backport PRs to the specified release branches');
+    }
+
     lines.push('');
     lines.push('<!-- branch-suggestions -->');
 
