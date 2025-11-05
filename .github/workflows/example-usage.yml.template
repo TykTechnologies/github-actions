@@ -1,0 +1,18 @@
+# Branch Suggestion Workflow
+# Documentation: https://github.com/TykTechnologies/github-actions/tree/main/branch-suggestion
+
+name: PR Branch Suggestions
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  branch-suggestions:
+    uses: TykTechnologies/REFINE/.github/workflows/branch-suggestion.yml@main
+    secrets:
+      JIRA_TOKEN: ${{ secrets.JIRA_API_TOKEN }}

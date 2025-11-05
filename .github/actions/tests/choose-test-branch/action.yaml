@@ -40,11 +40,25 @@ runs:
           fi
         fi
         if [[ ${{ github.event_name }} == "push" ]]; then
-          PUSH_BRANCH=${{ github.ref_name }}
-          echo "Looking for PUSH_BRANCH:$PUSH_BRANCH..."
-          if git rev-parse --verify "origin/$PUSH_BRANCH" >/dev/null 2>&1; then
-            echo "Push branch $PUSH_BRANCH exists. Checking out..."
-            git checkout "$PUSH_BRANCH"
+          # Check if this is a tag push
+          if [[ "${{ github.ref }}" == refs/tags/* ]] || [[ "${{ github.ref }}" =~ ^refs/tags/ ]]; then
+            TAG_NAME=${{ github.ref_name }}
+            echo "This is a tag push. Tag name: $TAG_NAME"
+            # Try to check out the tag directly
+            if git rev-parse --verify "$TAG_NAME" >/dev/null 2>&1; then
+              echo "Tag $TAG_NAME exists. Checking out..."
+              git checkout "$TAG_NAME"
+            else
+              echo "Tag $TAG_NAME not found in this repository."
+            fi
+          else
+            # Regular branch push
+            PUSH_BRANCH=${{ github.ref_name }}
+            echo "Looking for PUSH_BRANCH:$PUSH_BRANCH..."
+            if git rev-parse --verify "origin/$PUSH_BRANCH" >/dev/null 2>&1; then
+              echo "Push branch $PUSH_BRANCH exists. Checking out..."
+              git checkout "$PUSH_BRANCH"
+            fi
           fi
         fi
         if [[ -n "${{ inputs.branch }}" ]]; then

@@ -1,0 +1,98 @@
+version: "1.0"
+
+# Visor configuration for Branch Suggestion automation
+# Analyzes JIRA fix versions and suggests appropriate merge target branches
+# based on the repository's branching strategy
+
+checks:
+  # ============================================================================
+  # COMBINED STEP: ANALYZE AND SUGGEST BRANCHES
+  # ============================================================================
+  # Combines all steps into one to avoid Visor's output passing limitations:
+  # 1. Extract JIRA ticket from PR title/branch
+  # 2. Fetch fix versions from JIRA
+  # 3. Fetch repository branches
+  # 4. Match and suggest branches
+  # ============================================================================
+  analyze-and-suggest:
+    type: command
+    timeout: 90
+    exec: |
+      set -e
+
+      # Read from environment variables with defaults for local testing
+      PR_TITLE="${PR_TITLE:-TT-12345: Test PR}"
+      BRANCH_NAME="${BRANCH_NAME:-feature/TT-12345-test}"
+      REPO="${REPOSITORY:-TykTechnologies/tyk}"
+
+      set +e
+      JIRA_RESULT=$(node scripts/jira/get-fixedversion.js "$PR_TITLE" "$BRANCH_NAME")
+      JIRA_EXIT_CODE=$?
+      set -e
+
+      # Handle exit codes
+      if [ $JIRA_EXIT_CODE -eq 2 ]; then
+        echo "ℹ️  No JIRA ticket found. Skipping branch suggestions." >&2
+        exit 0
+      fi
+
+      if [ $JIRA_EXIT_CODE -eq 1 ]; then
+        echo "❌ JIRA ticket found but no fix versions set." >&2
+        exit 1
+      fi
+
+      # Fetch repository branches
+      # Check if gh CLI is available
+      if command -v gh &> /dev/null; then
+        BRANCHES=$(gh api "repos/$REPO/branches" --paginate | jq -c '[.[] | {name: .name}]')
+      else
+        # Use curl with GitHub API
+        if [ -n "$GITHUB_TOKEN" ]; then
+          BRANCHES=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/$REPO/branches?per_page=100" | \
+            jq -c '[.[] | {name: .name}]')
+        else
+          BRANCHES=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/$REPO/branches?per_page=100" | \
+            jq -c '[.[] | {name: .name}]')
+        fi
+      fi
+
+      # Match branches and generate suggestions
+      MATCH_RESULT=$(node scripts/common/match-branches.js "$JIRA_RESULT" "$BRANCHES" "$REPO")
+
+      # Extract markdown and save for PR comment (use printf to avoid escape sequence issues)
+      printf '%s\n' "$MATCH_RESULT" | jq -r '.markdown' > /tmp/branch_suggestion_markdown.txt
+
+      # Output full result to stdout
+      printf '%s\n' "$MATCH_RESULT"
+
+  # ============================================================================
+  # STEP 2: POST COMMENT TO PR
+  # ============================================================================
+  # Creates or updates a comment on the PR with branch suggestions
+  # ============================================================================
+  post-pr-comment:
+    type: command
+    depends_on: [analyze-and-suggest]
+    tags: ["remote"]
+    timeout: 30
+    exec: |
+      set -e
+
+      # Read from environment variables with defaults for local testing
+      REPO="${REPOSITORY:-TykTechnologies/tyk}"
+      PR_NUMBER="${PR_NUMBER:-123}"
+
+      # Check if markdown file exists from previous step
+      if [ ! -f /tmp/branch_suggestion_markdown.txt ]; then
+        echo "❌ Error: Markdown file not found. analyze-and-suggest step may have failed." >&2
+        exit 1
+      fi
+
+      # Post or update the comment
+      node scripts/github/add-pr-comment.js "$REPO" "$PR_NUMBER" --file /tmp/branch_suggestion_markdown.txt
+
+      # Clean up
+      rm -f /tmp/branch_suggestion_markdown.txt

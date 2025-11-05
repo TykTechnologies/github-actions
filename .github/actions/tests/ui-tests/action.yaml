@@ -6,6 +6,10 @@ inputs:
     description: 'Markers to filter tests'
     required: false
     default: ${{ matrix.envfiles.uimarkers }}
+  db_type:
+    description: 'Database used in the environment'
+    required: false
+    default: ${{ matrix.envfiles.db }}
 runs:
   using: "composite"
   steps:
@@ -23,6 +27,7 @@ runs:
         GW_URL: 'https://localhost:8080/'
         NODE_TLS_REJECT_UNAUTHORIZED: 0
         UI_MARKERS: ${{ inputs.ui_markers && format('--grep {0}', inputs.ui_markers ) || '' }}
+        TYK_TEST_DB_TYPE: ${{ inputs.db_type }}
       run: |
         npm ci
         npx playwright install --with-deps chromium

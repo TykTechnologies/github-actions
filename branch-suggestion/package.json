@@ -1,0 +1,33 @@
+{
+  "name": "release-manager",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "fetch:jira": "node scripts/jira/batch-fetch.js",
+    "fetch:zendesk": "node scripts/zendesk/zendesk-api.js",
+    "fetch:all": "node scripts/common/unified-fetch.js",
+    "analyze": "node scripts/common/analyze-ticket.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^1.0.77",
+    "@anthropic-ai/sdk": "^0.60.0",
+    "@modelcontextprotocol/sdk": "^1.17.4",
+    "commander": "^14.0.0",
+    "dotenv": "^17.2.1",
+    "mcp-remote": "^0.1.18",
+    "turndown": "^7.2.1"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.4",
+    "vitest": "^3.2.4"
+  }
+}

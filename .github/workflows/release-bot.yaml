@@ -16,10 +16,12 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { issue, comment } = context.payload;
+
             if (!issue || !issue.pull_request || !comment || !comment.body.startsWith('/release to ')) {
               core.setOutput('release_valid', 'false');
               return;
             }
+
             const releaseBranch = comment.body.split('/release to ')[1].trim();
             core.setOutput('release_valid', 'true');
             core.setOutput('release_branch', releaseBranch);
@@ -62,23 +64,27 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_NUMBER=${{ steps.check_command.outputs.pr_number }}
-          MERGE_COMMIT=$(gh pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty')
-          BASE_SHA=$(gh pr view "$PR_NUMBER" --json baseRefOid --jq '.baseRefOid // empty')
-          echo "MERGE_COMMIT=$MERGE_COMMIT" >> $GITHUB_ENV
-          echo "BASE_SHA=$BASE_SHA" >> $GITHUB_ENV
-          echo "MERGE_COMMIT=$MERGE_COMMIT" >> $GITHUB_OUTPUT
-          echo "BASE_SHA=$BASE_SHA" >> $GITHUB_OUTPUT
+          PR_DATA=$(gh pr view ${{ steps.check_command.outputs.pr_number }} --json headRefOid,title)
+          PR_TITLE=$(echo $PR_DATA | jq -r .title 2>/dev/null || echo "")
+          COMMIT_SHA=$(echo $PR_DATA | jq -r .headRefOid)
+          echo "COMMIT_SHA=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "PR_TITLE=${PR_TITLE}" >> $GITHUB_OUTPUT
 
-      - name: Cherry-pick PR into release branch
+      - name: Clone repository and cherry-pick commit
+        if: steps.check_command.outputs.release_valid == 'true'
         id: cherry_pick
         if: steps.check_command.outputs.release_valid == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
           GITHUB_BRANCH: ${{ steps.check_command.outputs.release_branch }}
+          GITHUB_CHERRY_PICK_COMMIT: ${{ steps.pr_details.outputs.COMMIT_SHA }}
+          PR_TITLE: ${{ steps.pr_details.outputs.PR_TITLE }}
         run: |
-          export FOLDER=$(basename "$GITHUB_REPO")
+          JIRA_ID=$(echo "$PR_TITLE" | grep -oE '[A-Z]{1,10}-[0-9]{1,10}' | head -n 1 2>/dev/null || echo "")
+
+          # Clone the repository
+          export FOLDER=$(echo $GITHUB_REPO | cut -d '/' -f2)
           rm -rf $FOLDER
           git clone https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPO
           cd $FOLDER
@@ -86,44 +92,45 @@ jobs:
           git checkout $GITHUB_BRANCH
           git pull
 
-          NEW_BRANCH=merge/$GITHUB_BRANCH/$MERGE_COMMIT
-          git branch -D $NEW_BRANCH 2>/dev/null || true
-          REMOTE_EXISTS=$(git ls-remote --heads origin $NEW_BRANCH | wc -l)
-          [ "$REMOTE_EXISTS" -gt 0 ] && git push origin --delete $NEW_BRANCH || true
+          if [ -n "$JIRA_ID" ]; then
+            BRANCH_NAME="merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT/$JIRA_ID"
+          else
+            BRANCH_NAME="merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT"
+          fi
 
-          git checkout -b $NEW_BRANCH
+          git branch -d $BRANCH_NAME || true
+          git push origin --delete $BRANCH_NAME || true
+          # for backward compatibility.
+          git branch -d merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT || true
+          git push origin --delete merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT || true
+
+          # Create and checkout the new branch
+          git checkout -b $BRANCH_NAME
 
           MERGE_FAILED=0
-          git cherry-pick -x $BASE_SHA..$MERGE_COMMIT || MERGE_FAILED=$?
+          git cherry-pick -x $GITHUB_CHERRY_PICK_COMMIT || MERGE_FAILED=$?
 
-          git diff --quiet origin/$GITHUB_BRANCH HEAD && {
-            echo "No changes to cherry-pick"
-            echo "PR_URL=" >> $GITHUB_OUTPUT
-            echo "MERGE_FAILED=0" >> $GITHUB_OUTPUT
-            exit 0
-          }
+          # If the cherry-pick failed, resolve conflicts
+          if ! [ $MERGE_FAILED -eq 0 ]; then
+            git add -A && git -c core.editor=true cherry-pick --continue --no-edit || true
+          fi
 
-          git push origin $NEW_BRANCH --force
+          echo "Push the new branch"
+          git push origin $BRANCH_NAME --force || true
 
-          TITLE=$(git log --format=%s -n 1 $MERGE_COMMIT)
-          BODY=$(git log --format=%B -n 1 $MERGE_COMMIT)
+          echo "Prepare the message and title for the PR"
+          MESSAGE=$(git log --format=%B -n 1 $GITHUB_CHERRY_PICK_COMMIT)
+          TITLE=$(git log --format=%B -n 1 $GITHUB_CHERRY_PICK_COMMIT | head -n 1)
 
-          PR_URL=$(gh pr create \
-            --title "Merging to $GITHUB_BRANCH: $TITLE" \
-            --body "$BODY" \
-            --repo $GITHUB_REPO \
-            --base $GITHUB_BRANCH \
-            --head $NEW_BRANCH \
-            $( [ "$MERGE_FAILED" -ne 0 ] && echo "--draft" ))
+          echo "Check GH token"
+          echo $GITHUB_TOKEN || gh auth login --with-token
 
-          echo "PR_URL=$PR_URL" >> $GITHUB_OUTPUT
-          echo "MERGE_FAILED=$MERGE_FAILED" >> $GITHUB_OUTPUT
-
-          if [ "$MERGE_FAILED" -eq 0 ]; then
-            if [[ "$PR_URL" =~ /pull/([0-9]+) ]]; then
-              PR_NUMBER="${BASH_REMATCH[1]}"
-              gh pr merge --squash "$PR_NUMBER" --auto --subject "Merging to $GITHUB_BRANCH: $TITLE" --body "$BODY" || echo "Auto-merge failed"
-            fi
+          echo "Create the PR"
+          PR_URL=
+          if ! [ $MERGE_FAILED -eq 0 ]; then
+            PR_URL=$(gh pr create --draft --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head $BRANCH_NAME)
+          else
+            PR_URL=$(gh pr create --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head $BRANCH_NAME)
           fi
 
       - name: Comment back on original PR
@@ -147,6 +154,9 @@ jobs:
             } else {
               body = '❌ Cherry-pick failed. Please check the workflow logs.';
             }
+
+            const owner = context.repo.owner || '${{ github.repository_owner }}';
+            const repo = context.repo.repo || '${{ github.event.repository.name }}';
 
             github.rest.issues.createComment({
               issue_number: ${{ steps.check_command.outputs.pr_number }},
