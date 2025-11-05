@@ -233,7 +233,9 @@ function formatBranchSuggestions(matchResults, jiraTicket = {}) {
     lines.push('---');
     lines.push('');
     lines.push('### 📋 Workflow');
-    lines.push('1. Merge this PR to `master` first');
+    lines.push('');
+    lines.push('1. **Merge this PR to `master` first**');
+    lines.push('');
 
     // Collect all non-master branches that need cherry-picking
     const releaseBranches = [];
@@ -246,13 +248,13 @@ function formatBranchSuggestions(matchResults, jiraTicket = {}) {
     }
 
     if (releaseBranches.length > 0) {
-        lines.push('2. After merging, cherry-pick to release branches by commenting on the **merged PR**:');
+        lines.push('2. **Cherry-pick to release branches** by commenting on the **merged PR**:');
         lines.push('');
         for (const branch of releaseBranches) {
-            lines.push(`   \`/release to ${branch}\``);
+            lines.push(`   - \`/release to ${branch}\``);
         }
         lines.push('');
-        lines.push('3. The bot will automatically create backport PRs to the specified release branches');
+        lines.push('3. **Automated backport** - The bot will automatically create backport PRs to the specified release branches');
     }
 
     lines.push('');
