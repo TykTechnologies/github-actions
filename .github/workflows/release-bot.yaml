@@ -73,7 +73,6 @@ jobs:
       - name: Clone repository and cherry-pick commit
         if: steps.check_command.outputs.release_valid == 'true'
         id: cherry_pick
-        if: steps.check_command.outputs.release_valid == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
