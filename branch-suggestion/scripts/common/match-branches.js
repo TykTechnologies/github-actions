@@ -237,15 +237,16 @@ function formatBranchSuggestions(matchResults, jiraTicket = {}) {
     lines.push('1. **Merge this PR to `master` first**');
     lines.push('');
 
-    // Collect all non-master branches that need cherry-picking
-    const releaseBranches = [];
+    // Collect all non-master branches that need cherry-picking using Set for O(1) operations
+    const releaseBranchesSet = new Set();
     for (const result of matchResults) {
         for (const branch of result.branches) {
-            if (branch.branch !== 'master' && !releaseBranches.includes(branch.branch)) {
-                releaseBranches.push(branch.branch);
+            if (branch.branch !== 'master') {
+                releaseBranchesSet.add(branch.branch);
             }
         }
     }
+    const releaseBranches = Array.from(releaseBranchesSet);
 
     if (releaseBranches.length > 0) {
         lines.push('2. **Cherry-pick to release branches** by commenting on the **merged PR**:');
