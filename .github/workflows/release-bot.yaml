@@ -38,7 +38,8 @@ jobs:
 
       - name: Skip if not a valid command
         if: steps.check_command.outputs.release_valid == 'false'
-        run: echo "Skipping: no '/release to <branch>' command found."
+        run: |
+          echo "Skipping: no '/release to <branch>' command found."
 
       # 2) Checkout repo with full history (needed to locate merge commit reliably)
       - name: Checkout repository
