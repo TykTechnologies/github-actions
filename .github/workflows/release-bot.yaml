@@ -92,7 +92,6 @@ jobs:
           COMMIT_SHA: ${{ steps.pr_details.outputs.COMMIT_SHA }}
           PR_TITLE: ${{ steps.pr_details.outputs.PR_TITLE }}
         run: |
-        run: |
           set -eo pipefail
 
           JIRA_ID=$(echo "$PR_TITLE" | grep -oE '[A-Z]{1,10}-[0-9]{1,10}' | head -n 1 || true)
