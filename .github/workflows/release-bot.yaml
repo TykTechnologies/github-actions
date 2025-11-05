@@ -8,11 +8,14 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 jobs:
   cherry_pick:
     runs-on: ubuntu-latest
+
     steps:
+      # 1) Only run when someone comments `/release to <branch>` on a PR
       - name: Check for release command
         id: check_command
         uses: actions/github-script@v6
@@ -20,155 +23,174 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { issue, comment } = context.payload;
-            if (!issue || !issue.pull_request || !comment || !comment.body?.startsWith('/release to ')) {
-              core.setOutput('release_valid', 'false');
+            if (!issue || !issue.pull_request || !comment) {
+              core.setOutput('release_valid','false');
               return;
             }
-            const releaseBranch = comment.body.split('/release to ')[1].trim();
-            core.setOutput('release_valid', 'true');
-            core.setOutput('release_branch', releaseBranch);
+            const m = (comment.body || '').trim().match(/^\/release to\s+([^\s]+)\s*$/i);
+            if (!m) {
+              core.setOutput('release_valid','false');
+              return;
+            }
+            core.setOutput('release_valid','true');
+            core.setOutput('release_branch', m[1]);
             core.setOutput('pr_number', issue.number);
 
+      - name: Skip if not a valid command
+        if: steps.check_command.outputs.release_valid == 'false'
+        run: echo "Skipping: no '/release to <branch>' command found."
+
+      # 2) Checkout repo with full history (needed to locate merge commit reliably)
       - name: Checkout repository
         if: steps.check_command.outputs.release_valid == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: true
 
-      - name: Setup Git user
+      - name: Configure git
         if: steps.check_command.outputs.release_valid == 'true'
         run: |
           git config --global user.email "bot@tyk.io"
           git config --global user.name "Tyk Bot"
 
-      - name: Get PR base and merge SHAs
+      # 3) Find the merge commit created when the PR was merged into its base (e.g. master)
+      - name: Find merge commit on base branch
         id: pr_details
         if: steps.check_command.outputs.release_valid == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -eo pipefail
+          set -euo pipefail
 
-          PR_NUMBER=${{ steps.check_command.outputs.pr_number }}
-          OWNER_REPO=${{ github.repository }}
-          DEFAULT_BRANCH=${{ env.DEFAULT_BRANCH }}
+          PR_NUMBER='${{ steps.check_command.outputs.pr_number }}'
+          OWNER_REPO='${{ github.repository }}'
 
-          # Ask GitHub for the merge commit SHA (works for "Merge" & "Squash" merges).
-          PR_JSON=$(gh api repos/${OWNER_REPO}/pulls/${PR_NUMBER})
-          PR_TITLE=$(echo "$PR_JSON" | jq -r '.title')
-          MERGE_SHA=$(echo "$PR_JSON" | jq -r '.merge_commit_sha // empty')
+          # Get PR JSON (title, base ref, merged status, merge commit sha if available)
+          PR_JSON="$(gh api "repos/${OWNER_REPO}/pulls/${PR_NUMBER}")"
+          PR_TITLE="$(jq -r '.title' <<<"$PR_JSON")"
+          BASE_REF="$(jq -r '.base.ref' <<<"$PR_JSON")"
+          MERGED="$(jq -r '.merged' <<<"$PR_JSON")"
+          MERGE_SHA="$(jq -r '.merge_commit_sha // empty' <<<"$PR_JSON")"
 
-          # Fallback 1: For classic merge commits with default message
-          if [ -z "$MERGE_SHA" ] || [ "$MERGE_SHA" = "null" ]; then
-            git fetch origin "${DEFAULT_BRANCH}" --quiet
-            MERGE_SHA=$(git log origin/${DEFAULT_BRANCH} --merges \
-              --grep="Merge pull request #${PR_NUMBER}" \
-              -n 1 --pretty=format:%H || true)
-          fi
-
-          # Fallback 2: For squash merges (default squash message ends with "(#<PR>)")
-          if [ -z "$MERGE_SHA" ]; then
-            MERGE_SHA=$(git log origin/${DEFAULT_BRANCH} \
-              --grep="(#${PR_NUMBER})" \
-              -n 1 --pretty=format:%H || true)
-          fi
-
-          if [ -z "$MERGE_SHA" ]; then
-            echo "Could not determine merge commit for PR #${PR_NUMBER}" >&2
+          if [ "${MERGED}" != "true" ]; then
+            echo "PR #${PR_NUMBER} is not merged; cannot use merge commit." >&2
             exit 1
           fi
 
-          echo "COMMIT_SHA=${MERGE_SHA}" >> "$GITHUB_OUTPUT"
-          echo "PR_TITLE=${PR_TITLE}"   >> "$GITHUB_OUTPUT"
+          # Ensure we have the base branch locally
+          git fetch origin "${BASE_REF}" --quiet
 
-      - name: Cherry-pick PR head commit onto target release
+          # Fallbacks when merge_commit_sha is empty (e.g., different merge message styles)
+          if [ -z "${MERGE_SHA}" ] || [ "${MERGE_SHA}" = "null" ]; then
+            # Classic merge commit with default message
+            MERGE_SHA="$(git log "origin/${BASE_REF}" --merges --grep="Merge pull request #${PR_NUMBER}" -n 1 --pretty=format:%H || true)"
+          fi
+
+          if [ -z "${MERGE_SHA}" ]; then
+            # Squash merge (default message contains "(#<PR_NUMBER>)")
+            MERGE_SHA="$(git log "origin/${BASE_REF}" --grep="(#${PR_NUMBER})" -n 1 --pretty=format:%H || true)"
+          fi
+
+          if [ -z "${MERGE_SHA}" ]; then
+            echo "Could not find a merge commit for PR #${PR_NUMBER} on ${BASE_REF}. Was it 'rebase and merge'?" >&2
+            exit 1
+          fi
+
+          {
+            echo "COMMIT_SHA=${MERGE_SHA}"
+            echo "PR_TITLE=${PR_TITLE}"
+            echo "BASE_REF=${BASE_REF}"
+          } >> "$GITHUB_OUTPUT"
+
+      # 4) Cherry-pick that merge commit onto the requested release branch and open a PR
+      - name: Cherry-pick merge commit to target release
         id: cherry_pick
         if: steps.check_command.outputs.release_valid == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          TARGET_BRANCH: ${{ steps.check_command.outputs.release_branch }}
-          PR_NUMBER: ${{ steps.check_command.outputs.pr_number }}
-          COMMIT_SHA: ${{ steps.pr_details.outputs.COMMIT_SHA }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          GITHUB_BRANCH: ${{ steps.check_command.outputs.release_branch }}
+          GITHUB_CHERRY_PICK_COMMIT: ${{ steps.pr_details.outputs.COMMIT_SHA }}
           PR_TITLE: ${{ steps.pr_details.outputs.PR_TITLE }}
+          BASE_REF: ${{ steps.pr_details.outputs.BASE_REF }}
         run: |
-          set -eo pipefail
+          set -euo pipefail
 
-          JIRA_ID=$(echo "$PR_TITLE" | grep -oE '[A-Z]{1,10}-[0-9]{1,10}' | head -n 1 || true)
+          # Make sure we have both the base (where the merge commit lives) and the target release branch
+          git fetch origin "${BASE_REF}" --quiet
+          git fetch origin "${GITHUB_BRANCH}" --quiet
 
-          # Clone the repository (kept for your act/local testing flow)
-          export FOLDER=$(echo $GITHUB_REPO | cut -d '/' -f2)
-          rm -rf "$FOLDER"
-          git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPO}"
-          cd "$FOLDER"
+          # Ensure local release branch exists and is up-to-date
+          git checkout -B "${GITHUB_BRANCH}" "origin/${GITHUB_BRANCH}"
 
-          # Ensure target exists & is up to date
-          git checkout "$GITHUB_BRANCH"
-          git pull --ff-only
-
-          # Build branch name
-          if [ -n "$JIRA_ID" ]; then
-            BRANCH_NAME="merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT/$JIRA_ID"
-          else
-            BRANCH_NAME="merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT"
+          # Build branch name; include JIRA id if available
+          JIRA_ID="$(echo "${PR_TITLE}" | grep -oE '[A-Z]{1,10}-[0-9]{1,10}' | head -n 1 || true)"
+          BRANCH_NAME="merge/${GITHUB_BRANCH}/${GITHUB_CHERRY_PICK_COMMIT}"
+          if [ -n "${JIRA_ID}" ]; then
+            BRANCH_NAME="${BRANCH_NAME}/${JIRA_ID}"
           fi
 
-          # Clean any stale branches
-          git branch -D "$BRANCH_NAME" 2>/dev/null || true
-          git push origin --delete "$BRANCH_NAME" 2>/dev/null || true
-          git branch -D "merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT" 2>/dev/null || true
-          git push origin --delete "merge/$GITHUB_BRANCH/$GITHUB_CHERRY_PICK_COMMIT" 2>/dev/null || true
+          # Clean any stale branches locally/remotely
+          git branch -D "${BRANCH_NAME}" 2>/dev/null || true
+          git push origin --delete "${BRANCH_NAME}" 2>/dev/null || true
 
-          # Create working branch
-          git checkout -b "$BRANCH_NAME"
+          # Create working branch based on the release branch
+          git switch -c "${BRANCH_NAME}"
 
-          # Determine if the selected commit is a merge commit (has >1 parent)
-          PARENT_FIELDS=$(git rev-list --parents -n 1 "$GITHUB_CHERRY_PICK_COMMIT" | wc -w)
-          # rev-list prints: <sha> <parent1> [parent2 ...]
-          # non-merge -> 2 fields; merge -> >=3 fields
-          if [ "$PARENT_FIELDS" -gt 2 ]; then
-            CHERRYPICK_OPTS="-m 1"
-          else
-            CHERRYPICK_OPTS=""
-          fi
+          # Decide whether the selected commit is a merge commit (has >1 parent)
+          PARENTS_LINE="$(git rev-list --parents -n 1 "${GITHUB_CHERRY_PICK_COMMIT}")"
+          WORDS_COUNT="$(wc -w <<<"${PARENTS_LINE}")"
 
           MERGE_FAILED=0
-          git cherry-pick -x ${CHERRYPICK_OPTS} "$GITHUB_CHERRY_PICK_COMMIT" || MERGE_FAILED=$?
+          if [ "${WORDS_COUNT}" -gt 2 ]; then
+            # Merge commit -> use -m 1
+            git cherry-pick -x -m 1 "${GITHUB_CHERRY_PICK_COMMIT}" || MERGE_FAILED=$?
+          else
+            # Normal / squash commit
+            git cherry-pick -x "${GITHUB_CHERRY_PICK_COMMIT}" || MERGE_FAILED=$?
+          fi
 
-          # Try to auto-continue if there were conflicts
-          if [ "$MERGE_FAILED" -ne 0 ]; then
+          # If conflicts happened, try to continue so we can still open a (draft) PR
+          if [ "${MERGE_FAILED}" -ne 0 ]; then
             git add -A || true
             git -c core.editor=true cherry-pick --continue --no-edit || true
           fi
 
-          echo "Push the new branch"
-          git push origin "$BRANCH_NAME" --force || true
+          git push origin "${BRANCH_NAME}" --force
 
-          echo "Prepare the message and title for the PR"
-          MESSAGE=$(git show -s --format=%B "$GITHUB_CHERRY_PICK_COMMIT")
-          TITLE=$(echo "$MESSAGE" | head -n 1)
+          # Prepare PR metadata from the cherry-picked commit
+          MESSAGE="$(git show -s --format=%B "${GITHUB_CHERRY_PICK_COMMIT}")"
+          TITLE="$(echo "${MESSAGE}" | head -n 1)"
 
-          # Create the PR (draft if conflicts observed)
-          if [ "$MERGE_FAILED" -ne 0 ]; then
-            PR_URL=$(gh pr create --draft \
-              --title "Merging to $GITHUB_BRANCH: $TITLE" \
-              --body "$MESSAGE" \
-              --repo "$GITHUB_REPO" \
-              --base "$GITHUB_BRANCH" \
-              --head "$BRANCH_NAME")
-          else
-            PR_URL=$(gh pr create \
-              --title "Merging to $GITHUB_BRANCH: $TITLE" \
-              --body "$MESSAGE" \
-              --repo "$GITHUB_REPO" \
-              --base "$GITHUB_BRANCH" \
-              --head "$BRANCH_NAME")
+          # If a PR already exists for this branch, reuse its URL
+          PR_URL="$(gh pr view --repo "${GITHUB_REPO}" --head "${BRANCH_NAME}" --json url -q .url 2>/dev/null || true)"
+          if [ -z "${PR_URL}" ]; then
+            if [ "${MERGE_FAILED}" -ne 0 ]; then
+              PR_URL="$(gh pr create --draft \
+                --repo "${GITHUB_REPO}" \
+                --base "${GITHUB_BRANCH}" \
+                --head "${BRANCH_NAME}" \
+                --title "Merging to ${GITHUB_BRANCH}: ${TITLE}" \
+                --body "${MESSAGE}")"
+            else
+              PR_URL="$(gh pr create \
+                --repo "${GITHUB_REPO}" \
+                --base "${GITHUB_BRANCH}" \
+                --head "${BRANCH_NAME}" \
+                --title "Merging to ${GITHUB_BRANCH}: ${TITLE}" \
+                --body "${MESSAGE}")"
+            fi
           fi
 
-          # Export outputs for the comment step
-          echo "PR_URL=${PR_URL}"       >> "$GITHUB_OUTPUT"
-          echo "MERGE_FAILED=${MERGE_FAILED}" >> "$GITHUB_OUTPUT"
+          {
+            echo "PR_URL=${PR_URL}"
+            echo "MERGE_FAILED=${MERGE_FAILED}"
+            echo "BRANCH_NAME=${BRANCH_NAME}"
+          } >> "$GITHUB_OUTPUT"
 
+      # 5) Comment back on the original PR with the result
       - name: Comment back on original PR
         if: always() && steps.check_command.outputs.release_valid == 'true'
         uses: actions/github-script@v6
