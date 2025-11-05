@@ -234,9 +234,27 @@ function formatBranchSuggestions(matchResults, jiraTicket = {}) {
     lines.push('');
     lines.push('### 📋 Workflow');
     lines.push('1. Merge this PR to `master` first');
-    lines.push('2. After merging, comment on the **merged PR** with `/release to <branch>` to cherry-pick to release branches');
-    lines.push('3. Example: `/release to release-5.8`');
-    lines.push('4. The bot will automatically create a backport PR to the specified release branch');
+
+    // Collect all non-master branches that need cherry-picking
+    const releaseBranches = [];
+    for (const result of matchResults) {
+        for (const branch of result.branches) {
+            if (branch.branch !== 'master' && !releaseBranches.includes(branch.branch)) {
+                releaseBranches.push(branch.branch);
+            }
+        }
+    }
+
+    if (releaseBranches.length > 0) {
+        lines.push('2. After merging, cherry-pick to release branches by commenting on the **merged PR**:');
+        lines.push('');
+        for (const branch of releaseBranches) {
+            lines.push(`   \`/release to ${branch}\``);
+        }
+        lines.push('');
+        lines.push('3. The bot will automatically create backport PRs to the specified release branches');
+    }
+
     lines.push('');
     lines.push('<!-- branch-suggestions -->');
 
