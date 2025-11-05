@@ -13,7 +13,7 @@ jobs:
         id: check_command
         uses: actions/github-script@v6
         with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { issue, comment } = context.payload;
 
@@ -27,6 +27,16 @@ jobs:
             core.setOutput('release_branch', releaseBranch);
             core.setOutput('pr_number', issue.number);
 
+      - name: Install GitHub CLI (for act/local testing)
+        if: steps.check_command.outputs.release_valid == 'true'
+        run: |
+          sudo apt update
+          sudo apt install -y curl unzip gnupg
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /usr/share/keyrings/githubcli-archive-keyring.gpg >/dev/null
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install -y gh
+
       - name: Checkout repository
         if: steps.check_command.outputs.release_valid == 'true'
         uses: actions/checkout@v3
@@ -35,13 +45,11 @@ jobs:
 
       - name: Set default branch variable
         if: steps.check_command.outputs.release_valid == 'true'
-        run: |
-          echo "DEFAULT_BRANCH=${{ github.event.repository.default_branch }}" >> $GITHUB_ENV
+        run: echo "DEFAULT_BRANCH=${{ github.event.repository.default_branch }}" >> $GITHUB_ENV
 
       - name: Skip jobs if not a valid release command
         if: steps.check_command.outputs.release_valid == 'false'
-        run: |
-          echo "Skipping cherry-pick as the release command is not valid."
+        run: echo "Skipping cherry-pick as the release command is not valid."
         continue-on-error: true
 
       - name: Setup Git
@@ -50,7 +58,7 @@ jobs:
           git config --global user.email "bot@tyk.io"
           git config --global user.name "Tyk Bot"
 
-      - name: Get PR details
+      - name: Get PR base and merge SHAs
         id: pr_details
         if: steps.check_command.outputs.release_valid == 'true'
         env:
@@ -65,6 +73,7 @@ jobs:
       - name: Clone repository and cherry-pick commit
         if: steps.check_command.outputs.release_valid == 'true'
         id: cherry_pick
+        if: steps.check_command.outputs.release_valid == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
@@ -77,15 +86,10 @@ jobs:
           # Clone the repository
           export FOLDER=$(echo $GITHUB_REPO | cut -d '/' -f2)
           rm -rf $FOLDER
-          git clone https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPO || true
+          git clone https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPO
           cd $FOLDER
 
-          # Reset and checkout default branch (master or main)
-          git reset --hard
-          git checkout $DEFAULT_BRANCH
-          git pull
           git checkout $GITHUB_BRANCH
-          git reset --hard
           git pull
 
           if [ -n "$JIRA_ID" ]; then
@@ -103,7 +107,6 @@ jobs:
           # Create and checkout the new branch
           git checkout -b $BRANCH_NAME
 
-          # Cherry-pick the commit
           MERGE_FAILED=0
           git cherry-pick -x $GITHUB_CHERRY_PICK_COMMIT || MERGE_FAILED=$?
 
@@ -130,27 +133,11 @@ jobs:
             PR_URL=$(gh pr create --title "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" --repo $GITHUB_REPO --base $GITHUB_BRANCH --head $BRANCH_NAME)
           fi
 
-          echo "$PR_URL"
-
-          echo "Extract PR ID"
-          PR_ID="${PR_URL##*/}"
-
-          echo "$PR_ID"
-
-          echo "If no merge failure, auto-merge the PR"
-          if [ $MERGE_FAILED -eq 0 ]; then
-            gh pr merge --squash $PR_ID --auto --subject "Merging to $GITHUB_BRANCH: $TITLE" --body "$MESSAGE" 
-          fi
-
-          echo "Set outputs for use in the next step"
-          echo "PR_URL=${PR_URL}" >> $GITHUB_OUTPUT
-          echo "MERGE_FAILED=${MERGE_FAILED}" >> $GITHUB_OUTPUT
-
-      - name: Comment on PR
+      - name: Comment back on original PR
         if: steps.check_command.outputs.release_valid == 'true' && always()
         uses: actions/github-script@v6
         with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const prUrl = '${{ steps.cherry_pick.outputs.PR_URL }}';
             const mergeFailed = '${{ steps.cherry_pick.outputs.MERGE_FAILED }}' === '1';
@@ -158,12 +145,14 @@ jobs:
 
             if ('${{ job.status }}' === 'success') {
               if (mergeFailed) {
-                body = `⚠️ Cherry-pick operation completed with conflicts. A draft pull request has been created: ${prUrl}\n\nPlease resolve the conflicts manually.`;
+                body = `⚠️ Cherry-pick completed with conflicts. A draft PR was created: ${prUrl}`;
+              } else if (prUrl) {
+                body = `✅ Cherry-pick successful. A PR was created and auto-merged (if allowed): ${prUrl}`;
               } else {
-                body = `✅ Cherry-pick operation completed successfully. New pull request created: ${prUrl}`;
+                body = `ℹ️ Cherry-pick skipped: no changes needed in target branch.`;
               }
             } else {
-              body = '❌ Cherry-pick operation failed. Please check the action logs for more information.';
+              body = '❌ Cherry-pick failed. Please check the workflow logs.';
             }
 
             const owner = context.repo.owner || '${{ github.repository_owner }}';
@@ -171,7 +160,7 @@ jobs:
 
             github.rest.issues.createComment({
               issue_number: ${{ steps.check_command.outputs.pr_number }},
-              owner: owner,
-              repo: repo,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
               body: body
             });
