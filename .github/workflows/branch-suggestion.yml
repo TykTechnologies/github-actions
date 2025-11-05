@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: TykTechnologies/github-actions
-          ref: TT-15793-give-exact-instructions-on-merging-branches
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
