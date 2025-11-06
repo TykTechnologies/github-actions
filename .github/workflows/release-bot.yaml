@@ -5,17 +5,17 @@ on:
   issue_comment:
     types: [created]
 
-  # Reusable usage from another workflow:
+  # Reusable usage from another workflow / repo
   workflow_call:
     secrets:
       APP_ID:
-        description: "GitHub App ID (string)."
+        description: "GitHub App ID"
         required: false
       APP_PRIVATE_KEY:
-        description: "GitHub App private key (PEM, multiline)."
+        description: "GitHub App private key (PEM)"
         required: false
       APP_INSTALLATION_ID:
-        description: "GitHub App installation ID (string)."
+        description: "GitHub App installation ID"
         required: false
 
 permissions:
@@ -62,43 +62,69 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # 3) Optionally authenticate as a GitHub App
-      #    First try secrets passed via workflow_call (APP_*), then fall back
-      #    to repo-level secrets (PROBE_*). If none provided, use GITHUB_TOKEN.
-      - name: Create GitHub App token (workflow_call secrets with installation id)
-        id: app_token_call_id
-        if: ${{ secrets.APP_ID != '' && secrets.APP_PRIVATE_KEY != '' && secrets.APP_INSTALLATION_ID != '' }}
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          installation-id: ${{ secrets.APP_INSTALLATION_ID }}
+      # 3) Resolve GitHub App credentials into env (supports workflow_call APP_* and repo-level PROBE_APP_*)
+      - name: Resolve GitHub App credentials
+        id: resolve_app
+        if: steps.check_command.outputs.release_valid == 'true'
+        env:
+          # From the caller (reusable workflow)
+          CALL_APP_ID: ${{ secrets.APP_ID }}
+          CALL_APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          CALL_APP_INSTALLATION_ID: ${{ secrets.APP_INSTALLATION_ID }}
+          # Repo-level fallbacks when run directly via issue_comment in the same repo
+          PROBE_APP_ID: ${{ secrets.PROBE_APP_ID }}
+          PROBE_APP_PRIVATE_KEY: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
+          PROBE_APP_INSTALLATION_ID: ${{ secrets.PROBE_APP_INSTALLATION_ID }}
+        run: |
+          set -euo pipefail
+          APP_ID="${CALL_APP_ID:-}"
+          APP_PRIVATE_KEY="${CALL_APP_PRIVATE_KEY:-}"
+          APP_INSTALLATION_ID="${CALL_APP_INSTALLATION_ID:-}"
 
-      - name: Create GitHub App token (workflow_call secrets by owner)
-        id: app_token_call_owner
-        if: ${{ secrets.APP_ID != '' && secrets.APP_PRIVATE_KEY != '' && (secrets.APP_INSTALLATION_ID == '') }}
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
+          # Fallback to repo-level secrets if not supplied via workflow_call
+          if [ -z "${APP_ID}" ] && [ -n "${PROBE_APP_ID:-}" ]; then
+            APP_ID="${PROBE_APP_ID}"
+          fi
+          if [ -z "${APP_PRIVATE_KEY}" ] && [ -n "${PROBE_APP_PRIVATE_KEY:-}" ]; then
+            APP_PRIVATE_KEY="${PROBE_APP_PRIVATE_KEY}"
+          fi
+          if [ -z "${APP_INSTALLATION_ID}" ] && [ -n "${PROBE_APP_INSTALLATION_ID:-}" ]; then
+            APP_INSTALLATION_ID="${PROBE_APP_INSTALLATION_ID}"
+          fi
 
-      - name: Create GitHub App token (repo PROBE_* secrets with installation id)
-        id: app_token_repo_id
-        if: ${{ secrets.PROBE_APP_ID != '' && secrets.PROBE_APP_PRIVATE_KEY != '' && secrets.PROBE_APP_INSTALLATION_ID != '' }}
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.PROBE_APP_ID }}
-          private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
-          installation-id: ${{ secrets.PROBE_APP_INSTALLATION_ID }}
+          HAS_APP=false
+          if [ -n "${APP_ID}" ] && [ -n "${APP_PRIVATE_KEY}" ]; then
+            HAS_APP=true
+          fi
 
-      - name: Create GitHub App token (repo PROBE_* secrets by owner)
-        id: app_token_repo_owner
-        if: ${{ secrets.PROBE_APP_ID != '' && secrets.PROBE_APP_PRIVATE_KEY != '' && (secrets.PROBE_APP_INSTALLATION_ID == '') }}
+          echo "HAS_APP=${HAS_APP}" >> "$GITHUB_ENV"
+          if [ "${HAS_APP}" = "true" ]; then
+            {
+              echo "APP_ID=${APP_ID}"
+              echo "APP_INSTALLATION_ID=${APP_INSTALLATION_ID}"
+              echo "APP_PRIVATE_KEY<<EOF"
+              echo "${APP_PRIVATE_KEY}"
+              echo "EOF"
+            } >> "$GITHUB_ENV"
+          fi
+
+      # 4) If we have App creds, mint an installation token (prefer explicit installation-id)
+      - name: Create GitHub App token (installation id)
+        id: app_token_id
+        if: env.HAS_APP == 'true' && env.APP_INSTALLATION_ID != ''
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ secrets.PROBE_APP_ID }}
-          private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.APP_PRIVATE_KEY }}
+          installation-id: ${{ env.APP_INSTALLATION_ID }}
+
+      - name: Create GitHub App token (by owner)
+        id: app_token_owner
+        if: env.HAS_APP == 'true' && env.APP_INSTALLATION_ID == ''
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
       - name: Select auth token & prepare git remote
@@ -106,20 +132,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          TOKEN="${{ steps.app_token_call_id.outputs.token }}"
-          if [ -z "$TOKEN" ]; then TOKEN="${{ steps.app_token_call_owner.outputs.token }}"; fi
-          if [ -z "$TOKEN" ]; then TOKEN="${{ steps.app_token_repo_id.outputs.token }}"; fi
-          if [ -z "$TOKEN" ]; then TOKEN="${{ steps.app_token_repo_owner.outputs.token }}"; fi
+          TOKEN="${{ steps.app_token_id.outputs.token }}"
+          if [ -z "$TOKEN" ]; then TOKEN="${{ steps.app_token_owner.outputs.token }}"; fi
           if [ -z "$TOKEN" ]; then TOKEN="${{ secrets.GITHUB_TOKEN }}"; fi
 
           echo "GITHUB_TOKEN=$TOKEN" >> "$GITHUB_ENV"
           echo "GH_TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
-          # Ensure pushes/pulls use our chosen token (and not checkout extraheader)
+          # Ensure git uses our chosen token (remove checkout extraheader)
           git config --local --unset-all http.https://github.com/.extraheader || true
           git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
           git remote -v
-        shell: bash
 
       - name: Configure git user
         if: steps.check_command.outputs.release_valid == 'true'
@@ -127,7 +150,7 @@ jobs:
           git config --global user.email "bot@tyk.io"
           git config --global user.name "Tyk Bot"
 
-      # 4) Find the merge commit created when the PR was merged into its base (e.g., master)
+      # 5) Find the *merge* commit that landed on the base branch when the PR was merged
       - name: Find merge commit on base branch
         id: pr_details
         if: steps.check_command.outputs.release_valid == 'true'
@@ -169,7 +192,7 @@ jobs:
             echo "BASE_REF=${BASE_REF}"
           } >> "$GITHUB_OUTPUT"
 
-      # 5) Cherry-pick that merge commit onto the requested release branch and open a PR
+      # 6) Cherry-pick the merge commit to the requested release branch and open a PR
       - name: Cherry-pick merge commit to target release
         id: cherry_pick
         if: steps.check_command.outputs.release_valid == 'true'
@@ -247,7 +270,7 @@ jobs:
             echo "BRANCH_NAME=${BRANCH_NAME}"
           } >> "$GITHUB_OUTPUT"
 
-      # 6) Comment back on the original PR with the result (uses selected token)
+      # 7) Comment back on the original PR with the result (uses selected token)
       - name: Comment back on original PR
         if: always() && steps.check_command.outputs.release_valid == 'true'
         uses: actions/github-script@v6
