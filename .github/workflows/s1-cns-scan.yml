@@ -50,10 +50,11 @@ jobs:
 
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.ref }}
-          filter: blob:none
+          filter: tree:0
+          fetch-depth: 0
 
       - name: Configure SentinelOne Shift Left CLI
         run: s1-cns-cli config --service-user-api-token "$S1_TOKEN" --management-console-url "$CONSOLE_URL" --scope-type "$SCOPE_TYPE" --scope-id "$SCOPE_ID" --tag "$TAG"
