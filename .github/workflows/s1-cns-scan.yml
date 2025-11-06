@@ -47,7 +47,7 @@ jobs:
           S1_TOKEN: ${{ secrets.S1_API_TOKEN  }}
           CONSOLE_URL: ${{ secrets.CONSOLE_URL }}
           SCOPE_TYPE: ${{ github.event.inputs.scope_type }}
-          SCOPE_ID: ${{ secrets.SCOP_ID }}
+          SCOPE_ID: ${{ secrets.SCOPE_ID }}
           TAG: ${{ github.event.inputs.tag }}
 
 
@@ -56,14 +56,14 @@ jobs:
 
       - name: Run Secret Detector
         id: secret-detector
-        run: s1-cns-cli scan secret -d $PWD --pull-request "origin/$SRC" "$DEST" --publish-result --repo-full-name $REPO_FULL_NAME  --repo-url $REPO_URL/$REPO_FULL_NAME --provider GITHUB
+        run: s1-cns-cli scan secret -d "$PWD" --pull-request "origin/$SRC" "$DEST" --publish-result --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME"--provider GITHUB
         continue-on-error: true
         env:
           DEST: ${{ github.event.pull_request.base.sha }}
           SRC: ${{ github.event.pull_request.head.ref }}
 
       - name: Run IaC Scanner
-        run: s1-cns-cli scan iac -d $PWD --publish-result --repo-full-name $REPO_FULL_NAME  --repo-url $REPO_URL/$REPO_FULL_NAME --branch "$BRANCH" --provider GITHUB
+        run: s1-cns-cli scan iac -d "$PWD" --publish-result --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --branch "$BRANCH" --provider GITHUB
         id: iac-scanner
         continue-on-error: true
         env:
@@ -72,7 +72,7 @@ jobs:
       - name: Run Vulnerability Scanner
         id: vuln-scanner
         continue-on-error: true
-        run: s1-cns-cli scan vuln --repo-full-name $REPO_FULL_NAME -d $PWD
+        run: s1-cns-cli scan vuln --repo-full-name "$REPO_FULL_NAME" -d "$PWD"
 
       - name: Check for failures
         if: steps.secret-detector.outcome == 'failure' || steps.iac-scanner.outcome == 'failure' || steps.vuln-scanner.outcome == 'failure'
