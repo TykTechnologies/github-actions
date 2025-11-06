@@ -20,9 +20,6 @@ on:
 jobs:
   s1-shift-left-cli:
     runs-on: ubuntu-latest
-    # Run only on pull requests as we've scans configured to run on pull requests and publish is
-    # only available on pull requests.
-    if: github.event_name  == 'pull_request'
     container:
       # latest version v0.5.4 - update digest after checking the image when
       # new version comes out.
@@ -46,15 +43,18 @@ jobs:
         env:
           S1_TOKEN: ${{ secrets.S1_API_TOKEN  }}
           CONSOLE_URL: ${{ secrets.CONSOLE_URL }}
-          SCOPE_TYPE: ${{ github.event.inputs.scope_type }}
+          SCOPE_TYPE: ${{ inputs.scope_type }}
           SCOPE_ID: ${{ secrets.SCOPE_ID }}
-          TAG: ${{ github.event.inputs.tag }}
+          TAG: ${{ inputs.tag }}
 
 
       - name: Configure git config
         run: git config --global --add safe.directory $PWD
 
       - name: Run Secret Detector
+        # Run only on pull requests as we've scans configured to run on pull requests and publish is
+        # only available on pull requests.
+        if: github.event_name  == 'pull_request'
         id: secret-detector
         run: s1-cns-cli scan secret -d "$PWD" --pull-request "origin/$SRC" "$DEST" --publish-result --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME"--provider GITHUB
         continue-on-error: true
