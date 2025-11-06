@@ -1,0 +1,71 @@
+name: SentinelOne CNS Scan
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        default: "scan:tykchecks"
+        type: string
+      scope_type:
+        default: "ACCOUNT"
+        type: string
+    secrets:
+      S1_API_TOKEN:
+        required: true
+      CONSOLE_URL:
+        required: true
+      SCOPE_ID:
+        required: true
+
+jobs:
+  s1-shift-left-cli:
+    runs-on: ubuntu-latest
+    container:
+      # latest version v0.5.4 - update digest after checking the image when
+      # new version comes out.
+      image: pingsafe/s1-shift-left-cli@sha256:fd03e7a6065c65dc58eabe6591cf48e72dfc32ecc5d2916ac05575d0ec336e86
+      options: --entrypoint ""
+    permissions:
+      contents: read
+    env:
+        REPO_FULL_NAME: ${{ github.repository }}
+        REPO_URL: ${{ github.server_url }}
+
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 2
+
+      - name: Configure SentinelOne Shift Left CLI
+        run: s1-cns-cli config --service-user-api-token ${{ secrets.S1_API_TOKEN }} --management-console-url ${{ secrets.CONSOLE_URL }} --scope-type ${{ github.event.inputs.scope_type }} --scope-id ${{ secrets.SCOPE_ID }} --tag ${{ github.event.inputs.tag }}
+
+      - name: Configure git config
+        run: git config --global --add safe.directory $PWD
+
+      - name: Run Secret Detector
+        id: secret-detector
+        run:  s1-cns-cli scan secret -d $PWD --pull-request "origin/$SRC" "$DEST" --publish-result --repo-full-name $REPO_FULL_NAME  --repo-url $REPO_URL/$REPO_FULL_NAME --provider GITHUB
+        continue-on-error: true
+        env:
+          DEST: ${{ github.event.pull_request.base.sha }}
+          SRC: ${{ github.event.pull_request.head.ref }}
+
+      - name: Run IaC Scanner
+        run:  s1-cns-cli scan iac -d $PWD --publish-result --repo-full-name $REPO_FULL_NAME  --repo-url $REPO_URL/$REPO_FULL_NAME --branch "$BRANCH --provider GITHUB"
+        id: iac-scanner
+        continue-on-error: true
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+
+      - name: Run Vulnerability Scanner
+        id: vuln-scanner
+        continue-on-error: true
+        run:  s1-cns-cli scan vuln --repo-full-name $REPO_FULL_NAME -d $PWD
+
+      - name: Check for failures
+        if: steps.secret-detector.outcome == 'failure' || steps.iac-scanner.outcome == 'failure' || steps.vuln-scanner.outcome == 'failure'
+        run: exit 1
+
+
