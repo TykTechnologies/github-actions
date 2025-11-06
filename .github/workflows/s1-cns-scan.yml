@@ -4,17 +4,34 @@ on:
   workflow_call:
     inputs:
       tag:
+        description: 'The tag configured for the scan policy in S1 Console'
         default: "scan:tykchecks"
         type: string
       scope_type:
+        description: 'The scope in which the scan policy is configured'
         default: "ACCOUNT"
         type: string
+      iac_enabled:
+        description: 'Whether Iac scanning should be enabled'
+        default: true
+        type: boolean
+      secrets_enabled:
+        description: 'Whether secrets scanning should be enabled(It will run only on a pull_request event)'
+        default: true
+        type: boolean
+      vuln_enabled:
+        description: 'Whether vulnerability scannin should be enabled'
+        default: true
+        type: boolean
     secrets:
       S1_API_TOKEN:
+        description: 'S1 API Token configured for scanning'
         required: true
       CONSOLE_URL:
+        description: 'S1 Management consoloe URL'
         required: true
       SCOPE_ID:
+        description: 'Scope ID from S1 console'
         required: true
 
 jobs:
@@ -49,31 +66,26 @@ jobs:
 
 
       - name: Configure git config
-        run: git config --global --add safe.directory $PWD
+        run: git config --global --add safe.directory "$PWD"
 
       - name: Run Secret Detector
         # Run only on pull requests as we've scans configured to run on pull requests and publish is
         # only available on pull requests.
-        if: github.event_name  == 'pull_request'
+        if: github.event_name  == 'pull_request' && inputs.secrets_enabled
         id: secret-detector
-        run: s1-cns-cli scan secret -d "$PWD" --pull-request "origin/$SRC" "$DEST" --publish-result --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME"--provider GITHUB
-        continue-on-error: true
+        run: s1-cns-cli scan secret -d "$PWD" --pull-request "$SRC" "$DEST" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --provider GITHUB --publish-result
         env:
-          DEST: ${{ github.event.pull_request.base.sha }}
-          SRC: ${{ github.event.pull_request.head.ref }}
+          DEST: ${{ github.event.pull_request.base.ref }}
+          SRC: ${{ github.head_ref }}
 
       - name: Run IaC Scanner
-        run: s1-cns-cli scan iac -d "$PWD" --publish-result --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --branch "$BRANCH" --provider GITHUB
+        if: inputs.iac_enabled
+        run: s1-cns-cli scan iac -d "$PWD" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --branch "$BRANCH" --provider GITHUB --publish-result
         id: iac-scanner
-        continue-on-error: true
         env:
-          BRANCH: ${{ github.event.pull_request.head.ref }}
+          BRANCH: ${{ github.head_red || github.ref_name }}
 
       - name: Run Vulnerability Scanner
+        if: inputs.vuln_enabled
         id: vuln-scanner
-        continue-on-error: true
         run: s1-cns-cli scan vuln --repo-full-name "$REPO_FULL_NAME" -d "$PWD"
-
-      - name: Check for failures
-        if: steps.secret-detector.outcome == 'failure' || steps.iac-scanner.outcome == 'failure' || steps.vuln-scanner.outcome == 'failure'
-        run: exit 1
