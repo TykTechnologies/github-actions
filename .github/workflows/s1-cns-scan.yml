@@ -40,7 +40,7 @@ jobs:
     container:
       # latest version v0.5.4 - update digest after checking the image when
       # new version comes out.
-      image: pingsafe/s1-shift-left-cli@sha256:fd03e7a6065c65dc58eabe6591cf48e72dfc32ecc5d2916ac05575d0ec336e86
+      image: pingsafe/s1-shift-left-cli@sha256:acd49cfd5ad72d488daf4e2418bd56891fbdef4d5da4729ccdafd6b9bbc5c8ad
       options: --entrypoint ""
     permissions:
       contents: read
@@ -53,7 +53,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
-          fetch-depth: 2
+          filter: blob:none
 
       - name: Configure SentinelOne Shift Left CLI
         run: s1-cns-cli config --service-user-api-token "$S1_TOKEN" --management-console-url "$CONSOLE_URL" --scope-type "$SCOPE_TYPE" --scope-id "$SCOPE_ID" --tag "$TAG"
@@ -75,7 +75,7 @@ jobs:
         id: secret-detector
         run: s1-cns-cli scan secret -d "$PWD" --pull-request "$SRC" "$DEST" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --provider GITHUB --publish-result
         env:
-          DEST: ${{ github.event.pull_request.base.ref }}
+          DEST: ${{ github.event.pull_request.base.sha }}
           SRC: ${{ github.head_ref }}
 
       - name: Run IaC Scanner
@@ -83,7 +83,7 @@ jobs:
         run: s1-cns-cli scan iac -d "$PWD" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --branch "$BRANCH" --provider GITHUB --publish-result
         id: iac-scanner
         env:
-          BRANCH: ${{ github.head_red || github.ref_name }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
 
       - name: Run Vulnerability Scanner
         if: inputs.vuln_enabled
