@@ -1,25 +1,22 @@
-name: Cherry-pick to Release Branch (with GitHub App auth)
+name: Cherry-pick to Release Branch (GitHub App ready)
 
 on:
+  # Direct usage in this repo: comment "/release to <branch>" on a PR
   issue_comment:
     types: [created]
+
+  # Reusable usage from another workflow:
   workflow_call:
-    inputs:
-      app-id:
-        description: "GitHub App ID (optional). If set with private-key, the workflow will auth as the App."
+    secrets:
+      APP_ID:
+        description: "GitHub App ID (string)."
         required: false
-        type: string
-        default: ""
-      private-key:
+      APP_PRIVATE_KEY:
         description: "GitHub App private key (PEM, multiline)."
         required: false
-        type: string
-        default: ""
-      installation-id:
-        description: "GitHub App installation ID (optional). If omitted, installation for the repo owner is used."
+      APP_INSTALLATION_ID:
+        description: "GitHub App installation ID (string)."
         required: false
-        type: string
-        default: ""
 
 permissions:
   contents: write
@@ -38,7 +35,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { issue, comment } = context.payload;
+            const { issue, comment } = context.payload || {};
             if (!issue || !issue.pull_request || !comment) {
               core.setOutput('release_valid','false');
               return;
@@ -64,23 +61,43 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # 3) Optional: Authenticate as a GitHub App (token with the app identity)
-      - name: Create GitHub App token (by installation id)
-        id: app_token_id
-        if: ${{ github.event_name == 'workflow_call' && inputs.app-id != '' && inputs.private-key != '' && inputs.installation-id != '' }}
+      # 3) Optionally authenticate as a GitHub App
+      #    First try secrets passed via workflow_call (APP_*), then fall back
+      #    to repo-level secrets (PROBE_*). If none provided, use GITHUB_TOKEN.
+      - name: Create GitHub App token (workflow_call secrets with installation id)
+        id: app_token_call_id
+        if: ${{ secrets.APP_ID != '' && secrets.APP_PRIVATE_KEY != '' && secrets.APP_INSTALLATION_ID != '' }}
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ inputs['app-id'] }}
-          private-key: ${{ inputs['private-key'] }}
-          installation-id: ${{ inputs['installation-id'] }}
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          installation-id: ${{ secrets.APP_INSTALLATION_ID }}
 
-      - name: Create GitHub App token (by owner)
-        id: app_token_owner
-        if: ${{ github.event_name == 'workflow_call' && inputs.app-id != '' && inputs.private-key != '' && inputs.installation-id == '' }}
+      - name: Create GitHub App token (workflow_call secrets by owner)
+        id: app_token_call_owner
+        if: ${{ secrets.APP_ID != '' && secrets.APP_PRIVATE_KEY != '' && (secrets.APP_INSTALLATION_ID == '') }}
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ inputs['app-id'] }}
-          private-key: ${{ inputs['private-key'] }}
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Create GitHub App token (repo PROBE_* secrets with installation id)
+        id: app_token_repo_id
+        if: ${{ secrets.PROBE_APP_ID != '' && secrets.PROBE_APP_PRIVATE_KEY != '' && secrets.PROBE_APP_INSTALLATION_ID != '' }}
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.PROBE_APP_ID }}
+          private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
+          installation-id: ${{ secrets.PROBE_APP_INSTALLATION_ID }}
+
+      - name: Create GitHub App token (repo PROBE_* secrets by owner)
+        id: app_token_repo_owner
+        if: ${{ secrets.PROBE_APP_ID != '' && secrets.PROBE_APP_PRIVATE_KEY != '' && (secrets.PROBE_APP_INSTALLATION_ID == '') }}
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.PROBE_APP_ID }}
+          private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
       - name: Select auth token & prepare git remote
@@ -88,19 +105,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          TOKEN="${{ steps.app_token_id.outputs.token }}"
-          if [ -z "$TOKEN" ]; then
-            TOKEN="${{ steps.app_token_owner.outputs.token }}"
-          fi
-          if [ -z "$TOKEN" ]; then
-            TOKEN="${{ secrets.GITHUB_TOKEN }}"
-          fi
+          TOKEN="${{ steps.app_token_call_id.outputs.token }}"
+          if [ -z "$TOKEN" ]; then TOKEN="${{ steps.app_token_call_owner.outputs.token }}"; fi
+          if [ -z "$TOKEN" ]; then TOKEN="${{ steps.app_token_repo_id.outputs.token }}"; fi
+          if [ -z "$TOKEN" ]; then TOKEN="${{ steps.app_token_repo_owner.outputs.token }}"; fi
+          if [ -z "$TOKEN" ]; then TOKEN="${{ secrets.GITHUB_TOKEN }}"; fi
 
-          # Export for following steps (gh CLI prefers GITHUB_TOKEN/GH_TOKEN)
           echo "GITHUB_TOKEN=$TOKEN" >> "$GITHUB_ENV"
           echo "GH_TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
-          # Ensure pushes/pulls use our chosen token (avoid any extraheader from checkout)
+          # Ensure pushes/pulls use our chosen token (and not checkout extraheader)
           git config --local --unset-all http.https://github.com/.extraheader || true
           git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
           git remote -v
@@ -112,7 +126,7 @@ jobs:
           git config --global user.email "bot@tyk.io"
           git config --global user.name "Tyk Bot"
 
-      # 4) Locate the *merge* commit that landed on the base branch when the PR was merged
+      # 4) Find the merge commit created when the PR was merged into its base (e.g., master)
       - name: Find merge commit on base branch
         id: pr_details
         if: steps.check_command.outputs.release_valid == 'true'
@@ -135,15 +149,12 @@ jobs:
             exit 1
           fi
 
-          # Ensure base branch is present locally
           git fetch origin "${BASE_REF}" --quiet
 
-          # Fallbacks for different merge strategies/messages
           if [ -z "${MERGE_SHA}" ] || [ "${MERGE_SHA}" = "null" ]; then
             MERGE_SHA="$(git log "origin/${BASE_REF}" --merges --grep="Merge pull request #${PR_NUMBER}" -n 1 --pretty=format:%H || true)"
           fi
           if [ -z "${MERGE_SHA}" ]; then
-            # Squash merge default message ends with "(#<PR_NUMBER>)"
             MERGE_SHA="$(git log "origin/${BASE_REF}" --grep="(#${PR_NUMBER})" -n 1 --pretty=format:%H || true)"
           fi
           if [ -z "${MERGE_SHA}" ]; then
@@ -172,39 +183,33 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Ensure both base and target branches are present/up-to-date
           git fetch origin "${BASE_REF}" --quiet
           git fetch origin "${GITHUB_BRANCH}" --quiet
           git checkout -B "${GITHUB_BRANCH}" "origin/${GITHUB_BRANCH}"
 
-          # Create a consistent branch name (optionally include JIRA key)
+          # Optional JIRA id in branch name
           JIRA_ID="$(echo "${PR_TITLE}" | grep -oE '[A-Z]{1,10}-[0-9]{1,10}' | head -n 1 || true)"
           BRANCH_NAME="merge/${GITHUB_BRANCH}/${GITHUB_CHERRY_PICK_COMMIT}"
           if [ -n "${JIRA_ID}" ]; then
             BRANCH_NAME="${BRANCH_NAME}/${JIRA_ID}"
           fi
 
-          # Remove any stale branches locally/remotely
           git branch -D "${BRANCH_NAME}" 2>/dev/null || true
           git push origin --delete "${BRANCH_NAME}" 2>/dev/null || true
 
-          # Create working branch from the release branch
           git switch -c "${BRANCH_NAME}"
 
-          # Determine if selected commit is a merge (has >1 parent)
+          # Is it a merge commit (has >1 parent)?
           PARENTS_LINE="$(git rev-list --parents -n 1 "${GITHUB_CHERRY_PICK_COMMIT}")"
           WORDS_COUNT="$(wc -w <<<"${PARENTS_LINE}")"
 
           MERGE_FAILED=0
           if [ "${WORDS_COUNT}" -gt 2 ]; then
-            # Merge commit -> use -m 1
             git cherry-pick -x -m 1 "${GITHUB_CHERRY_PICK_COMMIT}" || MERGE_FAILED=$?
           else
-            # Normal / squash commit
             git cherry-pick -x "${GITHUB_CHERRY_PICK_COMMIT}" || MERGE_FAILED=$?
           fi
 
-          # If conflicts happened, attempt to continue so we still open a (draft) PR
           if [ "${MERGE_FAILED}" -ne 0 ]; then
             git add -A || true
             git -c core.editor=true cherry-pick --continue --no-edit || true
@@ -212,11 +217,10 @@ jobs:
 
           git push origin "${BRANCH_NAME}" --force
 
-          # Prepare PR metadata from the cherry-picked commit
           MESSAGE="$(git show -s --format=%B "${GITHUB_CHERRY_PICK_COMMIT}")"
           TITLE="$(echo "${MESSAGE}" | head -n 1)"
 
-          # Reuse existing PR for this head if present; else create one (draft on conflicts)
+          # Reuse PR if it already exists
           PR_URL="$(gh pr view --repo "${GITHUB_REPO}" --head "${BRANCH_NAME}" --json url -q .url 2>/dev/null || true)"
           if [ -z "${PR_URL}" ]; then
             if [ "${MERGE_FAILED}" -ne 0 ]; then
@@ -242,7 +246,7 @@ jobs:
             echo "BRANCH_NAME=${BRANCH_NAME}"
           } >> "$GITHUB_OUTPUT"
 
-      # 6) Comment back on the original PR with the result (use App token if we have it)
+      # 6) Comment back on the original PR with the result (uses selected token)
       - name: Comment back on original PR
         if: always() && steps.check_command.outputs.release_valid == 'true'
         uses: actions/github-script@v6
