@@ -76,7 +76,7 @@ jobs:
         run: s1-cns-cli scan secret -d "$PWD" --pull-request "$SRC" "$DEST" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --provider GITHUB --publish-result
         env:
           DEST: ${{ github.event.pull_request.base.sha }}
-          SRC: ${{ github.head_ref }}
+          SRC: ${{ github.event.pull_request.head.ref }}
 
       - name: Run IaC Scanner
         if: inputs.iac_enabled
