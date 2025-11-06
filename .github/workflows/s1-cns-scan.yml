@@ -20,6 +20,9 @@ on:
 jobs:
   s1-shift-left-cli:
     runs-on: ubuntu-latest
+    # Run only on pull requests as we've scans configured to run on pull requests and publish is
+    # only available on pull requests.
+    if: github.event_name  == 'pull_request'
     container:
       # latest version v0.5.4 - update digest after checking the image when
       # new version comes out.
@@ -39,7 +42,14 @@ jobs:
           fetch-depth: 2
 
       - name: Configure SentinelOne Shift Left CLI
-        run: s1-cns-cli config --service-user-api-token ${{ secrets.S1_API_TOKEN }} --management-console-url ${{ secrets.CONSOLE_URL }} --scope-type ${{ github.event.inputs.scope_type }} --scope-id ${{ secrets.SCOPE_ID }} --tag ${{ github.event.inputs.tag }}
+        run: s1-cns-cli config --service-user-api-token "$S1_TOKEN" --management-console-url "$CONSOLE_URL" --scope-type "$SCOPE_TYPE" --scope-id "$SCOPE_ID" --tag "$TAG"
+        env:
+          S1_TOKEN: ${{ secrets.S1_API_TOKEN  }}
+          CONSOLE_URL: ${{ secrets.CONSOLE_URL }}
+          SCOPE_TYPE: ${{ github.event.inputs.scope_type }}
+          SCOPE_ID: ${{ secrets.SCOP_ID }}
+          TAG: ${{ github.event.inputs.tag }}
+
 
       - name: Configure git config
         run: git config --global --add safe.directory $PWD
@@ -53,7 +63,7 @@ jobs:
           SRC: ${{ github.event.pull_request.head.ref }}
 
       - name: Run IaC Scanner
-        run: s1-cns-cli scan iac -d $PWD --publish-result --repo-full-name $REPO_FULL_NAME  --repo-url $REPO_URL/$REPO_FULL_NAME --branch "$BRANCH --provider GITHUB"
+        run: s1-cns-cli scan iac -d $PWD --publish-result --repo-full-name $REPO_FULL_NAME  --repo-url $REPO_URL/$REPO_FULL_NAME --branch "$BRANCH" --provider GITHUB
         id: iac-scanner
         continue-on-error: true
         env:
