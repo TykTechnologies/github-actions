@@ -58,7 +58,8 @@ jobs:
 
       - name: Skip if not a valid command
         if: steps.check_command.outputs.release_valid == 'false'
-        run: echo "Skipping: no '/release to <branch>' command found."
+        run: |
+           echo "Skipping: no '/release to <branch>' command found."
 
       # 2) Minimal checkout (shallow + partial clone)
       - name: Checkout repository (shallow, partial)
