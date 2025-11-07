@@ -1,4 +1,4 @@
-name: Cherry-pick to Release Branch (light checkout + GitHub App)
+name: Cherry-pick to Release Branch (light checkout + GitHub App, resilient)
 
 on:
   # Direct usage in this repo: comment "/release to <branch>" on a PR
@@ -14,8 +14,9 @@ on:
       APP_PRIVATE_KEY:
         description: "GitHub App private key (PEM)"
         required: false
+      # Kept for compatibility, but we do not pass it to the action (avoids warnings)
       APP_INSTALLATION_ID:
-        description: "GitHub App installation ID"
+        description: "GitHub App installation ID (optional, unused)"
         required: false
 
 permissions:
@@ -27,7 +28,6 @@ jobs:
   cherry_pick:
     runs-on: ubuntu-latest
 
-    # Tune shallow depths (keeps the repo light while still robust)
     env:
       # Depths to try (in order) when we need to scan the base branch to find a squash "merge"
       BASE_FETCH_DEPTHS: "100 500 2000"
@@ -58,18 +58,16 @@ jobs:
 
       - name: Skip if not a valid command
         if: steps.check_command.outputs.release_valid == 'false'
-        run: |
-          echo "Skipping: no '/release to <branch>' command found."
+        run: echo "Skipping: no '/release to <branch>' command found."
 
-      # 2) Minimal checkout (shallow + partial clone) — we will selectively fetch only required branches
+      # 2) Minimal checkout (shallow + partial clone)
       - name: Checkout repository (shallow, partial)
         if: steps.check_command.outputs.release_valid == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-          filter: blob:none          # partial clone (lazy-fetch blobs on demand)
-          persist-credentials: false # we'll re-auth with either GitHub App or GITHUB_TOKEN
-          # Don't fetch submodules/tags (defaults are fine)
+          filter: blob:none
+          persist-credentials: false
 
       # 3) Resolve GitHub App credentials (supports workflow_call APP_* and repo PROBE_APP_*)
       - name: Resolve GitHub App credentials
@@ -86,47 +84,28 @@ jobs:
           set -euo pipefail
           APP_ID="${CALL_APP_ID:-}"
           APP_PRIVATE_KEY="${CALL_APP_PRIVATE_KEY:-}"
-          APP_INSTALLATION_ID="${CALL_APP_INSTALLATION_ID:-}"
 
-          # Fallback to repo-level secrets if not supplied via workflow_call
-          if [ -z "${APP_ID}" ] && [ -n "${PROBE_APP_ID:-}" ]; then
-            APP_ID="${PROBE_APP_ID}"
-          fi
-          if [ -z "${APP_PRIVATE_KEY}" ] && [ -n "${PROBE_APP_PRIVATE_KEY:-}" ]; then
-            APP_PRIVATE_KEY="${PROBE_APP_PRIVATE_KEY}"
-          fi
-          if [ -z "${APP_INSTALLATION_ID}" ] && [ -n "${PROBE_APP_INSTALLATION_ID:-}" ]; then
-            APP_INSTALLATION_ID="${PROBE_APP_INSTALLATION_ID}"
-          fi
+          # Fallbacks for direct runs in this repo
+          if [ -z "${APP_ID}" ] && [ -n "${PROBE_APP_ID:-}" ]; then APP_ID="${PROBE_APP_ID}"; fi
+          if [ -z "${APP_PRIVATE_KEY}" ] && [ -n "${PROBE_APP_PRIVATE_KEY:-}" ]; then APP_PRIVATE_KEY="${PROBE_APP_PRIVATE_KEY}"; fi
 
           HAS_APP=false
-          if [ -n "${APP_ID}" ] && [ -n "${APP_PRIVATE_KEY}" ]; then
-            HAS_APP=true
-          fi
+          if [ -n "${APP_ID}" ] && [ -n "${APP_PRIVATE_KEY}" ]; then HAS_APP=true; fi
 
           echo "HAS_APP=${HAS_APP}" >> "$GITHUB_ENV"
           if [ "${HAS_APP}" = "true" ]; then
             {
               echo "APP_ID=${APP_ID}"
-              echo "APP_INSTALLATION_ID=${APP_INSTALLATION_ID}"
               echo "APP_PRIVATE_KEY<<EOF"
               echo "${APP_PRIVATE_KEY}"
               echo "EOF"
             } >> "$GITHUB_ENV"
           fi
 
-      - name: Create GitHub App token (installation id)
-        id: app_token_id
-        if: env.HAS_APP == 'true' && env.APP_INSTALLATION_ID != ''
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ env.APP_ID }}
-          private-key: ${{ env.APP_PRIVATE_KEY }}
-          installation-id: ${{ env.APP_INSTALLATION_ID }}
-
-      - name: Create GitHub App token (by owner)
-        id: app_token_owner
-        if: env.HAS_APP == 'true' && env.APP_INSTALLATION_ID == ''
+      # Create GitHub App token (owner-based; avoids 'installation-id' warning)
+      - name: Create GitHub App token
+        id: app_token
+        if: env.HAS_APP == 'true'
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ env.APP_ID }}
@@ -137,28 +116,22 @@ jobs:
         if: steps.check_command.outputs.release_valid == 'true'
         run: |
           set -euo pipefail
-
-          TOKEN="${{ steps.app_token_id.outputs.token }}"
-          if [ -z "$TOKEN" ]; then TOKEN="${{ steps.app_token_owner.outputs.token }}"; fi
+          TOKEN="${{ steps.app_token.outputs.token }}"
           if [ -z "$TOKEN" ]; then TOKEN="${{ secrets.GITHUB_TOKEN }}"; fi
-
           echo "GITHUB_TOKEN=$TOKEN" >> "$GITHUB_ENV"
           echo "GH_TOKEN=$TOKEN" >> "$GITHUB_ENV"
-
-          # Ensure pushes/pulls use our chosen token (avoid checkout's extraheader)
           git config --local --unset-all http.https://github.com/.extraheader || true
           git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
           git remote -v
-        shell: bash
 
       - name: Configure git user
         if: steps.check_command.outputs.release_valid == 'true'
         run: |
           git config --global user.email "bot@tyk.io"
           git config --global user.name "Tyk Bot"
+          git config --global advice.submoduleMergeConflict false
 
-      # 4) Find the *merge* (or squash) commit that landed on the base branch
-      #    We only shallow-fetch the base branch as needed to locate it.
+      # 4) Find the merge (or squash) commit that landed on the base branch, using REST only
       - name: Find merge commit on base branch (shallow fetch)
         id: pr_details
         if: steps.check_command.outputs.release_valid == 'true'
@@ -182,10 +155,7 @@ jobs:
             exit 1
           fi
 
-          # If GitHub provides merge_commit_sha (true merge), prefer it.
           if [ -n "${MERGE_SHA}" ] && [ "${MERGE_SHA}" != "null" ]; then
-            # Make sure we have the commit object (shallow fetch base a bit so commit is reachable)
-            # Try a small depth first; we’ll deepen only if needed.
             for D in 50 200 1000; do
               git fetch --no-tags --filter=blob:none --depth="$D" origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
               if git cat-file -e "${MERGE_SHA}^{commit}" 2>/dev/null; then
@@ -193,14 +163,11 @@ jobs:
               fi
             done
           else
-            # Squash merge: find the commit on base with "(#<PR_NUMBER>)" in the message
             MERGE_SHA=""
             for D in ${BASE_FETCH_DEPTHS}; do
               git fetch --no-tags --filter=blob:none --depth="$D" origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
               MERGE_SHA="$(git log "origin/${BASE_REF}" --grep="(#${PR_NUMBER})" -n 1 --pretty=format:%H || true)"
-              if [ -n "${MERGE_SHA}" ]; then
-                break
-              fi
+              if [ -n "${MERGE_SHA}" ]; then break; fi
             done
             if [ -z "${MERGE_SHA}" ]; then
               echo "Could not locate the squash commit for PR #${PR_NUMBER} on ${BASE_REF} within depth(s): ${BASE_FETCH_DEPTHS}" >&2
@@ -212,10 +179,11 @@ jobs:
             echo "COMMIT_SHA=${MERGE_SHA}"
             echo "PR_TITLE=${PR_TITLE}"
             echo "BASE_REF=${BASE_REF}"
+            echo "PR_NUMBER=${PR_NUMBER}"
           } >> "$GITHUB_OUTPUT"
 
-      # 5) Shallow-fetch ONLY the target release branch and cherry-pick there
-      - name: Cherry-pick merge commit to target release (shallow)
+      # 5) Cherry-pick to the target branch, with robust conflict handling + guaranteed PR
+      - name: Cherry-pick merge commit to target release (shallow + resilient)
         id: cherry_pick
         if: steps.check_command.outputs.release_valid == 'true'
         env:
@@ -230,20 +198,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Shallow fetch only the needed branches
+          # Shallow fetch only target & ensure base exists
           git fetch --no-tags --filter=blob:none --depth="${TARGET_FETCH_DEPTH}" origin "+refs/heads/${GITHUB_BRANCH}:refs/remotes/origin/${GITHUB_BRANCH}" || {
             echo "Target branch '${GITHUB_BRANCH}' not found on remote." >&2
             exit 1
           }
-
-          # Base branch already fetched in previous step as needed; ensure it exists locally (shallow)
           git fetch --no-tags --filter=blob:none --depth=10 origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}" || true
 
-          # Ensure we have the cherry-pick commit object (should be reachable after base fetch above)
-          if ! git cat-file -e "${GITHUB_CHERRY_PICK_COMMIT}^{commit}" 2>/dev/null; then
-            # Attempt to fetch the specific commit by deepening base; this stays narrow
-            git fetch --no-tags --filter=blob:none origin "${GITHUB_CHERRY_PICK_COMMIT}" || true
-          fi
+          # Ensure we have the commit object
+          git fetch --no-tags --filter=blob:none origin "${GITHUB_CHERRY_PICK_COMMIT}" || true
 
           # Work on the target branch (shallow)
           git checkout -B "${GITHUB_BRANCH}" "origin/${GITHUB_BRANCH}"
@@ -260,33 +223,78 @@ jobs:
           # Create working branch from target
           git switch -c "${BRANCH_NAME}"
 
+          # If the commit touches submodules and .gitmodules exists, shallow-init submodules
+          if [ -f .gitmodules ]; then
+            SUB_PATHS="$(git config -f .gitmodules --name-only --get-regexp '^submodule\..*\.path' | sed -E 's/^submodule\.[^.]+\.path=//')"
+            NEED_SUBS=0
+            for P in $SUB_PATHS; do
+              if git diff-tree --no-commit-id --name-only -r "${GITHUB_CHERRY_PICK_COMMIT}" | grep -Fx "$P" >/dev/null 2>&1; then
+                NEED_SUBS=1; break
+              fi
+            done
+            if [ "$NEED_SUBS" -eq 1 ]; then
+              git submodule sync --recursive
+              git submodule update --init --depth=1 --recursive --recommend-shallow
+            fi
+          fi
+
           # Is it a merge commit (has >1 parent)?
           PARENTS_LINE="$(git rev-list --parents -n 1 "${GITHUB_CHERRY_PICK_COMMIT}")"
           WORDS_COUNT="$(wc -w <<<"${PARENTS_LINE}")"
 
           MERGE_FAILED=0
+          # Try to apply; if conflicts arise, we won't force-continue here
           if [ "${WORDS_COUNT}" -gt 2 ]; then
             git cherry-pick -x -m 1 "${GITHUB_CHERRY_PICK_COMMIT}" || MERGE_FAILED=$?
           else
             git cherry-pick -x "${GITHUB_CHERRY_PICK_COMMIT}" || MERGE_FAILED=$?
           fi
 
-          # If conflicts happened, try to continue so we still open a (draft) PR
+          CONFLICT_COUNT=0
+          CONFLICT_LIST=""
           if [ "${MERGE_FAILED}" -ne 0 ]; then
-            git add -A || true
-            git -c core.editor=true cherry-pick --continue --no-edit || true
+            # Gather a short conflicts summary BEFORE aborting
+            CONFLICT_COUNT="$(git ls-files -u | wc -l || true)"
+            CONFLICT_LIST="$(git diff --name-only --diff-filter=U | head -n 40 | sed 's/^/ - /' || true)"
+            # Abort to get the branch back to a clean state
+            git cherry-pick --abort || true
           fi
 
+          # If branch has no commits compared to target (e.g., due to abort), add an empty commit
+          AHEAD_COUNT="$(git rev-list --count "origin/${GITHUB_BRANCH}..HEAD" || echo 0)"
+          if [ "${AHEAD_COUNT}" -eq 0 ]; then
+            git commit --allow-empty -m "chore: prepare PR for cherry-pick ${GITHUB_CHERRY_PICK_COMMIT} → ${GITHUB_BRANCH}
+            
+Cherry-pick failed with conflicts and requires manual resolution.
+This empty commit exists to allow opening a draft PR.
+"
+          fi
+
+          # Push branch
           git push origin "${BRANCH_NAME}" --force
 
-          MESSAGE="$(git show -s --format=%B "${GITHUB_CHERRY_PICK_COMMIT}" || echo "")"
-          if [ -z "${MESSAGE}" ]; then
-            # fallback title if commit message not locally available for some reason
-            MESSAGE="Cherry-pick ${GITHUB_CHERRY_PICK_COMMIT} to ${GITHUB_BRANCH}"
-          fi
+          # Compose title/body
+          MESSAGE="$(git show -s --format=%B "${GITHUB_CHERRY_PICK_COMMIT}" 2>/dev/null || echo "")"
+          [ -z "${MESSAGE}" ] && MESSAGE="Cherry-pick ${GITHUB_CHERRY_PICK_COMMIT} to ${GITHUB_BRANCH}"
           TITLE="$(echo "${MESSAGE}" | head -n 1)"
 
-          # Reuse PR if it already exists
+          if [ "${MERGE_FAILED}" -ne 0 ]; then
+            BODY="Cherry-pick of \`${GITHUB_CHERRY_PICK_COMMIT}\` from \`${BASE_REF}\` to \`${GITHUB_BRANCH}\` requires manual resolution.
+
+**Conflicts detected:** ${CONFLICT_COUNT}
+${CONFLICT_LIST}
+
+Tips:
+- Check out this branch locally and run: \`git cherry-pick -x ${GITHUB_CHERRY_PICK_COMMIT}\`
+- Resolve conflicts (including submodules if any), then push back to this branch.
+
+Original commit: https://github.com/${GITHUB_REPO}/commit/${GITHUB_CHERRY_PICK_COMMIT}
+"
+          else
+            BODY="${MESSAGE}"
+          fi
+
+          # Create PR (draft if conflicts)
           PR_URL="$(gh pr view --repo "${GITHUB_REPO}" --head "${BRANCH_NAME}" --json url -q .url 2>/dev/null || true)"
           if [ -z "${PR_URL}" ]; then
             if [ "${MERGE_FAILED}" -ne 0 ]; then
@@ -295,15 +303,21 @@ jobs:
                 --base "${GITHUB_BRANCH}" \
                 --head "${BRANCH_NAME}" \
                 --title "Merging to ${GITHUB_BRANCH}: ${TITLE}" \
-                --body "${MESSAGE}")"
+                --body "${BODY}")"
             else
               PR_URL="$(gh pr create \
                 --repo "${GITHUB_REPO}" \
                 --base "${GITHUB_BRANCH}" \
                 --head "${BRANCH_NAME}" \
                 --title "Merging to ${GITHUB_BRANCH}: ${TITLE}" \
-                --body "${MESSAGE}")"
+                --body "${BODY}")"
             fi
+          fi
+
+          # Optionally label the PR if conflicts
+          if [ "${MERGE_FAILED}" -ne 0 ]; then
+            gh label create "needs-manual-cherry-pick" --color FF8700 --description "Cherry-pick has conflicts" --repo "${GITHUB_REPO}" 2>/dev/null || true
+            gh pr edit "${PR_URL}" --add-label "needs-manual-cherry-pick" --repo "${GITHUB_REPO}" || true
           fi
 
           {
@@ -324,7 +338,7 @@ jobs:
             let body;
             if ('${{ job.status }}' === 'success') {
               body = mergeFailed
-                ? `⚠️ Cherry-pick completed with conflicts. A draft PR was created: ${prUrl}`
+                ? `⚠️ Cherry-pick encountered conflicts. A draft PR was created: ${prUrl}`
                 : `✅ Cherry-pick successful. A PR was created: ${prUrl}`;
             } else {
               body = '❌ Cherry-pick failed. Please check the workflow logs.';
