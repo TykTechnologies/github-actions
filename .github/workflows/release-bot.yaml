@@ -266,9 +266,9 @@ jobs:
           if [ "${AHEAD_COUNT}" -eq 0 ]; then
             git commit --allow-empty -m "chore: prepare PR for cherry-pick ${GITHUB_CHERRY_PICK_COMMIT} → ${GITHUB_BRANCH}
             
-Cherry-pick failed with conflicts and requires manual resolution.
-This empty commit exists to allow opening a draft PR.
-"
+              Cherry-pick failed with conflicts and requires manual resolution.
+              This empty commit exists to allow opening a draft PR.
+            "
           fi
 
           # Push branch
@@ -282,15 +282,15 @@ This empty commit exists to allow opening a draft PR.
           if [ "${MERGE_FAILED}" -ne 0 ]; then
             BODY="Cherry-pick of \`${GITHUB_CHERRY_PICK_COMMIT}\` from \`${BASE_REF}\` to \`${GITHUB_BRANCH}\` requires manual resolution.
 
-**Conflicts detected:** ${CONFLICT_COUNT}
-${CONFLICT_LIST}
-
-Tips:
-- Check out this branch locally and run: \`git cherry-pick -x ${GITHUB_CHERRY_PICK_COMMIT}\`
-- Resolve conflicts (including submodules if any), then push back to this branch.
-
-Original commit: https://github.com/${GITHUB_REPO}/commit/${GITHUB_CHERRY_PICK_COMMIT}
-"
+            **Conflicts detected:** ${CONFLICT_COUNT}
+            ${CONFLICT_LIST}
+            
+            Tips:
+            - Check out this branch locally and run: \`git cherry-pick -x ${GITHUB_CHERRY_PICK_COMMIT}\`
+            - Resolve conflicts (including submodules if any), then push back to this branch.
+            
+            Original commit: https://github.com/${GITHUB_REPO}/commit/${GITHUB_CHERRY_PICK_COMMIT}
+            "
           else
             BODY="${MESSAGE}"
           fi
