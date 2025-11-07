@@ -1,22 +1,20 @@
-name: Cherry-pick to Release Branch (light checkout + GitHub App)
+name: Cherry-pick to Release Branch (REST, deterministic & lightweight)
 
 on:
-  # Direct usage in this repo: comment "/release to <branch>" on a PR
   issue_comment:
     types: [created]
 
-  # Reusable usage from another workflow / repo
   workflow_call:
     secrets:
       APP_ID:
+        required: false
         description: "GitHub App ID"
-        required: false
       APP_PRIVATE_KEY:
+        required: false
         description: "GitHub App private key (PEM)"
-        required: false
       APP_INSTALLATION_ID:
-        description: "GitHub App installation ID"
         required: false
+        description: "GitHub App installation ID"
 
 permissions:
   contents: write
@@ -27,15 +25,8 @@ jobs:
   cherry_pick:
     runs-on: ubuntu-latest
 
-    # Tune shallow depths (keeps the repo light while still robust)
-    env:
-      # Depths to try (in order) when we need to scan the base branch to find a squash "merge"
-      BASE_FETCH_DEPTHS: "100 500 2000"
-      # Depth for the target release branch
-      TARGET_FETCH_DEPTH: "50"
-
     steps:
-      # 1) Only run when someone comments `/release to <branch>` on a PR
+      # 1) Gate on "/release to <branch>" command on a PR
       - name: Check for release command
         id: check_command
         uses: actions/github-script@v6
@@ -61,15 +52,14 @@ jobs:
         run: |
           echo "Skipping: no '/release to <branch>' command found."
 
-      # 2) Minimal checkout (shallow + partial clone) — we will selectively fetch only required branches
+      # 2) Minimal checkout; we’ll fetch only what we need later
       - name: Checkout repository (shallow, partial)
         if: steps.check_command.outputs.release_valid == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-          filter: blob:none          # partial clone (lazy-fetch blobs on demand)
-          persist-credentials: false # we'll re-auth with either GitHub App or GITHUB_TOKEN
-          # Don't fetch submodules/tags (defaults are fine)
+          filter: blob:none
+          persist-credentials: false
 
       # 3) Resolve GitHub App credentials (supports workflow_call APP_* and repo PROBE_APP_*)
       - name: Resolve GitHub App credentials
@@ -88,21 +78,13 @@ jobs:
           APP_PRIVATE_KEY="${CALL_APP_PRIVATE_KEY:-}"
           APP_INSTALLATION_ID="${CALL_APP_INSTALLATION_ID:-}"
 
-          # Fallback to repo-level secrets if not supplied via workflow_call
-          if [ -z "${APP_ID}" ] && [ -n "${PROBE_APP_ID:-}" ]; then
-            APP_ID="${PROBE_APP_ID}"
-          fi
-          if [ -z "${APP_PRIVATE_KEY}" ] && [ -n "${PROBE_APP_PRIVATE_KEY:-}" ]; then
-            APP_PRIVATE_KEY="${PROBE_APP_PRIVATE_KEY}"
-          fi
-          if [ -z "${APP_INSTALLATION_ID}" ] && [ -n "${PROBE_APP_INSTALLATION_ID:-}" ]; then
-            APP_INSTALLATION_ID="${PROBE_APP_INSTALLATION_ID}"
-          fi
+          # Fallbacks for direct runs in this repo
+          if [ -z "${APP_ID}" ] && [ -n "${PROBE_APP_ID:-}" ]; then APP_ID="${PROBE_APP_ID}"; fi
+          if [ -z "${APP_PRIVATE_KEY}" ] && [ -n "${PROBE_APP_PRIVATE_KEY:-}" ]; then APP_PRIVATE_KEY="${PROBE_APP_PRIVATE_KEY}"; fi
+          if [ -z "${APP_INSTALLATION_ID}" ] && [ -n "${PROBE_APP_INSTALLATION_ID:-}" ]; then APP_INSTALLATION_ID="${PROBE_APP_INSTALLATION_ID}"; fi
 
           HAS_APP=false
-          if [ -n "${APP_ID}" ] && [ -n "${APP_PRIVATE_KEY}" ]; then
-            HAS_APP=true
-          fi
+          if [ -n "${APP_ID}" ] && [ -n "${APP_PRIVATE_KEY}" ]; then HAS_APP=true; fi
 
           echo "HAS_APP=${HAS_APP}" >> "$GITHUB_ENV"
           if [ "${HAS_APP}" = "true" ]; then
@@ -137,19 +119,14 @@ jobs:
         if: steps.check_command.outputs.release_valid == 'true'
         run: |
           set -euo pipefail
-
           TOKEN="${{ steps.app_token_id.outputs.token }}"
           if [ -z "$TOKEN" ]; then TOKEN="${{ steps.app_token_owner.outputs.token }}"; fi
           if [ -z "$TOKEN" ]; then TOKEN="${{ secrets.GITHUB_TOKEN }}"; fi
-
           echo "GITHUB_TOKEN=$TOKEN" >> "$GITHUB_ENV"
           echo "GH_TOKEN=$TOKEN" >> "$GITHUB_ENV"
-
-          # Ensure pushes/pulls use our chosen token (avoid checkout's extraheader)
           git config --local --unset-all http.https://github.com/.extraheader || true
           git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
           git remote -v
-        shell: bash
 
       - name: Configure git user
         if: steps.check_command.outputs.release_valid == 'true'
@@ -157,65 +134,75 @@ jobs:
           git config --global user.email "bot@tyk.io"
           git config --global user.name "Tyk Bot"
 
-      # 4) Find the *merge* (or squash) commit that landed on the base branch
-      #    We only shallow-fetch the base branch as needed to locate it.
-      - name: Find merge commit on base branch (shallow fetch)
+      # 4) REST: get PR info -> merge_commit_sha & base ref, then get commit info to detect parents,
+      #    and (if merge commit) get the first parent's date to drive --shallow-since.
+      - name: Resolve merge commit via REST (deterministic)
         id: pr_details
         if: steps.check_command.outputs.release_valid == 'true'
         env:
           GH_TOKEN: ${{ env.GH_TOKEN }}
-          BASE_FETCH_DEPTHS: ${{ env.BASE_FETCH_DEPTHS }}
         run: |
           set -euo pipefail
 
           PR_NUMBER='${{ steps.check_command.outputs.pr_number }}'
-          OWNER_REPO='${{ github.repository }}'
+          REPO_SLUG='${{ github.repository }}'
 
-          PR_JSON="$(gh api "repos/${OWNER_REPO}/pulls/${PR_NUMBER}")"
+          PR_JSON="$(gh api "repos/${REPO_SLUG}/pulls/${PR_NUMBER}")"
           PR_TITLE="$(jq -r '.title' <<<"$PR_JSON")"
           BASE_REF="$(jq -r '.base.ref' <<<"$PR_JSON")"
           MERGED="$(jq -r '.merged' <<<"$PR_JSON")"
           MERGE_SHA="$(jq -r '.merge_commit_sha // empty' <<<"$PR_JSON")"
 
           if [ "${MERGED}" != "true" ]; then
-            echo "PR #${PR_NUMBER} is not merged; cannot use merge commit." >&2
+            echo "PR #${PR_NUMBER} is not merged; this workflow expects a merged PR." >&2
             exit 1
           fi
 
-          # If GitHub provides merge_commit_sha (true merge), prefer it.
-          if [ -n "${MERGE_SHA}" ] && [ "${MERGE_SHA}" != "null" ]; then
-            # Make sure we have the commit object (shallow fetch base a bit so commit is reachable)
-            # Try a small depth first; we’ll deepen only if needed.
-            for D in 50 200 1000; do
-              git fetch --no-tags --filter=blob:none --depth="$D" origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
-              if git cat-file -e "${MERGE_SHA}^{commit}" 2>/dev/null; then
-                break
-              fi
-            done
-          else
-            # Squash merge: find the commit on base with "(#<PR_NUMBER>)" in the message
-            MERGE_SHA=""
-            for D in ${BASE_FETCH_DEPTHS}; do
-              git fetch --no-tags --filter=blob:none --depth="$D" origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
-              MERGE_SHA="$(git log "origin/${BASE_REF}" --grep="(#${PR_NUMBER})" -n 1 --pretty=format:%H || true)"
-              if [ -n "${MERGE_SHA}" ]; then
-                break
-              fi
-            done
-            if [ -z "${MERGE_SHA}" ]; then
-              echo "Could not locate the squash commit for PR #${PR_NUMBER} on ${BASE_REF} within depth(s): ${BASE_FETCH_DEPTHS}" >&2
-              exit 1
-            fi
+          if [ -z "${MERGE_SHA}" ] || [ "${MERGE_SHA}" = "null" ]; then
+            echo "PR #${PR_NUMBER} was likely 'rebase & merge' (no single merge commit to cherry-pick)." >&2
+            echo "Please cherry-pick the desired range manually." >&2
+            exit 1
+          fi
+
+          MERGE_JSON="$(gh api "repos/${REPO_SLUG}/commits/${MERGE_SHA}")"
+          PARENTS_COUNT="$(jq -r '.parents | length' <<<"$MERGE_JSON")"
+
+          # Default: for squash merges (single-parent), we only need the merge commit itself.
+          SHALLOW_SINCE="$(jq -r '.commit.committer.date // .commit.author.date' <<<"$MERGE_JSON")"
+          PARENT_SHA=""
+          if [ "${PARENTS_COUNT}" -gt 1 ]; then
+            PARENT_SHA="$(jq -r '.parents[0].sha' <<<"$MERGE_JSON")"
+            PARENT_JSON="$(gh api "repos/${REPO_SLUG}/commits/${PARENT_SHA}")"
+            SHALLOW_SINCE="$(jq -r '.commit.committer.date // .commit.author.date' <<<"$PARENT_JSON")"
           fi
 
           {
-            echo "COMMIT_SHA=${MERGE_SHA}"
             echo "PR_TITLE=${PR_TITLE}"
             echo "BASE_REF=${BASE_REF}"
+            echo "MERGE_SHA=${MERGE_SHA}"
+            echo "PARENTS_COUNT=${PARENTS_COUNT}"
+            echo "PARENT_SHA=${PARENT_SHA}"
+            echo "SHALLOW_SINCE=${SHALLOW_SINCE}"
           } >> "$GITHUB_OUTPUT"
 
-      # 5) Shallow-fetch ONLY the target release branch and cherry-pick there
-      - name: Cherry-pick merge commit to target release (shallow)
+      # 5) Fetch precisely what we need: base since parent date (or merge date for squash), and target tip
+      - name: Deterministic shallow fetch (base & target only)
+        if: steps.check_command.outputs.release_valid == 'true'
+        env:
+          BASE_REF: ${{ steps.pr_details.outputs.BASE_REF }}
+          SHALLOW_SINCE: ${{ steps.pr_details.outputs.SHALLOW_SINCE }}
+          TARGET_BRANCH: ${{ steps.check_command.outputs.release_branch }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --filter=blob:none \
+            --shallow-since="${SHALLOW_SINCE}" \
+            origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+
+          git fetch --no-tags --filter=blob:none --depth=1 \
+            origin "+refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}"
+
+      # 6) Cherry-pick the merge (or squash) commit onto the target and open a PR
+      - name: Cherry-pick merge commit to target release
         id: cherry_pick
         if: steps.check_command.outputs.release_valid == 'true'
         env:
@@ -223,55 +210,30 @@ jobs:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
           GITHUB_BRANCH: ${{ steps.check_command.outputs.release_branch }}
-          GITHUB_CHERRY_PICK_COMMIT: ${{ steps.pr_details.outputs.COMMIT_SHA }}
+          GITHUB_CHERRY_PICK_COMMIT: ${{ steps.pr_details.outputs.MERGE_SHA }}
           PR_TITLE: ${{ steps.pr_details.outputs.PR_TITLE }}
-          BASE_REF: ${{ steps.pr_details.outputs.BASE_REF }}
-          TARGET_FETCH_DEPTH: ${{ env.TARGET_FETCH_DEPTH }}
+          PARENTS_COUNT: ${{ steps.pr_details.outputs.PARENTS_COUNT }}
         run: |
           set -euo pipefail
 
-          # Shallow fetch only the needed branches
-          git fetch --no-tags --filter=blob:none --depth="${TARGET_FETCH_DEPTH}" origin "+refs/heads/${GITHUB_BRANCH}:refs/remotes/origin/${GITHUB_BRANCH}" || {
-            echo "Target branch '${GITHUB_BRANCH}' not found on remote." >&2
-            exit 1
-          }
-
-          # Base branch already fetched in previous step as needed; ensure it exists locally (shallow)
-          git fetch --no-tags --filter=blob:none --depth=10 origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}" || true
-
-          # Ensure we have the cherry-pick commit object (should be reachable after base fetch above)
-          if ! git cat-file -e "${GITHUB_CHERRY_PICK_COMMIT}^{commit}" 2>/dev/null; then
-            # Attempt to fetch the specific commit by deepening base; this stays narrow
-            git fetch --no-tags --filter=blob:none origin "${GITHUB_CHERRY_PICK_COMMIT}" || true
-          fi
-
-          # Work on the target branch (shallow)
           git checkout -B "${GITHUB_BRANCH}" "origin/${GITHUB_BRANCH}"
 
-          # Create a consistent branch name (optionally include JIRA key)
           JIRA_ID="$(echo "${PR_TITLE}" | grep -oE '[A-Z]{1,10}-[0-9]{1,10}' | head -n 1 || true)"
           BRANCH_NAME="merge/${GITHUB_BRANCH}/${GITHUB_CHERRY_PICK_COMMIT}"
           [ -n "${JIRA_ID}" ] && BRANCH_NAME="${BRANCH_NAME}/${JIRA_ID}"
 
-          # Clean any stale branches locally/remotely
           git branch -D "${BRANCH_NAME}" 2>/dev/null || true
           git push origin --delete "${BRANCH_NAME}" 2>/dev/null || true
 
-          # Create working branch from target
           git switch -c "${BRANCH_NAME}"
 
-          # Is it a merge commit (has >1 parent)?
-          PARENTS_LINE="$(git rev-list --parents -n 1 "${GITHUB_CHERRY_PICK_COMMIT}")"
-          WORDS_COUNT="$(wc -w <<<"${PARENTS_LINE}")"
-
           MERGE_FAILED=0
-          if [ "${WORDS_COUNT}" -gt 2 ]; then
+          if [ "${PARENTS_COUNT}" -gt 1 ]; then
             git cherry-pick -x -m 1 "${GITHUB_CHERRY_PICK_COMMIT}" || MERGE_FAILED=$?
           else
             git cherry-pick -x "${GITHUB_CHERRY_PICK_COMMIT}" || MERGE_FAILED=$?
           fi
 
-          # If conflicts happened, try to continue so we still open a (draft) PR
           if [ "${MERGE_FAILED}" -ne 0 ]; then
             git add -A || true
             git -c core.editor=true cherry-pick --continue --no-edit || true
@@ -280,13 +242,9 @@ jobs:
           git push origin "${BRANCH_NAME}" --force
 
           MESSAGE="$(git show -s --format=%B "${GITHUB_CHERRY_PICK_COMMIT}" || echo "")"
-          if [ -z "${MESSAGE}" ]; then
-            # fallback title if commit message not locally available for some reason
-            MESSAGE="Cherry-pick ${GITHUB_CHERRY_PICK_COMMIT} to ${GITHUB_BRANCH}"
-          fi
+          [ -z "${MESSAGE}" ] && MESSAGE="Cherry-pick ${GITHUB_CHERRY_PICK_COMMIT} to ${GITHUB_BRANCH}"
           TITLE="$(echo "${MESSAGE}" | head -n 1)"
 
-          # Reuse PR if it already exists
           PR_URL="$(gh pr view --repo "${GITHUB_REPO}" --head "${BRANCH_NAME}" --json url -q .url 2>/dev/null || true)"
           if [ -z "${PR_URL}" ]; then
             if [ "${MERGE_FAILED}" -ne 0 ]; then
@@ -312,7 +270,7 @@ jobs:
             echo "BRANCH_NAME=${BRANCH_NAME}"
           } >> "$GITHUB_OUTPUT"
 
-      # 6) Comment back on the original PR with the result (uses selected token)
+      # 7) Comment back on the original PR
       - name: Comment back on original PR
         if: always() && steps.check_command.outputs.release_valid == 'true'
         uses: actions/github-script@v6
