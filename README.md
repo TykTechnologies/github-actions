@@ -318,6 +318,8 @@ It has three available scanners.
 
 By default, all three are enabled, but it could be controlled by setting the flags appropriately
 while calling the workflow.
+Also, keep in mind that the secret scanner runs only on pull request events, as the scanner only supports
+publishing results on pull requsts.
 
 Example usage:
 
