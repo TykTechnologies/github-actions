@@ -1,0 +1,92 @@
+name: SentinelOne CNS Scan
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: 'The tag configured for the scan policy in S1 Console'
+        default: "scan:tykchecks"
+        type: string
+      scope_type:
+        description: 'The scope in which the scan policy is configured'
+        default: "ACCOUNT"
+        type: string
+      iac_enabled:
+        description: 'Whether Iac scanning should be enabled'
+        default: true
+        type: boolean
+      secrets_enabled:
+        description: 'Whether secrets scanning should be enabled(It will run only on a pull_request event)'
+        default: true
+        type: boolean
+      vuln_enabled:
+        description: 'Whether vulnerability scannin should be enabled'
+        default: true
+        type: boolean
+    secrets:
+      S1_API_TOKEN:
+        description: 'S1 API Token configured for scanning'
+        required: true
+      CONSOLE_URL:
+        description: 'S1 Management consoloe URL'
+        required: true
+      SCOPE_ID:
+        description: 'Scope ID from S1 console'
+        required: true
+
+jobs:
+  s1-shift-left-cli:
+    runs-on: ubuntu-latest
+    container:
+      # latest version v0.5.4 - update digest after checking the image when
+      # new version comes out.
+      image: pingsafe/s1-shift-left-cli@sha256:acd49cfd5ad72d488daf4e2418bd56891fbdef4d5da4729ccdafd6b9bbc5c8ad
+      options: --entrypoint ""
+    permissions:
+      contents: read
+    env:
+      REPO_FULL_NAME: ${{ github.repository }}
+      REPO_URL: ${{ github.server_url }}
+
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+          filter: tree:0
+          fetch-depth: 0
+
+      - name: Configure SentinelOne Shift Left CLI
+        run: s1-cns-cli config --service-user-api-token "$S1_TOKEN" --management-console-url "$CONSOLE_URL" --scope-type "$SCOPE_TYPE" --scope-id "$SCOPE_ID" --tag "$TAG"
+        env:
+          S1_TOKEN: ${{ secrets.S1_API_TOKEN  }}
+          CONSOLE_URL: ${{ secrets.CONSOLE_URL }}
+          SCOPE_TYPE: ${{ inputs.scope_type }}
+          SCOPE_ID: ${{ secrets.SCOPE_ID }}
+          TAG: ${{ inputs.tag }}
+
+
+      - name: Configure git config
+        run: git config --global --add safe.directory "$PWD"
+
+      - name: Run Secret Detector
+        # Run only on pull requests as we've scans configured to run on pull requests and publish is
+        # only available on pull requests.
+        if: github.event_name  == 'pull_request' && inputs.secrets_enabled
+        id: secret-detector
+        run: s1-cns-cli scan secret -d "$PWD" --pull-request "$SRC" "$DEST" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --provider GITHUB --publish-result
+        env:
+          DEST: ${{ github.event.pull_request.base.sha }}
+          SRC: ${{ github.event.pull_request.head.sha }}
+
+      - name: Run IaC Scanner
+        if: inputs.iac_enabled
+        run: s1-cns-cli scan iac -d "$PWD" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --branch "$BRANCH" --provider GITHUB --publish-result
+        id: iac-scanner
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+
+      - name: Run Vulnerability Scanner
+        if: inputs.vuln_enabled
+        id: vuln-scanner
+        run: s1-cns-cli scan vuln --repo-full-name "$REPO_FULL_NAME" -d "$PWD"
