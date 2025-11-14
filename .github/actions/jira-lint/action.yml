@@ -1,0 +1,61 @@
+name: 'Reliable Jira Issue Validation'
+description: 'Validates GitHub PR elements against Jira issue IDs with reliable state checking and comment management'
+
+inputs:
+  github-token:
+    description: 'GitHub token for API access'
+    required: true
+  jira-token:
+    description: 'Base64 encoded Jira token (username:api_token)'
+    required: true
+  jira-base-url:
+    description: 'Jira base URL (e.g., https://your-domain.atlassian.net)'
+    required: true
+  skip-branches:
+    description: 'Regex pattern for branches to skip validation'
+    required: false
+    default: ''
+  skip-comments:
+    description: 'Skip adding lint comments for PR title'
+    required: false
+    default: 'false'
+  validate_issue_status:
+    description: 'Validate Jira issue status'
+    required: false
+    default: 'false'
+
+outputs:
+  validation-report:
+    description: 'The validation report markdown'
+    value: ${{ steps.validate.outputs.report }}
+  validation-status:
+    description: 'The validation status (success/failure)'
+    value: ${{ steps.validate.outputs.status }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Install jira-lint
+      shell: bash
+      run: |
+        go install github.com/TykTechnologies/exp/cmd/jira-lint@main
+    
+    - name: Run Jira Validation
+      id: validate
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}
+        go run main.go
+      env:
+        GITHUB_EVENT_PATH: ${{ github.event_path }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_JIRA_TOKEN: ${{ inputs.jira-token }}
+        INPUT_JIRA_BASE_URL: ${{ inputs.jira-base-url }}
+        INPUT_SKIP_BRANCHES: ${{ inputs.skip-branches }}
+        INPUT_SKIP_COMMENTS: ${{ inputs.skip-comments }}
+        INPUT_VALIDATE_ISSUE_STATUS: ${{ inputs.validate_issue_status }}
