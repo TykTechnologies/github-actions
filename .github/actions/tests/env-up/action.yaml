@@ -17,6 +17,10 @@ inputs:
   TYK_MDCB_LICENSE:
     description: 'Tyk MDCB license key'
     required: true
+  dashboard_image:
+    description: 'Override dashboard image (optional). If not provided, uses gromit policy matching.'
+    required: false
+    default: ''
 outputs:
   USER_API_SECRET:
     description: 'User API secret for the test'
@@ -38,6 +42,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         TYK_DB_LICENSEKEY: ${{ inputs.TYK_DB_LICENSEKEY }}
         TYK_MDCB_LICENSE: ${{ inputs.TYK_MDCB_LICENSE }}
+        DASHBOARD_IMAGE: ${{ inputs.dashboard_image }}
       run: |
         match_tag=$ECR/$REPO_NAME:$BASE_REF
         
@@ -75,6 +80,13 @@ runs:
         
         set -eaxo pipefail
         docker run -q --rm -v ~/.docker/config.json:/root/.docker/config.json tykio/gromit policy match ${non_sha_tag} ${match_tag} 2>versions.env
+
+        # Override dashboard image if provided
+        if [ -n "$DASHBOARD_IMAGE" ]; then
+          echo "🔧 Overriding dashboard image with: $DASHBOARD_IMAGE"
+          echo "tyk_analytics_image=$DASHBOARD_IMAGE" >> versions.env
+        fi
+
         echo '# alfa and beta have to come after the override
         tyk_image="$ECR/tyk-ee"
         tyk_alfa_image=$tyk_image
