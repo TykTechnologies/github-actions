@@ -94,7 +94,6 @@ jobs:
       - name: Run Vulnerability Scanner
         if: inputs.vuln_enabled
         id: vuln-scanner
-        run: s1-cns-cli scan vuln --repo-full-name "$REPO_FULL_NAME" ${{ inputs.skip_paths != '' && '--skip-paths "$SKIP_PATHS"' || '' }} -d "$PWD"
+        run: s1-cns-cli scan vuln --debug --repo-full-name "$REPO_FULL_NAME" ${{ inputs.skip_paths != '' && '--skip-paths "$SKIP_PATHS"' || '' }} -d "$PWD"
         env:
-          GODEBUG: http2debug=1
           SKIP_PATHS: ${{ inputs.skip_paths }}
