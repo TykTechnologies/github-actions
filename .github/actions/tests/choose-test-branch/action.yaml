@@ -27,7 +27,12 @@ runs:
       shell: bash
       run: |
         echo "Checking out proper branch..."
-        if [[ ${{ github.event_name }} == "pull_request" ]]; then
+        # First check if a specific branch was provided as input
+        if [[ -n "${{ inputs.branch }}" ]]; then
+          echo "Input branch provided: ${{ inputs.branch }}. Checking out..."
+          git checkout "${{ inputs.branch }}"
+        # If no specific branch was provided, determine branch based on event type
+        elif [[ ${{ github.event_name }} == "pull_request" ]]; then
           PR_BRANCH=${{ github.event.pull_request.head.ref }}
           TARGET_BRANCH=${{ github.event.pull_request.base.ref }}
           echo "Looking for PR_BRANCH:$PR_BRANCH or TARGET_BRANCH:$TARGET_BRANCH..."
@@ -38,8 +43,7 @@ runs:
             echo "Target branch $TARGET_BRANCH exists. Checking out..."
             git checkout "$TARGET_BRANCH"
           fi
-        fi
-        if [[ ${{ github.event_name }} == "push" ]]; then
+        elif [[ ${{ github.event_name }} == "push" ]]; then
           # Check if this is a tag push
           if [[ "${{ github.ref }}" == refs/tags/* ]] || [[ "${{ github.ref }}" =~ ^refs/tags/ ]]; then
             TAG_NAME=${{ github.ref_name }}
@@ -60,9 +64,5 @@ runs:
               git checkout "$PUSH_BRANCH"
             fi
           fi
-        fi
-        if [[ -n "${{ inputs.branch }}" ]]; then
-          echo "Checking out branch ${{ inputs.branch }}..."
-          git checkout "${{ inputs.branch }}"
         fi
         echo "Current commit: $(git rev-parse HEAD)"
