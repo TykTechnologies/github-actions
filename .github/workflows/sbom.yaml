@@ -25,6 +25,7 @@ jobs:
       ci: ${{ steps.changes.outputs.ci }}
       docker: ${{ steps.changes.outputs.docker }}
       github: ${{ steps.changes.outputs.github }}
+    if: false
     steps:
       # Make sure we have some code to diff.
       - name: Checkout repository
@@ -61,7 +62,7 @@ jobs:
       id-token: write   # This is required for requesting the JWT
       contents: read    # This is required for actions/checkout
     needs: changedfiles
-    if: contains(github.ref, 'release-') || contains(github.ref, 'master') || contains(github.base_ref, 'release-') || contains(github.base_ref, 'master') || needs.changedfiles.outputs.go || needs.changedfiles.outputs.npm || needs.changedfiles.outputs.ci || needs.changedfiles.outputs.docker || needs.changedfiles.outputs.github
+    if: false && (contains(github.ref, 'release-') || contains(github.ref, 'master') || contains(github.base_ref, 'release-') || contains(github.base_ref, 'master') || needs.changedfiles.outputs.go || needs.changedfiles.outputs.npm || needs.changedfiles.outputs.ci || needs.changedfiles.outputs.docker || needs.changedfiles.outputs.github)
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
