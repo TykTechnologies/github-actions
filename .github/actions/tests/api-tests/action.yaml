@@ -42,5 +42,7 @@ runs:
           TYK_TEST_FEDERATION_HOST=federation
           TYK_TEST_GRAPHQL_FAKER_HOST=graphql-faker
           GATEWAY_CONTAINER_NAME=tyk
+          TYK_TEST_KEYCLOAK_URL=http://localhost:8180
+          TYK_TEST_KEYCLOAK_INTERNAL_URL=http://keycloak:8080
           EOF
           env $(cat pytest.env | xargs) $pytest -m "${{ inputs.api_markers }}"
