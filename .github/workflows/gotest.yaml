@@ -46,7 +46,7 @@ jobs:
           
     - name: Set up test tooling
       run: |
-        go install gotest.tools/gotestsum@latest
+        go install gotest.tools/gotestsum@v1.11.0
        
     - name: Go Test
       id: test

@@ -38,36 +38,6 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-      - name: Download template
-        run: |
-          curl 'https://raw.githubusercontent.com/TykTechnologies/github-actions/main/.github/workflows/.golangci.tmpl.yaml' -o .golangci.yaml
-      - name: Render template
-        id: render_template
-        uses: chuhlomin/render-template@v1.7
-        with:
-          template: .golangci.yaml
-          result_path: .golangci.yaml
-          vars: |
-            main_branch: ${{ inputs.main_branch }}
-            goimports: ''
-            build_tags: []
-            skip_dirs: []
-            go_version: ${{ inputs.go }}
-      - name: Apply template
-        run: |
-          cp .golangci.yaml /tmp/.golangci.yaml
-          if [[ `git status --porcelain` ]]; then
-            export ref=$(git rev-parse HEAD)
-            git checkout ${{ inputs.main_branch }}
-            git pull --rebase
-            git config --global user.name 'Bender'
-            git config --global user.email 'bender@users.noreply.github.com'
-            git add -A
-            git commit -a -m 'Update Golangci config'
-            git push origin ${{ inputs.main_branch }}
-            git checkout $ref
-          fi
-          cp /tmp/.golangci.yaml .golangci.yaml
       - uses: actions/setup-go@v3
         with:
           go-version: ${{ inputs.go }}
