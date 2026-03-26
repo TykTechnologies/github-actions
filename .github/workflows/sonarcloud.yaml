@@ -33,7 +33,7 @@ jobs:
             -Dsonar.organization=tyktechnologies
             -Dsonar.projectKey=TykTechnologies_${{ github.event.repository.name }}
             -Dsonar.sources=.
-            -Dsonar.exclusions=${{ github.event.inputs.exclusions }}
+            -Dsonar.exclusions=${{ inputs.exclusions }}
             -Dsonar.coverage.exclusions=**/*_test.go
             -Dsonar.test.inclusions=**/*_test.go
             -Dsonar.tests=.
