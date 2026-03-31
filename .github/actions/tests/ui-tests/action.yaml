@@ -14,7 +14,7 @@ runs:
   using: "composite"
   steps:
     - name: Install Node.js 18.16
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
       with:
         node-version: "18.16"
         cache-dependency-path: tyk-analytics/tests/ui

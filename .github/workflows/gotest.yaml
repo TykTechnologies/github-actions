@@ -19,25 +19,25 @@ jobs:
     name: Go Test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/setup-go@v3
+    - uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495  # v3
       with:
         go-version: ${{ inputs.go }}
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
     
     - name: Start Redis
       if: ${{ inputs.redis != '' }}
-      uses: supercharge/redis-github-action@1.2.0
+      uses: supercharge/redis-github-action@1f58ff85cf4f9ef3c036109c11acd8376b436b47  # 1.2.0
       with:
         redis-version: '${{ inputs.redis }}'
 
     - name: Start MongoDB
       if: ${{ inputs.mongo != '' }}
-      uses: supercharge/mongodb-github-action@1.2.0
+      uses: supercharge/mongodb-github-action@751e4ddb1f8de2717b75f275abce04735664ef46  # 1.2.0
       with:
         mongodb-version: '${{ inputs.mongo }}'    
         
     - name: Cache
-      uses: actions/cache@v3
+      uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c  # v3
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -67,18 +67,18 @@ jobs:
             gotestsum --junitfile ${coveragefile}.xml --raw-command go test ${OPTS} --json -timeout 15m -coverprofile=${coveragefile}.cov ${pkg} ${tags}
         done
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
       with:
         name: coverage
         path: "*cov"
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
       if: ${{ always() }}
       with:
         name: junit
         path: "*xml"
     - name: Github report view
       if: ${{ always() }}
-      uses: phoenix-actions/test-reporting@v8
+      uses: phoenix-actions/test-reporting@1e9b578818d03d6df50ce8e60d024a000bf3ab63  # v8
       with:
         name: Unit Test Results
         path: "*.xml"

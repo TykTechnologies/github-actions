@@ -26,12 +26,12 @@ jobs:
           git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
 
       - name: Checkout repo
-        uses: TykTechnologies/github-actions/.github/actions/checkout-pr@main
+        uses: TykTechnologies/github-actions/.github/actions/checkout-pr@75796ad54ffce9f0036f036414f8c9fb3dc5c0e0  # main
         with:
           token: ${{ secrets.ORG_GH_TOKEN }}
 
       - name: Checkout exp
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744  # v3
         with:
           fetch-depth: 1
           repository: TykTechnologies/exp
@@ -39,12 +39,12 @@ jobs:
           path: exp
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@7b8cf10d4e4a01d4992d18a89f4d7dc5a3e6d6f4  # v4
         with:
           go-version: ${{ inputs.go-version }}
 
       - name: Install Task
-        uses: arduino/setup-task@v1
+        uses: arduino/setup-task@e26d8975574116b0097a1161e0fe16ba75d84c1c  # v1
         with:
           version: 3
 
@@ -77,7 +77,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Find Comment
-        uses: peter-evans/find-comment@v2
+        uses: peter-evans/find-comment@a54c31d7fa095754bfef525c0c8e5e5674c4b4b1  # v2
         id: fc
         with:
           issue-number: ${{ github.event.pull_request.number }}
@@ -85,7 +85,7 @@ jobs:
           body-includes: API Changes
 
       - name: Create or update comment
-        uses: peter-evans/create-or-update-comment@v3
+        uses: peter-evans/create-or-update-comment@23ff15729ef2fc348714a3bb66d2f655ca9066f2  # v3
         with:
           comment-id: ${{ steps.fc.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}

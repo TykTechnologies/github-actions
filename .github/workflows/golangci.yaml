@@ -15,13 +15,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Git - checkout master
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744  # v3
         with:
           ref: ${{ inputs.main_branch }}
           fetch-depth: 1
       - name: Git - checkout current ref
-        uses: actions/checkout@v3
-      - uses: actions/cache@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744  # v3
+      - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c  # v3
         with:
           # In order:
           # * Module download cache
@@ -43,7 +43,7 @@ jobs:
           curl 'https://raw.githubusercontent.com/TykTechnologies/github-actions/main/.github/workflows/.golangci.tmpl.yaml' -o .golangci.yaml
       - name: Render template
         id: render_template
-        uses: chuhlomin/render-template@v1.7
+        uses: chuhlomin/render-template@b5c1c085165d9eb712cf4f2b56f89f11146ad017  # v1.7
         with:
           template: .golangci.yaml
           result_path: .golangci.yaml
@@ -68,7 +68,7 @@ jobs:
             git checkout $ref
           fi
           cp /tmp/.golangci.yaml .golangci.yaml
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495  # v3
         with:
           go-version: ${{ inputs.go }}
       - name: Fetch modules
@@ -86,13 +86,13 @@ jobs:
         run: |
           $(go env GOPATH)/bin/golangci-lint run --verbose --out-format 'checkstyle:golangci_lint.xml' --timeout=300s --new=false --new-from-rev= ./...
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         if: ${{ always() }}
         with:
           name: golangci-report
           path: "*xml"
           
-      - uses: reviewdog/action-setup@v1
+      - uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f  # v1
         if: ${{ always() }}
         with:
           reviewdog_version: latest # Optional. [latest,nightly,v.X.Y.Z]
