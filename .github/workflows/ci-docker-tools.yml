@@ -45,15 +45,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
-      - uses: docker/setup-buildx-action@v2
-      - uses: docker/login-action@v2
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744  # v3
+      - uses: docker/setup-buildx-action@885d1462b80bc1c1c7f0b00334ad271f09369c55  # v2
+      - uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc  # v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: 'Build tykio/ci-tools:${{ matrix.tag }}'
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@0a97817b6ade9f46837855d676c4cca3a2471fc9  # v4
         with:
           push: ${{ github.ref_name == 'main' || github.event_name == 'workflow_dispatch' }}
           pull: true
@@ -65,7 +65,7 @@ jobs:
       - run: docker image ls
 
       - name: 'Extract tykio/ci-tools:${{ matrix.tag }}'
-        uses: shrink/actions-docker-extract@v3
+        uses: shrink/actions-docker-extract@04c17c51a5b9fd93b7aed2e05e86c8fe2d90ee52  # v3
         with:
           image: tykio/ci-tools:${{ matrix.tag }}
           path: /usr/local/bin/.

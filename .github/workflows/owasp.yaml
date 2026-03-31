@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: OWASP Zap
-        uses: zaproxy/action-full-scan@v0.4.0
+        uses: zaproxy/action-full-scan@6eade0f93b10fad8cfb4e63b979703a2cbd0cc98  # v0.4.0
         with:
           target: ${{ inputs.target }}
           cmd_options: '-a'
