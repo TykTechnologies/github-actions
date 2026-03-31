@@ -1,0 +1,63 @@
+name: Dependency Change Guard
+
+on:
+  workflow_call:
+    inputs:
+      label_name:
+        description: 'Label name that bypasses the guard'
+        default: 'deps-reviewed'
+        type: string
+      extra_paths:
+        description: 'Additional paths to monitor (space-separated)'
+        default: ''
+        type: string
+
+jobs:
+  dependency-guard:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for dependency changes
+        if: ${{ !contains(github.event.pull_request.labels.*.name, inputs.label_name) }}
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          git fetch origin "$BASE_REF" --depth=1
+
+          # Default monitored paths
+          PATHS=(
+            go.mod go.sum vendor/
+            package.json package-lock.json yarn.lock pnpm-lock.yaml node_modules/
+            '**/requirements*.txt' '**/Pipfile' '**/Pipfile.lock'
+            '**/pyproject.toml' '**/poetry.lock' '**/setup.py' '**/setup.cfg'
+          )
+
+          # Add extra paths if provided
+          if [ -n "$EXTRA_PATHS" ]; then
+            for p in $EXTRA_PATHS; do
+              PATHS+=("$p")
+            done
+          fi
+
+          CHANGED=$(git diff --name-only "origin/$BASE_REF"...HEAD -- "${PATHS[@]}")
+
+          if [ -n "$CHANGED" ]; then
+            echo "::error::Dependency files changed in this PR. A reviewer must verify the changes and add the '${{ inputs.label_name }}' label to unblock CI."
+            echo ""
+            echo "Changed dependency files:"
+            echo "$CHANGED"
+            echo ""
+            echo "To unblock: add the '${{ inputs.label_name }}' label after reviewing the dependency changes."
+            exit 1
+          fi
+
+          echo "No dependency file changes detected."
+        env:
+          EXTRA_PATHS: ${{ inputs.extra_paths }}
