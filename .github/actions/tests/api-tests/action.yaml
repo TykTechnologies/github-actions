@@ -26,7 +26,7 @@ runs:
         API_MARKERS: ${{ inputs.api_markers }}
       run: |
           pytest="pytest --ci --random-order --force-flaky --no-success-flaky-report --maxfail=3 --junitxml=${XUNIT_REPORT_PATH} --cache-clear --ignore=./tests/mdcb -v --log-cli-level=ERROR"
-          pip install -r requirements.txt
+          pip install --no-deps -r requirements.txt
           cat >pytest.env <<-EOF
           TYK_TEST_BASE_URL=http://localhost:3000/
           TYK_TEST_GW_URL=https://localhost:8080/

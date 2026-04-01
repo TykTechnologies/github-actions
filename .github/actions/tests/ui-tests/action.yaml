@@ -29,6 +29,6 @@ runs:
         UI_MARKERS: ${{ inputs.ui_markers && format('--grep {0}', inputs.ui_markers ) || '' }}
         TYK_TEST_DB_TYPE: ${{ inputs.db_type }}
       run: |
-        npm ci
+        npm ci --ignore-scripts
         npx playwright install --with-deps chromium
         PLAYWRIGHT_JUNIT_OUTPUT_NAME=${XUNIT_REPORT_PATH} npx playwright test --project=chromium --reporter=junit,html $UI_MARKERS

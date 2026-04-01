@@ -101,7 +101,7 @@ jobs:
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          go install golang.org/x/tools/cmd/goimports@latest
+          go install golang.org/x/tools/cmd/goimports@v0.43.0  # 24a8e95f9d7ae2696f66314da5e50c0d98ccaa90
           goimports -w .
           
           cat golangci_lint.xml | reviewdog -f=checkstyle -name="Linter" -reporter=github-pr-review

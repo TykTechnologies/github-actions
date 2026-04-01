@@ -31,10 +31,10 @@ jobs:
 
       - name: Install dependencies
         working-directory: branch-suggestion
-        run: npm install
+        run: npm install --ignore-scripts
 
       - name: Install Visor
-        run: npm install -g @probelabs/visor
+        run: npm install -g @probelabs/visor@0.1.185 --ignore-scripts
 
       - name: Analyze PR and suggest branches
         working-directory: branch-suggestion
