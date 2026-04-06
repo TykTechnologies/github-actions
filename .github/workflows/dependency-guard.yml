@@ -26,7 +26,7 @@ jobs:
       - name: Check for dependency changes
         if: ${{ !contains(github.event.pull_request.labels.*.name, inputs.label_name) }}
         env:
-          BASE_REF: ${{ github.event.pull_request.base.ref || 'master' || 'main' }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.repository.default_branch }}
           EXTRA_PATHS: ${{ inputs.extra_paths }}
         run: |
           git fetch origin "$BASE_REF" --depth=1
