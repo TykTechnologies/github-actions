@@ -35,17 +35,30 @@ runs:
         TRIGGER: ${{ github.event_name }}
       run: |
         set -eo pipefail
-        URL="http://tui.internal.dev.tyk.technology/v2/$VARIATION/$REPO_NAME/$BASE_REF/$TRIGGER/$TEST_TYPE.gho"
-        FALLBACK_URL="http://tui.internal.dev.tyk.technology/v2/$VARIATION/$REPO_NAME/master/$TRIGGER/$TEST_TYPE.gho"
         
-        TMP_OUT=$(mktemp)
-        if curl -s --retry 5 --retry-delay 10 --fail "$URL" > "$TMP_OUT"; then
-          cat "$TMP_OUT" | tee -a "$GITHUB_OUTPUT"
-        else
-          echo "Failed to fetch configuration for branch $BASE_REF. Retrying with master branch as fallback..."
-          curl -s --retry 5 --retry-delay 10 --fail-with-body "$FALLBACK_URL" | tee -a "$GITHUB_OUTPUT"
+        URL="http://tui.internal.dev.tyk.technology/v2/$VARIATION/$REPO_NAME/$BASE_REF/$TRIGGER/$TEST_TYPE.gho"
+        
+        # Fetch the configuration and capture the HTTP status code
+        HTTP_CODE=$(curl -s -o response.txt -w "%{http_code}" --retry 5 --retry-delay 10 "$URL")
+        
+        # If 404, fallback to master branch
+        if [ "$HTTP_CODE" -eq 404 ]; then
+          echo "Configuration not found for base_ref '$BASE_REF'. Falling back to 'master' branch."
+          FALLBACK_URL="http://tui.internal.dev.tyk.technology/v2/$VARIATION/$REPO_NAME/master/$TRIGGER/$TEST_TYPE.gho"
+          HTTP_CODE=$(curl -s -o response.txt -w "%{http_code}" --retry 5 --retry-delay 10 "$FALLBACK_URL")
         fi
+        
+        # If still an error (>= 400), fail the step and output the body
+        if [ "$HTTP_CODE" -ge 400 ]; then
+          echo "Failed to fetch configuration: HTTP $HTTP_CODE"
+          cat response.txt
+          exit 1
+        fi
+        
+        # Write the successful response to GITHUB_OUTPUT
+        cat response.txt | tee -a "$GITHUB_OUTPUT"
+        
         if ! [[ $VARIATION =~ prod ]] ;then  
           echo "::warning file=.github/workflows/release.yml,line=24,col=1,endColumn=8::Using non-prod variation"
-          echo "### :warning: You are using VARIATION=${VARIATION} in test-controller-{{ .test }}" >> $GITHUB_STEP_SUMMARY
+          echo "### :warning: You are using VARIATION=${VARIATION} in test-controller-" >> $GITHUB_STEP_SUMMARY
         fi
