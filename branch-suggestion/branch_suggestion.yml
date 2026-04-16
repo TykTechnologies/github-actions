@@ -62,7 +62,8 @@ checks:
       # Match branches and generate suggestions
       MATCH_RESULT=$(node scripts/common/match-branches.js "$JIRA_RESULT" "$BRANCHES" "$REPO")
 
-      # Extract markdown and save for PR comment (use printf to avoid escape sequence issues)
+      # Save full result for downstream steps (use printf to avoid escape sequence issues)
+      printf '%s\n' "$MATCH_RESULT" > /tmp/branch_suggestion_result.json
       printf '%s\n' "$MATCH_RESULT" | jq -r '.markdown' > /tmp/branch_suggestion_markdown.txt
 
       # Output full result to stdout
@@ -96,3 +97,32 @@ checks:
 
       # Clean up
       rm -f /tmp/branch_suggestion_markdown.txt
+
+  # ============================================================================
+  # STEP 3: POST /release COMMANDS ON MERGED PR
+  # ============================================================================
+  # After a PR is merged to master/main, posts one "/release to <branch>"
+  # comment per required/recommended release branch so the backport bot
+  # picks them up automatically without developer intervention.
+  # Only runs with --tags auto-release (triggered by the merge workflow).
+  # ============================================================================
+  post-release-commands:
+    type: command
+    depends_on: [analyze-and-suggest]
+    tags: ["auto-release"]
+    timeout: 60
+    exec: |
+      set -e
+
+      REPO="${REPOSITORY:-TykTechnologies/tyk}"
+      PR_NUMBER="${PR_NUMBER:-123}"
+
+      if [ ! -f /tmp/branch_suggestion_result.json ]; then
+        echo "❌ Error: branch_suggestion_result.json not found. analyze-and-suggest step may have failed." >&2
+        exit 1
+      fi
+
+      node scripts/github/post-release-commands.js "$REPO" "$PR_NUMBER" --file /tmp/branch_suggestion_result.json
+
+      # Clean up
+      rm -f /tmp/branch_suggestion_result.json
