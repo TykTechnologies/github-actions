@@ -5,17 +5,27 @@ on:
     secrets:
       JIRA_TOKEN:
         required: true
-      ORG_GH_TOKEN:
+      PROBE_APP_ID:
+        required: true
+      PROBE_APP_PRIVATE_KEY:
         required: true
 
 jobs:
   jira-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: cyrus-za/jira-lint@68fe771c843a59c7c7020e6b98817897abecb44b  # master 
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        with:
+          app-id: ${{ secrets.PROBE_APP_ID }}
+          private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
+          owner: TykTechnologies
+
+      - uses: cyrus-za/jira-lint@68fe771c843a59c7c7020e6b98817897abecb44b  # master
         name: jira-lint
         with:
-          github-token: ${{ secrets.ORG_GH_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
           jira-token: ${{ secrets.JIRA_TOKEN }}
           jira-base-url: https://tyktech.atlassian.net/
           skip-branches: '^(release-[0-9.-]+(lts)?|master|main)$'
