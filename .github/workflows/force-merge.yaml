@@ -3,8 +3,11 @@ name: Force Merge PR (Reusable)
 on:
   workflow_call:
     secrets:
-      ADMIN_PAT:
-        description: 'Personal Access Token with repo scope from an admin'
+      PROBE_APP_ID:
+        description: 'GitHub App ID for generating tokens'
+        required: true
+      PROBE_APP_PRIVATE_KEY:
+        description: 'GitHub App private key for generating tokens'
         required: true
       SLACK_WEBHOOK_URL:
         description: 'Slack Webhook URL for notifications'
@@ -14,12 +17,20 @@ jobs:
   force_merge:
     runs-on: ubuntu-latest
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        with:
+          app-id: ${{ secrets.PROBE_APP_ID }}
+          private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
+          owner: TykTechnologies
+
       - name: Check and Merge Pull Request
         uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410  # v6
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         with:
-          github-token: ${{ secrets.ADMIN_PAT }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const comment = context.payload.comment;
             const issue = context.payload.issue;
