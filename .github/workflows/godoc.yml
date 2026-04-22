@@ -3,7 +3,9 @@ name: Print Go API changes
 on:
   workflow_call:
     secrets:
-      ORG_GH_TOKEN:
+      PROBE_APP_ID:
+        required: true
+      PROBE_APP_PRIVATE_KEY:
         required: true
     inputs:
       go-version:
@@ -19,16 +21,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        with:
+          app-id: ${{ secrets.PROBE_APP_ID }}
+          private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
+          owner: TykTechnologies
+
       - name: Use GitHub Token
         env:
-          TOKEN: ${{ secrets.ORG_GH_TOKEN }}
+          TOKEN: ${{ steps.app-token.outputs.token }}
         run: >
           git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
 
       - name: Checkout repo
         uses: TykTechnologies/github-actions/.github/actions/checkout-pr@75796ad54ffce9f0036f036414f8c9fb3dc5c0e0  # main
         with:
-          token: ${{ secrets.ORG_GH_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout exp
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744  # v3
