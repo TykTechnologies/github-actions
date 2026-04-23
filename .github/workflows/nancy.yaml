@@ -38,9 +38,9 @@ jobs:
         env:
           GITHUB_PAT: ${{ steps.app-token.outputs.token }}
         run: |
-          echo "https://$GITHUB_PAT:x-oauth-basic@github.com" >> ~/.git-credentials
+          echo "https://x-access-token:$GITHUB_PAT@github.com" >> ~/.git-credentials
           git config --global credential.helper store
-          git config --global url."https://$GITHUB_PAT:x-oauth-basic@github.com".insteadOf "https://github.com"
+          git config --global url."https://x-access-token:${GITHUB_PAT}@github.com/".insteadOf "https://github.com/"
       - name: Write Go List
         run: go list -json -m all > go.list
         working-directory: ./${{ inputs.dir }}
