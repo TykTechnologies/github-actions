@@ -1,0 +1,123 @@
+name: Path-Based OSV Scan
+
+on:
+  workflow_call:
+    inputs:
+      image_name:
+        required: true
+        type: string
+        description: "Identifier for the report (e.g., tykio/tyk-ui:path-based)"
+      scan_args:
+        required: false
+        type: string
+        default: "-r --format json --output osv-results.json ."
+        description: "Custom arguments for OSV-Scanner"
+    outputs:
+      check_run_url:
+        description: "The URL of the created GitHub Check Run"
+        value: ${{ jobs.scan.outputs.check_run_url }}
+      slack_summary:
+        description: "A pre-formatted severity summary for Slack"
+        value: ${{ jobs.scan.outputs.slack_summary }}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    outputs:
+      check_run_url: ${{ steps.report.outputs.url }}
+      slack_summary: ${{ steps.report.outputs.summary }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: System Cleanup
+        run: sudo rm -rf /usr/local/bin/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - name: Run OSV-Scanner
+        id: osv-scan
+        uses: google/osv-scanner-action/osv-scan@c51854704019a247608d928f370c98740469d4b5 # v2.3.5
+        with:
+          scan-args: ${{ inputs.scan_args }}
+        continue-on-error: true
+
+      - name: Generate CVE Report
+        id: report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ ! -f osv-results.json ]; then
+            echo "osv-results.json not found"
+            echo "summary=:warning: OSV-Scanner failed" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Count vulnerabilities by severity
+          CRITICAL=$(jq '[.results[].packages[]?.vulnerabilities[]? | select(.database_specific.severity == "CRITICAL")] | length' osv-results.json || echo 0)
+          HIGH=$(jq '[.results[].packages[]?.vulnerabilities[]? | select(.database_specific.severity == "HIGH")] | length' osv-results.json || echo 0)
+          MEDIUM=$(jq '[.results[].packages[]?.vulnerabilities[]? | select(.database_specific.severity == "MEDIUM")] | length' osv-results.json || echo 0)
+          LOW=$(jq '[.results[].packages[]?.vulnerabilities[]? | select(.database_specific.severity == "LOW")] | length' osv-results.json || echo 0)
+
+          # Helper function for report lines
+          generate_lines() {
+            local sev=$1
+            jq -r --arg sev "$sev" '
+              .results[]? | 
+              .packages[]? as $pkg | 
+              ($pkg.vulnerabilities // [])[]? |
+              select(.database_specific.severity == $sev) |
+              "- (\(.id)) (score: \(.database_specific.cvss.score // .database_specific.cvss3_score // 0), affects: \($pkg.package.name)@\($pkg.package.version), fixed: \([.affected[]?.ranges[]?.events[]?.fixed | select(. != null)] | unique | join(",") // "unknown")): \(.summary // .details | split("\n")[0] | sub("^[ ]+"; ""))"
+            ' osv-results.json | sort -u
+          }
+
+          {
+            echo "# CVE Report: ${{ inputs.image_name }}"
+            echo ""
+            echo "| Severity | Count |"
+            echo "|----------|-------|"
+            echo "| Critical | $CRITICAL |"
+            echo "| High     | $HIGH |"
+            echo "| Medium   | $MEDIUM |"
+            echo "| Low      | $LOW |"
+            echo ""
+            echo "## Critical CVEs"
+            generate_lines CRITICAL
+            echo ""
+            echo "## High CVEs"
+            generate_lines HIGH
+            echo ""
+            echo "## Medium CVEs"
+            generate_lines MEDIUM
+            echo ""
+            echo "## Low CVEs"
+            generate_lines LOW
+          } > report.md
+
+          # Create Check Run via GitHub API
+          CHECK_URL=$(jq -n \
+            --arg name "Scan Report - ${{ inputs.image_name }}" \
+            --arg sha "${{ github.sha }}" \
+            --arg title "CVE Scan results - ${{ inputs.image_name }}" \
+            --arg text "$(cat report.md)" \
+            '{
+              name: $name,
+              head_sha: $sha,
+              status: "completed",
+              conclusion: "neutral",
+              output: {title: $title, summary: "", text: $text}
+            }' | gh api repos/${{ github.repository }}/check-runs --input - --jq '.html_url')
+          
+          echo "url=$CHECK_URL" >> "$GITHUB_OUTPUT"
+
+          pad_count() {
+            printf '%2s' "$1" | sed 's/ / /g'
+          }
+
+          SUMMARY=":red_circle: Critical: $(pad_count "$CRITICAL")  :large_orange_circle: High: $(pad_count "$HIGH")  :large_yellow_circle: Medium: $(pad_count "$MEDIUM")  :white_circle: Low: $(pad_count "$LOW")  ${{ github.repository }} (path-based)"
+          echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: osv-results
+          path: osv-results.json
