@@ -112,7 +112,7 @@ jobs:
             printf '%2s' "$1" | sed 's/ / /g'
           }
 
-          SUMMARY=":red_circle: Critical: $(pad_count "$CRITICAL")  :large_orange_circle: High: $(pad_count "$HIGH")  :large_yellow_circle: Medium: $(pad_count "$MEDIUM")  :white_circle: Low: $(pad_count "$LOW")  ${{ github.repository }} (path-based)"
+          SUMMARY=":red_circle: Critical: $(pad_count "$CRITICAL")  :large_orange_circle: High: $(pad_count "$HIGH")  :large_yellow_circle: Medium: $(pad_count "$MEDIUM")  :white_circle: Low: $(pad_count "$LOW")  ${{ inputs.image_name }}"
           echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
 
       - name: Upload Artifacts
