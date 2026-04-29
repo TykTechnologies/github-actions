@@ -54,7 +54,7 @@ jobs:
           # Count vulnerabilities by severity
           CRITICAL=$(jq '[.results[].packages[]?.vulnerabilities[]? | select(.database_specific.severity == "CRITICAL")] | length' osv-results.json || echo 0)
           HIGH=$(jq '[.results[].packages[]?.vulnerabilities[]? | select(.database_specific.severity == "HIGH")] | length' osv-results.json || echo 0)
-          MEDIUM=$(jq '[.results[].packages[]?.vulnerabilities[]? | select(.database_specific.severity == "MEDIUM")] | length' osv-results.json || echo 0)
+          MEDIUM=$(jq '[.results[].packages[]?.vulnerabilities[]? | select(.database_specific.severity == "MODERATE")] | length' osv-results.json || echo 0)
           LOW=$(jq '[.results[].packages[]?.vulnerabilities[]? | select(.database_specific.severity == "LOW")] | length' osv-results.json || echo 0)
 
           # Helper function for report lines
@@ -63,9 +63,9 @@ jobs:
             jq -r --arg sev "$sev" '
               .results[]? | 
               .packages[]? as $pkg | 
-              ($pkg.vulnerabilities // [])[]? |
-              select(.database_specific.severity == $sev) |
-              "- (\(.id)) (score: \(.database_specific.cvss.score // .database_specific.cvss3_score // 0), affects: \($pkg.package.name)@\($pkg.package.version), fixed: \([.affected[]?.ranges[]?.events[]?.fixed | select(. != null)] | unique | join(",") // "unknown")): \(.summary // .details | split("\n")[0] | sub("^[ ]+"; ""))"
+              ($pkg.vulnerabilities // [])[]? as $vuln |
+              select($vuln.database_specific.severity == $sev) |
+              "- (" + (((($vuln.aliases // []) | map(select(startswith("CVE-")))[0])) // $vuln.id) + ") (score: " + (([$pkg.groups[] | select(.ids | contains([$vuln.id]))][0].max_severity // $vuln.database_specific.max_severity // $vuln.database_specific.cvss.score // $vuln.database_specific.cvss3_score // "0") | if . == "" then "0" else . end) + ", affects: \($pkg.package.name)@\($pkg.package.version), fixed: \([$vuln.affected[]?.ranges[]?.events[]?.fixed | select(. != null)] | unique | join(",") // "unknown")): \($vuln.summary // $vuln.details | split("\n")[0] | sub("^[ ]+"; ""))"
             ' osv-results.json | sort -u
           }
 
@@ -86,7 +86,7 @@ jobs:
             generate_lines HIGH
             echo ""
             echo "## Medium CVEs"
-            generate_lines MEDIUM
+            generate_lines MODERATE
             echo ""
             echo "## Low CVEs"
             generate_lines LOW
