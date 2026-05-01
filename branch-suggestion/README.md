@@ -19,7 +19,7 @@ Add this workflow to your repository to enable automatic branch suggestions:
 1. Copy `.github/workflows/example-usage.yml.template` to your repository as `.github/workflows/branch-suggestion.yml`
 
 2. Add required secrets to your repository (Settings → Secrets and variables → Actions):
-   - `JIRA_EMAIL`: JIRA account email
+   - `JIRA_USER_EMAIL`: JIRA account email
    - `JIRA_TOKEN`: JIRA API token (generate at https://id.atlassian.com/manage-profile/security/api-tokens)
 
 3. That's it! The workflow will automatically analyze PRs and post branch suggestions.
@@ -27,7 +27,7 @@ Add this workflow to your repository to enable automatic branch suggestions:
 ### Example Workflow Configuration
 
 2. Add required secrets to your repository (Settings → Secrets and variables → Actions):
-   - `JIRA_EMAIL`: JIRA account email
+   - `JIRA_USER_EMAIL`: JIRA account email
    - `JIRA_TOKEN`: JIRA API token (generate at https://id.atlassian.com/manage-profile/security/api-tokens)
 
 on:
@@ -42,7 +42,7 @@ jobs:
   branch-suggestions:
     uses: TykTechnologies/REFINE/.github/workflows/branch-suggestion.yml@main
     secrets:
-      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
       JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
 ```
 
@@ -101,7 +101,7 @@ npm install -g @probelabs/visor
 
 3. Set up environment variables:
 ```bash
-export JIRA_EMAIL="your-email@example.com"
+export JIRA_USER_EMAIL="your-email@example.com"
 export JIRA_TOKEN="your-jira-api-token"
 ```
 
@@ -190,14 +190,14 @@ node scripts/github/add-pr-comment.js \
 
 ```bash
 # Test with a real ticket
-env JIRA_EMAIL="your-email@example.com" \
+env JIRA_USER_EMAIL="your-email@example.com" \
     JIRA_TOKEN="your-token" \
     PR_TITLE="TT-12345" \
     REPOSITORY="TykTechnologies/tyk" \
     visor --config branch_suggestion.yml
 
 # Test with TIB ticket (different version format)
-env JIRA_EMAIL="your-email@example.com" \
+env JIRA_USER_EMAIL="your-email@example.com" \
     JIRA_TOKEN="your-token" \
     PR_TITLE="TT-5433" \
     REPOSITORY="TykTechnologies/tyk-identity-broker" \
@@ -270,7 +270,7 @@ BRANCH SUGGESTION ANALYSIS
 ### Environment Variables
 
 #### Required
-- `JIRA_EMAIL`: JIRA account email
+- `JIRA_USER_EMAIL`: JIRA account email
 - `JIRA_TOKEN`: JIRA API token
 
 #### Optional (for PR comment posting)
@@ -323,7 +323,7 @@ The tool automatically adapts to different branching strategies:
 **Symptom:** Error message about authentication
 
 **Solution:**
-1. Verify `JIRA_EMAIL` matches your JIRA account email
+1. Verify `JIRA_USER_EMAIL` matches your JIRA account email
 2. Generate a new API token at https://id.atlassian.com/manage-profile/security/api-tokens
 3. Ensure the token has not expired
 
