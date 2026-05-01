@@ -20,7 +20,7 @@ Add this workflow to your repository to enable automatic branch suggestions:
 
 2. Add required secrets to your repository (Settings → Secrets and variables → Actions):
    - `JIRA_EMAIL`: JIRA account email
-   - `JIRA_API_TOKEN`: JIRA API token (generate at https://id.atlassian.com/manage-profile/security/api-tokens)
+   - `JIRA_TOKEN`: JIRA API token (generate at https://id.atlassian.com/manage-profile/security/api-tokens)
 
 3. That's it! The workflow will automatically analyze PRs and post branch suggestions.
 
@@ -28,7 +28,7 @@ Add this workflow to your repository to enable automatic branch suggestions:
 
 2. Add required secrets to your repository (Settings → Secrets and variables → Actions):
    - `JIRA_EMAIL`: JIRA account email
-   - `JIRA_API_TOKEN`: JIRA API token (generate at https://id.atlassian.com/manage-profile/security/api-tokens)
+   - `JIRA_TOKEN`: JIRA API token (generate at https://id.atlassian.com/manage-profile/security/api-tokens)
 
 on:
   pull_request:
@@ -43,7 +43,7 @@ jobs:
     uses: TykTechnologies/REFINE/.github/workflows/branch-suggestion.yml@main
     secrets:
       JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
 ```
 
 ## How It Works
@@ -102,7 +102,7 @@ npm install -g @probelabs/visor
 3. Set up environment variables:
 ```bash
 export JIRA_EMAIL="your-email@example.com"
-export JIRA_API_TOKEN="your-jira-api-token"
+export JIRA_TOKEN="your-jira-api-token"
 ```
 Alternatively, Node.js 20 has built-in support for `.env` files. You can create a `.env` file and use the `--env-file=.env` CLI flag for local testing.
 
@@ -192,14 +192,14 @@ node scripts/github/add-pr-comment.js \
 ```bash
 # Test with a real ticket
 env JIRA_EMAIL="your-email@example.com" \
-    JIRA_API_TOKEN="your-token" \
+    JIRA_TOKEN="your-token" \
     PR_TITLE="TT-12345" \
     REPOSITORY="TykTechnologies/tyk" \
     visor --config branch_suggestion.yml
 
 # Test with TIB ticket (different version format)
 env JIRA_EMAIL="your-email@example.com" \
-    JIRA_API_TOKEN="your-token" \
+    JIRA_TOKEN="your-token" \
     PR_TITLE="TT-5433" \
     REPOSITORY="TykTechnologies/tyk-identity-broker" \
     visor --config branch_suggestion.yml
@@ -272,7 +272,7 @@ BRANCH SUGGESTION ANALYSIS
 
 #### Required
 - `JIRA_EMAIL`: JIRA account email
-- `JIRA_API_TOKEN`: JIRA API token
+- `JIRA_TOKEN`: JIRA API token
 
 #### Optional (for PR comment posting)
 - `GITHUB_TOKEN`: GitHub token (automatically provided in GitHub Actions)
