@@ -42,6 +42,7 @@ jobs:
       - name: Analyze PR and suggest branches
         working-directory: branch-suggestion
         env:
+          VISOR_WORKSPACE_ENABLED: "false"
           JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
