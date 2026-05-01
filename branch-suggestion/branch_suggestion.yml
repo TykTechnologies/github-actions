@@ -13,9 +13,9 @@ checks:
   # 2. Fetch fix versions from JIRA
   # 3. Fetch repository branches
   # 4. Match and suggest branches
-  # ============================================================================
   analyze-and-suggest:
     type: command
+    tags: ["remote"]
     timeout: 90
     exec: |
       set -e
