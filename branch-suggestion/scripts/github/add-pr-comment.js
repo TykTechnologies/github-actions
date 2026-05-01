@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import dotenv from 'dotenv';
 import fs from 'fs';
 import {
     getPullRequest,
@@ -7,10 +6,6 @@ import {
     updatePRComment,
     findCommentByMarker
 } from './github-api.js';
-
-// Silence dotenv v17+ logging
-process.env.DOTENV_LOG_LEVEL = 'error';
-dotenv.config();
 
 const COMMENT_MARKER = '<!-- branch-suggestions -->';
 

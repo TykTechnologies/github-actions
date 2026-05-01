@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 // Configuration
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;

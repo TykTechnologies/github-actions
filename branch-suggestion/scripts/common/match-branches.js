@@ -1,12 +1,4 @@
 #!/usr/bin/env node
-import dotenv from 'dotenv';
-
-// Only load .env if JIRA_TOKEN is not already set (to avoid log output in CI)
-// Silence dotenv v17+ logging
-if (!process.env.JIRA_TOKEN) {
-    process.env.DOTENV_LOG_LEVEL = 'error';
-    dotenv.config();
-}
 
 /**
  * Generate candidate branch names based on a parsed version

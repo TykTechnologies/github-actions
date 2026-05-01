@@ -1,13 +1,8 @@
 #!/usr/bin/env node
-import dotenv from 'dotenv';
 import { URL } from 'url';
 import readline from 'readline';
 
 // Only load .env if JIRA_TOKEN is not already set (to avoid log output in CI)
-if (!process.env.JIRA_TOKEN) {
-    dotenv.config();
-}
-
 // JIRA configuration
 const JIRA_BASE_URL = 'https://tyktech.atlassian.net';
 // We read JIRA_TOKEN dynamically inside jiraAPI to allow testing

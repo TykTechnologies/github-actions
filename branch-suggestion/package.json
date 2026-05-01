@@ -22,7 +22,6 @@
     "@anthropic-ai/sdk": "^0.60.0",
     "@modelcontextprotocol/sdk": "^1.17.4",
     "commander": "^14.0.0",
-    "dotenv": "^17.2.1",
     "mcp-remote": "^0.1.18",
     "turndown": "^7.2.1"
   },
