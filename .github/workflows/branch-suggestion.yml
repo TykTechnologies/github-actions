@@ -7,7 +7,10 @@ on:
     secrets:
       JIRA_TOKEN:
         required: true
-        description: 'Pre-encoded JIRA token (base64(email:api_token))'
+        description: 'Raw JIRA API token'
+      JIRA_EMAIL:
+        required: true
+        description: 'JIRA account email'
 
 permissions:
   pull-requests: write
@@ -40,6 +43,7 @@ jobs:
         working-directory: branch-suggestion
         env:
           JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}

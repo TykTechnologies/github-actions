@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { jiraAPI, getIssue } from './jira-api.js';
 
-// Only load .env if JIRA_TOKEN is not already set (to avoid log output in CI)
 /**
  * Extract JIRA ticket key from text (e.g., PR title, branch name)
  * @param {string} text - Text to search

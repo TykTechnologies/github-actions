@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Set env var before importing
 process.env.JIRA_TOKEN = 'test-token';
+process.env.JIRA_EMAIL = 'test@example.com';
 
 import { extractJQL, jiraAPI, searchIssues, getIssue, formatIssue, main } from '../jira-api.js';
 import readline from 'readline';
@@ -51,9 +52,13 @@ describe('jiraAPI', () => {
     process.env = originalEnv;
   });
 
-  it('should throw error if JIRA_TOKEN is not set', async () => {
+  it('should throw error if JIRA_TOKEN or JIRA_EMAIL is not set', async () => {
     delete process.env.JIRA_TOKEN;
-    await expect(jiraAPI('/test')).rejects.toThrow('JIRA_TOKEN must be set');
+    await expect(jiraAPI('/test')).rejects.toThrow('JIRA_TOKEN and JIRA_EMAIL must be set');
+    
+    process.env.JIRA_TOKEN = 'test-token';
+    delete process.env.JIRA_EMAIL;
+    await expect(jiraAPI('/test')).rejects.toThrow('JIRA_TOKEN and JIRA_EMAIL must be set');
   });
 
   it('should handle 401 Unauthorized error', async () => {

@@ -25,9 +25,9 @@ Add this workflow to your repository to enable automatic branch suggestions:
 
 ### Example Workflow Configuration
 
-```yaml
-# .github/workflows/branch-suggestion.yml
-name: PR Branch Suggestions
+2. Add required secrets to your repository (Settings → Secrets and variables → Actions):
+   - `JIRA_EMAIL`: JIRA account email
+   - `JIRA_API_TOKEN`: JIRA API token (generate at https://id.atlassian.com/manage-profile/security/api-tokens)
 
 on:
   pull_request:
