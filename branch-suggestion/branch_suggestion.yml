@@ -35,10 +35,9 @@ checks:
         echo "ℹ️  No JIRA ticket found. Skipping branch suggestions." >&2
         exit 0
       fi
-
       if [ $JIRA_EXIT_CODE -eq 1 ]; then
-        echo "❌ JIRA ticket found but no fix versions set." >&2
-        exit 1
+        echo '[{"file": "branch-suggestion", "line": 0, "message": "JIRA ticket found but no fix versions set, or JIRA API error (e.g. invalid token).", "severity": "critical", "ruleId": "command/execution_error"}]'
+        exit 0
       fi
 
       # Fetch repository branches

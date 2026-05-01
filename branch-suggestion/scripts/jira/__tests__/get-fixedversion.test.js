@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { extractJiraTicket, parseVersion, detectComponent } from '../get-fixedversion.js';
+import { describe, it, expect, vi } from 'vitest';
+import { extractJiraTicket, parseVersion, detectComponent, getFixVersions } from '../get-fixedversion.js';
+import * as jiraApi from '../jira-api.js';
 
 describe('extractJiraTicket', () => {
   it('should extract ticket from PR title', () => {
@@ -143,5 +144,46 @@ describe('parseVersion', () => {
   it('should preserve original version string', () => {
     const result = parseVersion('TIB 1.7.0');
     expect(result.original).toBe('TIB 1.7.0');
+  });
+});
+
+// Mock the JIRA API module
+vi.mock('../jira-api.js', () => ({
+  getIssue: vi.fn()
+}));
+
+describe('getFixVersions', () => {
+  it('should return fix versions when present', async () => {
+    vi.mocked(jiraApi.getIssue).mockResolvedValue({
+      fields: {
+        summary: 'Test issue',
+        priority: { name: 'High' },
+        issuetype: { name: 'Bug' },
+        fixVersions: [{ name: '1.0.0', id: '10000', released: false }]
+      }
+    });
+    
+    const result = await getFixVersions('TT-123');
+    expect(result.ticket).toBe('TT-123');
+    expect(result.fixVersions).toHaveLength(1);
+    expect(result.fixVersions[0].name).toBe('1.0.0');
+  });
+
+  it('should handle missing fix versions', async () => {
+    vi.mocked(jiraApi.getIssue).mockResolvedValue({
+      fields: {
+        summary: 'Test issue',
+        fixVersions: []
+      }
+    });
+    
+    const result = await getFixVersions('TT-123');
+    expect(result.fixVersions).toHaveLength(0);
+  });
+
+  it('should throw error when JIRA API fails (e.g. invalid token)', async () => {
+    vi.mocked(jiraApi.getIssue).mockRejectedValue(new Error('JIRA_TOKEN must be set'));
+    
+    await expect(getFixVersions('TT-123')).rejects.toThrow('Failed to fetch JIRA ticket TT-123: JIRA_TOKEN must be set');
   });
 });
