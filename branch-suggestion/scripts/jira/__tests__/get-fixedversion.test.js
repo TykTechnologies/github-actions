@@ -286,4 +286,61 @@ describe('main execution', () => {
     expect(consoleLogMock).toHaveBeenCalled();
     expect(exitMock).not.toHaveBeenCalled();
   });
+
+  it('should exit with code 1 if no arguments provided', async () => {
+    process.argv = ['node', 'script.js'];
+
+    await main();
+
+    expect(consoleLogMock).toHaveBeenCalledWith(expect.stringContaining('Usage:'));
+    expect(exitMock).toHaveBeenCalledWith(1);
+  });
+
+  it('should extract ticket from branchName (Priority 1)', async () => {
+    process.argv = ['node', 'script.js', 'No ticket here', 'feature/TT-999-fix'];
+    getIssue.mockResolvedValue({
+      fields: {
+        summary: 'Test',
+        fixVersions: [{ name: '1.0.0' }]
+      }
+    });
+
+    await main();
+
+    expect(getIssue).toHaveBeenCalledWith('TT-999');
+    expect(consoleLogMock).toHaveBeenCalled();
+    expect(exitMock).not.toHaveBeenCalled();
+  });
+
+  it('should extract ticket from prTitle (Priority 2)', async () => {
+    process.argv = ['node', 'script.js', 'TT-888: Fix bug', 'no-ticket-branch'];
+    getIssue.mockResolvedValue({
+      fields: {
+        summary: 'Test',
+        fixVersions: [{ name: '1.0.0' }]
+      }
+    });
+
+    await main();
+
+    expect(getIssue).toHaveBeenCalledWith('TT-888');
+    expect(consoleLogMock).toHaveBeenCalled();
+    expect(exitMock).not.toHaveBeenCalled();
+  });
+
+  it('should handle prTitle as direct ticket key', async () => {
+    process.argv = ['node', 'script.js', 'TT-777'];
+    getIssue.mockResolvedValue({
+      fields: {
+        summary: 'Test',
+        fixVersions: [{ name: '1.0.0' }]
+      }
+    });
+
+    await main();
+
+    expect(getIssue).toHaveBeenCalledWith('TT-777');
+    expect(consoleLogMock).toHaveBeenCalled();
+    expect(exitMock).not.toHaveBeenCalled();
+  });
 });

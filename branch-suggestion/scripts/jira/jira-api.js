@@ -10,11 +10,11 @@ if (!process.env.JIRA_TOKEN) {
 
 // JIRA configuration
 const JIRA_BASE_URL = 'https://tyktech.atlassian.net';
-const JIRA_TOKEN = process.env.JIRA_TOKEN; // Pre-encoded base64(email:api_token)
+// We read JIRA_TOKEN dynamically inside jiraAPI to allow testing
 
 // Debug logging (without exposing sensitive data)
 console.error('DEBUG: Environment check:');
-console.error(`  JIRA_TOKEN: ${JIRA_TOKEN ? 'SET' : 'EMPTY'}`);
+console.error(`  JIRA_TOKEN: ${process.env.JIRA_TOKEN ? 'SET' : 'EMPTY'}`);
 console.error(`  All JIRA env vars: ${Object.keys(process.env).filter(k => k.includes('JIRA')).join(', ')}`);
 
 // Extract JQL from URL or use directly
@@ -37,12 +37,13 @@ function extractJQL(input) {
 
 // Make JIRA API request
 async function jiraAPI(endpoint, options = {}) {
-  if (!JIRA_TOKEN) {
+  const token = process.env.JIRA_TOKEN;
+  if (!token) {
     throw new Error('JIRA_TOKEN must be set in .env file (pre-encoded base64(email:api_token))');
   }
 
   // Token is already base64 encoded, use directly
-  const auth = JIRA_TOKEN;
+  const auth = token;
   
   const response = await fetch(`${JIRA_BASE_URL}/rest/api/3${endpoint}`, {
     ...options,
@@ -260,7 +261,8 @@ export {
   searchIssues,
   getIssue,
   formatIssue,
-  exportToCSV
+  exportToCSV,
+  main
 };
 
 // Run main if executed directly
