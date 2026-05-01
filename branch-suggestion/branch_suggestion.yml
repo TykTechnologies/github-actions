@@ -16,7 +16,7 @@ checks:
   analyze-and-suggest:
     type: command
     tags: ["remote"]
-    timeout: 90
+    timeout: 90000
     exec: |
       set -e
 
@@ -80,7 +80,7 @@ checks:
     type: command
     depends_on: [analyze-and-suggest]
     tags: ["remote"]
-    timeout: 30
+    timeout: 30000
     exec: |
       set -e
 
