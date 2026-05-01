@@ -36,6 +36,14 @@ jobs:
         working-directory: branch-suggestion
         run: npm install --ignore-scripts
 
+      - name: Point Visor to current ref
+        run: |
+          # Visor always checks out origin/HEAD in its isolated workspace.
+          # We need to point origin/HEAD to the commit we just checked out
+          # so Visor analyzes the correct code (e.g. the PR branch).
+          git update-ref refs/remotes/origin/visor-target $(git rev-parse HEAD)
+          git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/visor-target
+
       - name: Install Visor
         run: npm install -g @probelabs/visor@0.1.185 --ignore-scripts
 
