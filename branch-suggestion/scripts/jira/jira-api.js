@@ -7,14 +7,13 @@ import readline from 'readline';
 if (!process.env.JIRA_TOKEN) {
     dotenv.config();
 }
-
 // JIRA configuration
 const JIRA_BASE_URL = 'https://tyktech.atlassian.net';
-const JIRA_TOKEN = process.env.JIRA_TOKEN; // Pre-encoded base64(email:api_token)
+// We read JIRA_TOKEN dynamically inside jiraAPI to allow testing
 
 // Debug logging (without exposing sensitive data)
 console.error('DEBUG: Environment check:');
-console.error(`  JIRA_TOKEN: ${JIRA_TOKEN ? 'SET' : 'EMPTY'}`);
+console.error(`  JIRA_TOKEN: ${process.env.JIRA_TOKEN ? 'SET' : 'EMPTY'}`);
 console.error(`  All JIRA env vars: ${Object.keys(process.env).filter(k => k.includes('JIRA')).join(', ')}`);
 
 // Extract JQL from URL or use directly
@@ -37,13 +36,14 @@ function extractJQL(input) {
 
 // Make JIRA API request
 async function jiraAPI(endpoint, options = {}) {
-  if (!JIRA_TOKEN) {
-    throw new Error('JIRA_TOKEN must be set in .env file (pre-encoded base64(email:api_token))');
+  const token = process.env.JIRA_TOKEN;
+  const email = process.env.JIRA_USER_EMAIL;
+  if (!token || !email) {
+    throw new Error('JIRA_TOKEN and JIRA_USER_EMAIL must be set in environment variables');
   }
 
-  // Token is already base64 encoded, use directly
-  const auth = JIRA_TOKEN;
-  
+  // Token is raw API token, encode it with email
+  const auth = Buffer.from(`${email}:${token}`).toString('base64');
   const response = await fetch(`${JIRA_BASE_URL}/rest/api/3${endpoint}`, {
     ...options,
     headers: {
@@ -135,8 +135,8 @@ async function main() {
     console.log('  node jira-api.js "project = TT AND status != closed"');
     console.log('  node jira-api.js "https://tyktech.atlassian.net/jira/software/c/projects/TT/issues/?jql=..."');
     console.log('\nMake sure to set in .env:');
-    console.log('  JIRA_TOKEN=<pre-encoded-base64-token>');
-    console.log('\nNote: JIRA_TOKEN should be pre-encoded as base64(email:api_token)');
+    console.log('  JIRA_TOKEN=<raw-api-token>');
+    console.log('  JIRA_USER_EMAIL=<your-jira-email>');
     process.exit(1);
   }
 
@@ -225,7 +225,7 @@ async function main() {
     
   } catch (error) {
     console.error('\n❌ Error:', error.message);
-    console.error('\nMake sure you have set JIRA_TOKEN in your .env file (pre-encoded as base64(email:api_token))');
+    console.error('\nMake sure you have set JIRA_TOKEN and JIRA_USER_EMAIL in your environment variables');
     process.exit(1);
   }
 }
@@ -260,7 +260,8 @@ export {
   searchIssues,
   getIssue,
   formatIssue,
-  exportToCSV
+  exportToCSV,
+  main
 };
 
 // Run main if executed directly

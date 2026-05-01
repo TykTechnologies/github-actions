@@ -7,7 +7,10 @@ on:
     secrets:
       JIRA_TOKEN:
         required: true
-        description: 'Pre-encoded JIRA token (base64(email:api_token))'
+        description: 'Raw JIRA API token'
+      JIRA_USER_EMAIL:
+        required: true
+        description: 'JIRA account email'
 
 permissions:
   pull-requests: write
@@ -22,7 +25,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           repository: TykTechnologies/github-actions
-          ref: main
+          ref: ${{ github.repository == 'TykTechnologies/github-actions' && github.ref || 'main' }}
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
@@ -39,7 +42,9 @@ jobs:
       - name: Analyze PR and suggest branches
         working-directory: branch-suggestion
         env:
+          VISOR_WORKSPACE_ENABLED: "false"
           JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
