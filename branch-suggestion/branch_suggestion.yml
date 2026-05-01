@@ -36,7 +36,11 @@ checks:
         exit 0
       fi
       if [ $JIRA_EXIT_CODE -eq 1 ]; then
-        echo '[{"file": "branch-suggestion", "line": 0, "message": "JIRA ticket found but no fix versions set, or JIRA API error (e.g. invalid token).", "severity": "critical", "ruleId": "command/execution_error"}]'
+        echo '[{"file": "branch-suggestion", "line": 0, "message": "JIRA API or configuration error (e.g. invalid token).", "severity": "critical", "ruleId": "command/execution_error"}]'
+        exit 0
+      fi
+      if [ $JIRA_EXIT_CODE -eq 3 ]; then
+        echo '[{"file": "branch-suggestion", "line": 0, "message": "JIRA ticket found but no fix versions set.", "severity": "info", "ruleId": "command/execution_info"}]'
         exit 0
       fi
 
@@ -86,8 +90,8 @@ checks:
 
       # Check if markdown file exists from previous step
       if [ ! -f /tmp/branch_suggestion_markdown.txt ]; then
-        echo "❌ Error: Markdown file not found. analyze-and-suggest step may have failed." >&2
-        exit 1
+        echo "ℹ️  Markdown file not found. analyze-and-suggest step may have exited early with info severity." >&2
+        exit 0
       fi
 
       # Post or update the comment
