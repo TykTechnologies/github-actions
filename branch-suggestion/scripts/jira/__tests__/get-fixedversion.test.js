@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { extractJiraTicket, parseVersion, detectComponent } from '../get-fixedversion.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { extractJiraTicket, parseVersion, detectComponent, getFixVersions, main } from '../get-fixedversion.js';
+import { getIssue } from '../jira-api.js';
+
+vi.mock('../jira-api.js', () => ({
+  getIssue: vi.fn()
+}));
 
 describe('extractJiraTicket', () => {
   it('should extract ticket from PR title', () => {
@@ -143,5 +148,142 @@ describe('parseVersion', () => {
   it('should preserve original version string', () => {
     const result = parseVersion('TIB 1.7.0');
     expect(result.original).toBe('TIB 1.7.0');
+  });
+});
+
+describe('getFixVersions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should return parsed fix versions on success', async () => {
+    getIssue.mockResolvedValue({
+      fields: {
+        summary: 'Test issue',
+        priority: { name: 'High' },
+        issuetype: { name: 'Bug' },
+        fixVersions: [
+          { name: 'Tyk 5.0.0', id: '10000', released: true }
+        ]
+      }
+    });
+
+    const result = await getFixVersions('TT-123');
+    expect(result).toEqual({
+      ticket: 'TT-123',
+      summary: 'Test issue',
+      priority: 'High',
+      issueType: 'Bug',
+      fixVersions: [
+        {
+          name: 'Tyk 5.0.0',
+          id: '10000',
+          released: true,
+          parsed: {
+            major: 5,
+            minor: 0,
+            patch: 0,
+            original: 'Tyk 5.0.0',
+            component: ['tyk', 'tyk-analytics', 'tyk-analytics-ui']
+          }
+        }
+      ]
+    });
+    expect(getIssue).toHaveBeenCalledWith('TT-123');
+  });
+
+  it('should handle missing fix versions', async () => {
+    getIssue.mockResolvedValue({
+      fields: {
+        summary: 'Test issue',
+        priority: { name: 'High' },
+        issuetype: { name: 'Bug' },
+        // no fixVersions
+      }
+    });
+
+    const result = await getFixVersions('TT-123');
+    expect(result.fixVersions).toEqual([]);
+  });
+
+  it('should throw error when getIssue fails', async () => {
+    getIssue.mockRejectedValue(new Error('API Error'));
+
+    await expect(getFixVersions('TT-123')).rejects.toThrow('Failed to fetch JIRA ticket TT-123: API Error');
+  });
+});
+
+describe('main execution', () => {
+  let originalArgv;
+  let exitMock;
+  let consoleLogMock;
+  let consoleErrorMock;
+
+  beforeEach(() => {
+    originalArgv = process.argv;
+    exitMock = vi.spyOn(process, 'exit').mockImplementation(() => {});
+    consoleLogMock = vi.spyOn(console, 'log').mockImplementation(() => {});
+    consoleErrorMock = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    process.argv = originalArgv;
+    vi.restoreAllMocks();
+  });
+
+  it('should exit with code 3 if no fix versions found', async () => {
+    process.argv = ['node', 'script.js', 'TT-123'];
+    getIssue.mockResolvedValue({
+      fields: {
+        summary: 'Test',
+        fixVersions: []
+      }
+    });
+
+    await main();
+
+    expect(consoleErrorMock).toHaveBeenCalled();
+    const errorCall = consoleErrorMock.mock.calls[0][0];
+    expect(errorCall).toContain('No fix versions found in JIRA ticket');
+    expect(exitMock).toHaveBeenCalledWith(3);
+  });
+
+  it('should exit with code 1 on API error', async () => {
+    process.argv = ['node', 'script.js', 'TT-123'];
+    getIssue.mockRejectedValue(new Error('API Error'));
+
+    await main();
+
+    expect(consoleErrorMock).toHaveBeenCalled();
+    const errorCall = consoleErrorMock.mock.calls[0][0];
+    expect(errorCall).toContain('API Error');
+    expect(exitMock).toHaveBeenCalledWith(1);
+  });
+
+  it('should exit with code 2 if no ticket found', async () => {
+    process.argv = ['node', 'script.js', 'No ticket here'];
+
+    await main();
+
+    expect(consoleErrorMock).toHaveBeenCalled();
+    const errorCall = consoleErrorMock.mock.calls[0][0];
+    expect(errorCall).toContain('No JIRA ticket found');
+    expect(exitMock).toHaveBeenCalledWith(2);
+  });
+
+  it('should log result and not exit on success', async () => {
+    process.argv = ['node', 'script.js', 'TT-123'];
+    getIssue.mockResolvedValue({
+      fields: {
+        summary: 'Test',
+        fixVersions: [{ name: '1.0.0' }]
+      }
+    });
+
+    await main();
+
+    expect(consoleLogMock).toHaveBeenCalled();
+    expect(exitMock).not.toHaveBeenCalled();
   });
 });

@@ -201,13 +201,13 @@ async function main() {
     }
 
 }
-
 // Export functions for use in other scripts
 export {
     extractJiraTicket,
     getFixVersions,
     parseVersion,
-    detectComponent
+    detectComponent,
+    main
 };
 
 
