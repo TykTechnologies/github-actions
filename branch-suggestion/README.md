@@ -103,6 +103,7 @@ npm install -g @probelabs/visor
 export JIRA_EMAIL="your-email@example.com"
 export JIRA_API_TOKEN="your-jira-api-token"
 ```
+Alternatively, Node.js 20 has built-in support for `.env` files. You can create a `.env` file and use the `--env-file=.env` CLI flag for local testing.
 
 ### Test Individual Scripts
 
@@ -340,12 +341,6 @@ The tool automatically adapts to different branching strategies:
 **Symptom:** JSON parse error about control characters
 
 **Solution:** This has been fixed in the latest version by using regex-based extraction instead of JSON parsing. Update to the latest version of the tool.
-
-### dotenv logging pollution
-
-**Symptom:** `[dotenv@17.2.1]` messages in output
-
-**Solution:** Already fixed by setting `DOTENV_LOG_LEVEL=error` before loading dotenv. Update to the latest version.
 
 ## Output Schema
 
