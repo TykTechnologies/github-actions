@@ -25,10 +25,23 @@ checks:
       BRANCH_NAME="${BRANCH_NAME:-feature/TT-12345-test}"
       REPO="${REPOSITORY:-TykTechnologies/tyk}"
 
+      # Visor may execute this check from a fresh temporary worktree.
+      # Install dependencies there when node_modules is not present.
+      if [ ! -d node_modules ]; then
+        npm ci --ignore-scripts
+      fi
+
       set +e
-      JIRA_RESULT=$(node scripts/jira/get-fixedversion.js "$PR_TITLE" "$BRANCH_NAME")
+      JIRA_ERROR_FILE=$(mktemp)
+      JIRA_RESULT=$(node scripts/jira/get-fixedversion.js "$PR_TITLE" "$BRANCH_NAME" 2>"$JIRA_ERROR_FILE")
       JIRA_EXIT_CODE=$?
+      JIRA_ERROR=$(cat "$JIRA_ERROR_FILE")
+      rm -f "$JIRA_ERROR_FILE"
       set -e
+
+      if [ -n "$JIRA_ERROR" ]; then
+        printf '%s\n' "$JIRA_ERROR" >&2
+      fi
 
       # Handle exit codes
       if [ $JIRA_EXIT_CODE -eq 2 ]; then

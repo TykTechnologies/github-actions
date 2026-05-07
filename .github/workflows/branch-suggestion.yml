@@ -7,7 +7,7 @@ on:
     secrets:
       JIRA_TOKEN:
         required: true
-        description: 'Base64 encoded JIRA API token'
+        description: 'Base64-encoded Jira email and API token in the form base64(email:api_token)'
 
 permissions:
   pull-requests: write

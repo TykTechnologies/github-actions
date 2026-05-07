@@ -15,4 +15,5 @@ jobs:
   branch-suggestions:
     uses: TykTechnologies/REFINE/.github/workflows/branch-suggestion.yml@b469f63c328ddc43e222dac10487f0a19cd0add1  # main
     secrets:
+      # JIRA_TOKEN should be base64-encoded from "your-email@example.com:your-jira-api-token".
       JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}

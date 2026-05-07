@@ -19,7 +19,8 @@ Add this workflow to your repository to enable automatic branch suggestions:
 1. Copy `.github/workflows/example-usage.yml.template` to your repository as `.github/workflows/branch-suggestion.yml`
 
 2. Add required secrets to your repository (Settings → Secrets and variables → Actions):
-   - `JIRA_TOKEN`: Base64 encoded JIRA API token
+   - `JIRA_TOKEN`: get a Jira API token from Atlassian, combine it with your Jira account email as `email:api_token`, then base64 encode that full value.
+
 3. That's it! The workflow will automatically analyze PRs and post branch suggestions.
 
 ### Example Workflow Configuration
@@ -85,6 +86,7 @@ Posts a comment on the PR with:
 
 1. Install dependencies:
 ```bash
+cd branch-suggestion
 npm install
 ```
 
@@ -95,7 +97,8 @@ npm install -g @probelabs/visor
 
 3. Set up environment variables:
 ```bash
-export JIRA_TOKEN="your-jira-api-token"
+# First get a Jira API token from Atlassian, then encode "email:api_token".
+export JIRA_TOKEN="$(printf '%s' 'your-email@example.com:your-jira-api-token' | base64)"
 ```
 
 ### Test Individual Scripts
@@ -109,8 +112,11 @@ node scripts/jira/get-fixedversion.js TT-12345
 # From PR title
 node scripts/jira/get-fixedversion.js "TT-12345: Fix authentication bug"
 
-# From branch name
-node scripts/jira/get-fixedversion.js "feature/TT-12345-fix-auth"
+# From PR title and branch name
+# If both contain a ticket, the branch name takes precedence.
+node scripts/jira/get-fixedversion.js \
+  "TT-12345: Fix authentication bug" \
+  "feature/TT-67890-fix-auth"
 ```
 
 **Expected output:**
@@ -129,7 +135,8 @@ node scripts/jira/get-fixedversion.js "feature/TT-12345-fix-auth"
         "major": 5,
         "minor": 8,
         "patch": 1,
-        "original": "5.8.1"
+        "original": "5.8.1",
+        "component": []
       }
     }
   ]
@@ -183,14 +190,16 @@ node scripts/github/add-pr-comment.js \
 
 ```bash
 # Test with a real ticket
-env JIRA_TOKEN="your-token" \
+env JIRA_TOKEN="$(printf '%s' 'your-email@example.com:your-jira-api-token' | base64)" \
     PR_TITLE="TT-12345" \
+    BRANCH_NAME="feature/TT-12345-test" \
     REPOSITORY="TykTechnologies/tyk" \
     visor --config branch_suggestion.yml
 
 # Test with TIB ticket (different version format)
-env JIRA_TOKEN="your-token" \
+env JIRA_TOKEN="$(printf '%s' 'your-email@example.com:your-jira-api-token' | base64)" \
     PR_TITLE="TT-5433" \
+    BRANCH_NAME="feature/TT-5433-test" \
     REPOSITORY="TykTechnologies/tyk-identity-broker" \
     visor --config branch_suggestion.yml
 ```
@@ -261,7 +270,7 @@ BRANCH SUGGESTION ANALYSIS
 ### Environment Variables
 
 #### Required
-- `JIRA_TOKEN`: Base64 encoded JIRA API token
+- `JIRA_TOKEN`: get a Jira API token from Atlassian, combine it with your Jira account email as `email:api_token`, then base64 encode that full value.
 
 #### Optional (for PR comment posting)
 - `GITHUB_TOKEN`: GitHub token (automatically provided in GitHub Actions)
@@ -313,9 +322,10 @@ The tool automatically adapts to different branching strategies:
 **Symptom:** Error message about authentication
 
 **Solution:**
-1. Generate a new API token at https://id.atlassian.com/manage-profile/security/api-tokens
-2. Base64 encode the token with your email (e.g., `echo -n "email:token" | base64`)
-3. Ensure the token has not expired
+1. Verify the email used to build `JIRA_TOKEN` matches your JIRA account email
+2. Generate a new API token at https://id.atlassian.com/manage-profile/security/api-tokens
+3. Rebuild `JIRA_TOKEN` with `printf '%s' 'email@example.com:api-token' | base64`
+4. Ensure the token has not expired
 
 ### GitHub API rate limiting
 
