@@ -261,7 +261,7 @@ BRANCH SUGGESTION ANALYSIS
 ### Environment Variables
 
 #### Required
-- `JIRA_TOKEN`: JIRA API token
+- `JIRA_TOKEN`: Base64 encoded JIRA API token
 
 #### Optional (for PR comment posting)
 - `GITHUB_TOKEN`: GitHub token (automatically provided in GitHub Actions)
