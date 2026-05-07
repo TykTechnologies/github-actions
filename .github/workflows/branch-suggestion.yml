@@ -7,10 +7,7 @@ on:
     secrets:
       JIRA_TOKEN:
         required: true
-        description: 'Raw JIRA API token'
-      JIRA_USER_EMAIL:
-        required: true
-        description: 'JIRA account email'
+        description: 'Base64 encoded JIRA API token'
 
 permissions:
   pull-requests: write
@@ -44,7 +41,6 @@ jobs:
         env:
           VISOR_WORKSPACE_ENABLED: "false"
           JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
-          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}

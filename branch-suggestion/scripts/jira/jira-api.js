@@ -37,17 +37,14 @@ function extractJQL(input) {
 // Make JIRA API request
 async function jiraAPI(endpoint, options = {}) {
   const token = process.env.JIRA_TOKEN;
-  const email = process.env.JIRA_USER_EMAIL;
-  if (!token || !email) {
-    throw new Error('JIRA_TOKEN and JIRA_USER_EMAIL must be set in environment variables');
+  if (!token) {
+    throw new Error('JIRA_TOKEN must be set in environment variables');
   }
 
-  // Token is raw API token, encode it with email
-  const auth = Buffer.from(`${email}:${token}`).toString('base64');
   const response = await fetch(`${JIRA_BASE_URL}/rest/api/3${endpoint}`, {
     ...options,
     headers: {
-      'Authorization': `Basic ${auth}`,
+      'Authorization': `Basic ${token}`,
       'Accept': 'application/json',
       'Content-Type': 'application/json',
       ...options.headers
@@ -135,8 +132,7 @@ async function main() {
     console.log('  node jira-api.js "project = TT AND status != closed"');
     console.log('  node jira-api.js "https://tyktech.atlassian.net/jira/software/c/projects/TT/issues/?jql=..."');
     console.log('\nMake sure to set in .env:');
-    console.log('  JIRA_TOKEN=<raw-api-token>');
-    console.log('  JIRA_USER_EMAIL=<your-jira-email>');
+    console.log('  JIRA_TOKEN=<base64-encoded-token>');
     process.exit(1);
   }
 
@@ -225,7 +221,7 @@ async function main() {
     
   } catch (error) {
     console.error('\n❌ Error:', error.message);
-    console.error('\nMake sure you have set JIRA_TOKEN and JIRA_USER_EMAIL in your environment variables');
+    console.error('\nMake sure you have set JIRA_TOKEN in your environment variables');
     process.exit(1);
   }
 }
