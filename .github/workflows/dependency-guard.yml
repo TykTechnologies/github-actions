@@ -29,7 +29,7 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
           EXTRA_PATHS: ${{ inputs.extra_paths }}
         run: |
-          git fetch origin "$BASE_REF"
+          git fetch origin "$BASE_REF" --depth=1
 
           # Default monitored paths
           PATHS=(
