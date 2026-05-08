@@ -8,7 +8,6 @@ if (!process.env.JIRA_TOKEN) {
     process.env.DOTENV_LOG_LEVEL = 'error';
     dotenv.config();
 }
-
 /**
  * Extract JIRA ticket key from text (e.g., PR title, branch name)
  * @param {string} text - Text to search
@@ -140,8 +139,9 @@ async function main() {
         console.log('\nOutput: JSON object with ticket info and fix versions');
         console.log('\nExit codes:');
         console.log('  0 - Success (fix versions found)');
-        console.log('  1 - Error (ticket found but no fix versions set)');
+        console.log('  1 - Error (JIRA API or configuration error)');
         console.log('  2 - No JIRA ticket found');
+        console.log('  3 - Info (ticket found but no fix versions set)');
         process.exit(1);
     }
 
@@ -186,7 +186,7 @@ async function main() {
                 priority: result.priority,
                 issueType: result.issueType
             }));
-            process.exit(1);
+            process.exit(3);
         }
 
         console.log(JSON.stringify(result, null, 2));
@@ -200,13 +200,13 @@ async function main() {
     }
 
 }
-
 // Export functions for use in other scripts
 export {
     extractJiraTicket,
     getFixVersions,
     parseVersion,
-    detectComponent
+    detectComponent,
+    main
 };
 
 
