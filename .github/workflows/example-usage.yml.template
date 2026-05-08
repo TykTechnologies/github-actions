@@ -15,4 +15,7 @@ jobs:
   branch-suggestions:
     uses: TykTechnologies/REFINE/.github/workflows/branch-suggestion.yml@b469f63c328ddc43e222dac10487f0a19cd0add1  # main
     secrets:
-      JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
+      # JIRA_READ_AUTH should be base64-encoded from "your-email@example.com:your-scoped-jira-api-token".
+      JIRA_READ_AUTH: ${{ secrets.JIRA_READ_AUTH }}
+      # JIRA_BASE_URL should be "https://api.atlassian.com/ex/jira/<cloudId>".
+      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}

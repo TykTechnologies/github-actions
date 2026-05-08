@@ -19,7 +19,8 @@ Add this workflow to your repository to enable automatic branch suggestions:
 1. Copy `.github/workflows/example-usage.yml.template` to your repository as `.github/workflows/branch-suggestion.yml`
 
 2. Add required secrets to your repository (Settings → Secrets and variables → Actions):
-   - `JIRA_TOKEN`: Base64 encoded JIRA API token
+   - `JIRA_READ_AUTH`: Base64 encoded Jira account email and scoped API token, generated from `email:api_token`
+   - `JIRA_BASE_URL`: Scoped Jira API base URL, for example `https://api.atlassian.com/ex/jira/<cloudId>`
 3. That's it! The workflow will automatically analyze PRs and post branch suggestions.
 
 ### Example Workflow Configuration
@@ -37,7 +38,8 @@ jobs:
   branch-suggestions:
     uses: TykTechnologies/REFINE/.github/workflows/branch-suggestion.yml@main
     secrets:
-      JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
+      JIRA_READ_AUTH: ${{ secrets.JIRA_READ_AUTH }}
+      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
 ```
 
 ## How It Works
@@ -95,7 +97,8 @@ npm install -g @probelabs/visor
 
 3. Set up environment variables:
 ```bash
-export JIRA_TOKEN="your-jira-api-token"
+export JIRA_READ_AUTH="$(printf '%s' 'your-email@example.com:your-scoped-jira-api-token' | base64)"
+export JIRA_BASE_URL="https://api.atlassian.com/ex/jira/your-cloud-id"
 ```
 
 ### Test Individual Scripts
@@ -138,8 +141,9 @@ node scripts/jira/get-fixedversion.js "feature/TT-12345-fix-auth"
 
 **Exit codes:**
 - `0`: Success (fix versions found)
-- `1`: Error (ticket found but no fix versions set)
+- `1`: Error (JIRA API or configuration error)
 - `2`: No JIRA ticket found
+- `3`: Ticket found but no fix versions set
 
 #### Test Branch Matcher
 
@@ -183,13 +187,15 @@ node scripts/github/add-pr-comment.js \
 
 ```bash
 # Test with a real ticket
-env JIRA_TOKEN="your-token" \
+env JIRA_READ_AUTH="$(printf '%s' 'your-email@example.com:your-scoped-jira-api-token' | base64)" \
+    JIRA_BASE_URL="https://api.atlassian.com/ex/jira/your-cloud-id" \
     PR_TITLE="TT-12345" \
     REPOSITORY="TykTechnologies/tyk" \
     visor --config branch_suggestion.yml
 
 # Test with TIB ticket (different version format)
-env JIRA_TOKEN="your-token" \
+env JIRA_READ_AUTH="$(printf '%s' 'your-email@example.com:your-scoped-jira-api-token' | base64)" \
+    JIRA_BASE_URL="https://api.atlassian.com/ex/jira/your-cloud-id" \
     PR_TITLE="TT-5433" \
     REPOSITORY="TykTechnologies/tyk-identity-broker" \
     visor --config branch_suggestion.yml
@@ -261,7 +267,8 @@ BRANCH SUGGESTION ANALYSIS
 ### Environment Variables
 
 #### Required
-- `JIRA_TOKEN`: Base64 encoded JIRA API token
+- `JIRA_READ_AUTH`: Base64 encoded Jira account email and scoped API token, generated from `email:api_token`
+- `JIRA_BASE_URL`: Scoped Jira API base URL, for example `https://api.atlassian.com/ex/jira/<cloudId>`
 
 #### Optional (for PR comment posting)
 - `GITHUB_TOKEN`: GitHub token (automatically provided in GitHub Actions)
@@ -313,9 +320,11 @@ The tool automatically adapts to different branching strategies:
 **Symptom:** Error message about authentication
 
 **Solution:**
-1. Generate a new API token at https://id.atlassian.com/manage-profile/security/api-tokens
-2. Base64 encode the token with your email (e.g., `echo -n "email:token" | base64`)
-3. Ensure the token has not expired
+1. Generate a scoped API token at https://id.atlassian.com/manage-profile/security/api-tokens
+2. Ensure the token has Jira read scope, such as `read:jira-work`
+3. Base64 encode the token with your email (for example, `printf '%s' 'email:token' | base64`)
+4. Set `JIRA_BASE_URL` to the scoped Jira API base URL
+5. Ensure the token owner can browse the Jira project
 
 ### GitHub API rate limiting
 
