@@ -52,9 +52,6 @@ jobs:
             echo "::warning title=Dependency Guard::No merge base found between HEAD and origin/$BASE_REF. Falling back to HEAD~1 comparison."
             if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
               CHANGED=$(git diff --name-only HEAD~1 HEAD -- "${PATHS[@]}")
-            else
-              # single-commit branch: compare against the empty tree
-              CHANGED=$(git diff --name-only 4b825dc642cb6eb9a060e54bf899d15363d7aa90 HEAD -- "${PATHS[@]}")
             fi
           fi
 
