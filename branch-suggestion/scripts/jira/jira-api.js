@@ -3,18 +3,28 @@ import dotenv from 'dotenv';
 import { URL } from 'url';
 import readline from 'readline';
 
-// Only load .env if JIRA_TOKEN is not already set (to avoid log output in CI)
-if (!process.env.JIRA_TOKEN) {
+// Only load .env if auth is not already set (to avoid log output in CI)
+if (!process.env.JIRA_READ_AUTH) {
     dotenv.config();
 }
 // JIRA configuration
-const JIRA_BASE_URL = 'https://tyktech.atlassian.net';
-// We read JIRA_TOKEN dynamically inside jiraAPI to allow testing
+const JIRA_SITE_URL = 'https://tyktech.atlassian.net';
+// We read auth dynamically inside jiraAPI to allow testing
 
 // Debug logging (without exposing sensitive data)
 console.error('DEBUG: Environment check:');
-console.error(`  JIRA_TOKEN: ${process.env.JIRA_TOKEN ? 'SET' : 'EMPTY'}`);
+console.error(`  JIRA_READ_AUTH: ${process.env.JIRA_READ_AUTH ? 'SET' : 'EMPTY'}`);
+console.error(`  JIRA_BASE_URL: ${process.env.JIRA_BASE_URL ? 'SET' : 'EMPTY'}`);
 console.error(`  All JIRA env vars: ${Object.keys(process.env).filter(k => k.includes('JIRA')).join(', ')}`);
+
+function getJiraApiBaseUrl() {
+  const baseUrl = process.env.JIRA_BASE_URL;
+  if (!baseUrl) {
+    throw new Error('JIRA_BASE_URL must be set in environment variables');
+  }
+
+  return baseUrl.replace(/\/$/, '');
+}
 
 // Extract JQL from URL or use directly
 function extractJQL(input) {
@@ -36,15 +46,16 @@ function extractJQL(input) {
 
 // Make JIRA API request
 async function jiraAPI(endpoint, options = {}) {
-  const token = process.env.JIRA_TOKEN;
-  if (!token) {
-    throw new Error('JIRA_TOKEN must be set in environment variables');
+  const readAuth = process.env.JIRA_READ_AUTH
+  if (!readAuth) {
+    throw new Error('JIRA_READ_AUTH must be set in environment variables');
   }
 
-  const response = await fetch(`${JIRA_BASE_URL}/rest/api/3${endpoint}`, {
+  const baseUrl = getJiraApiBaseUrl();
+  const response = await fetch(`${baseUrl}/rest/api/3${endpoint}`, {
     ...options,
     headers: {
-      'Authorization': `Basic ${token}`,
+      'Authorization': `Basic ${readAuth}`,
       'Accept': 'application/json',
       'Content-Type': 'application/json',
       ...options.headers
@@ -76,7 +87,7 @@ async function searchIssues(jql, startAt = 0, maxResults = 50) {
 
 // Get issue details
 async function getIssue(issueKey) {
-  return jiraAPI(`/issue/${issueKey}`);
+  return jiraAPI(`/issue/${issueKey}?fields=summary,priority,issuetype,fixVersions`);
 }
 
 // Format issue for display
@@ -118,7 +129,7 @@ function formatIssue(issue, index) {
     lines.push(`   Components: ${issue.fields.components.map(c => c.name).join(', ')}`);
   }
   
-  lines.push(`   Link: ${JIRA_BASE_URL}/browse/${issue.key}`);
+  lines.push(`   Link: ${JIRA_SITE_URL}/browse/${issue.key}`);
   
   return lines.join('\n');
 }
@@ -132,7 +143,7 @@ async function main() {
     console.log('  node jira-api.js "project = TT AND status != closed"');
     console.log('  node jira-api.js "https://tyktech.atlassian.net/jira/software/c/projects/TT/issues/?jql=..."');
     console.log('\nMake sure to set in .env:');
-    console.log('  JIRA_TOKEN=<base64-encoded-token>');
+    console.log('  JIRA_READ_AUTH=<base64-encoded-email-and-token>');
     process.exit(1);
   }
 
@@ -221,7 +232,7 @@ async function main() {
     
   } catch (error) {
     console.error('\n❌ Error:', error.message);
-    console.error('\nMake sure you have set JIRA_TOKEN in your environment variables');
+    console.error('\nMake sure you have set JIRA_READ_AUTH in your environment variables');
     process.exit(1);
   }
 }
@@ -241,7 +252,7 @@ function exportToCSV(issues) {
       new Date(issue.fields.created).toLocaleDateString(),
       issue.fields.assignee?.displayName || '',
       issue.fields.reporter?.displayName || '',
-      `${JIRA_BASE_URL}/browse/${issue.key}`
+      `${JIRA_SITE_URL}/browse/${issue.key}`
     ];
     rows.push(row.join(','));
   }
@@ -257,6 +268,7 @@ export {
   getIssue,
   formatIssue,
   exportToCSV,
+  getJiraApiBaseUrl,
   main
 };
 

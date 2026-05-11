@@ -1,11 +1,9 @@
 #!/usr/bin/env node
 import dotenv from 'dotenv';
 
-// Only load .env if JIRA_TOKEN is not already set (to avoid log output in CI)
-// Silence dotenv v17+ logging
-if (!process.env.JIRA_TOKEN) {
-    process.env.DOTENV_LOG_LEVEL = 'error';
-    dotenv.config();
+// Keep local .env fallback for manual usage, but do not let dotenv write to stdout.
+if (!process.env.JIRA_READ_AUTH && !process.env.JIRA_TOKEN) {
+    dotenv.config({ quiet: true });
 }
 
 /**
@@ -346,4 +344,3 @@ export {
 if (import.meta.url === `file://${process.argv[1]}`) {
     main();
 }
-

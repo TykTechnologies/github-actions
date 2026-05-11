@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Set env var before importing
-process.env.JIRA_TOKEN = 'test-token';
+process.env.JIRA_READ_AUTH = 'test-token';
+process.env.JIRA_BASE_URL = 'https://api.atlassian.com/ex/jira/cloud-123';
 
-import { extractJQL, jiraAPI, searchIssues, getIssue, formatIssue, main } from '../jira-api.js';
+import { extractJQL, jiraAPI, searchIssues, getIssue, formatIssue, getJiraApiBaseUrl, main } from '../jira-api.js';
 import readline from 'readline';
 
 // Mock fetch
@@ -51,9 +52,9 @@ describe('jiraAPI', () => {
     process.env = originalEnv;
   });
 
-  it('should throw error if JIRA_TOKEN is not set', async () => {
-    delete process.env.JIRA_TOKEN;
-    await expect(jiraAPI('/test')).rejects.toThrow('JIRA_TOKEN must be set');
+  it('should throw error if JIRA_READ_AUTH is not set', async () => {
+    delete process.env.JIRA_READ_AUTH;
+    await expect(jiraAPI('/test')).rejects.toThrow('JIRA_READ_AUTH must be set');
   });
 
   it('should handle 401 Unauthorized error', async () => {
@@ -86,11 +87,44 @@ describe('jiraAPI', () => {
     const result = await jiraAPI('/test');
     expect(result).toEqual(mockData);
   });
+
+  it('should throw error if JIRA_BASE_URL is not set', async () => {
+    delete process.env.JIRA_BASE_URL;
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({})
+    });
+
+    await expect(jiraAPI('/test')).rejects.toThrow('JIRA_BASE_URL must be set');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('should use JIRA_BASE_URL for scoped API token requests', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({})
+    });
+
+    await jiraAPI('/test');
+
+    expect(global.fetch.mock.calls[0][0]).toBe('https://api.atlassian.com/ex/jira/cloud-123/rest/api/3/test');
+  });
+
+  it('should remove trailing slash from JIRA_BASE_URL', () => {
+    process.env.JIRA_BASE_URL = 'https://api.atlassian.com/ex/jira/cloud-123/';
+    expect(getJiraApiBaseUrl()).toBe('https://api.atlassian.com/ex/jira/cloud-123');
+  });
+
+  it('should require JIRA_BASE_URL when building Jira API base URL', () => {
+    delete process.env.JIRA_BASE_URL;
+    expect(() => getJiraApiBaseUrl()).toThrow('JIRA_BASE_URL must be set');
+  });
 });
 
 describe('searchIssues', () => {
   beforeEach(() => {
     global.fetch.mockClear();
+    process.env.JIRA_BASE_URL = 'https://api.atlassian.com/ex/jira/cloud-123';
   });
 
   it('should call jiraAPI with correct parameters', async () => {
@@ -107,6 +141,26 @@ describe('searchIssues', () => {
     expect(url).toContain('jql=project+%3D+TT');
     expect(url).toContain('startAt=10');
     expect(url).toContain('maxResults=20');
+  });
+});
+
+describe('getIssue', () => {
+  beforeEach(() => {
+    global.fetch.mockClear();
+    process.env.JIRA_BASE_URL = 'https://api.atlassian.com/ex/jira/cloud-123';
+  });
+
+  it('should request only fields needed for branch suggestions', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ key: 'TT-123' })
+    });
+
+    await getIssue('TT-123');
+
+    const url = global.fetch.mock.calls[0][0];
+    expect(url).toContain('/issue/TT-123?');
+    expect(url).toContain('fields=summary,priority,issuetype,fixVersions');
   });
 });
 

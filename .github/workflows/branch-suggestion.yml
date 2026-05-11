@@ -5,9 +5,12 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_call:
     secrets:
-      JIRA_TOKEN:
+      JIRA_READ_AUTH:
         required: true
-        description: 'Base64 encoded JIRA API token'
+        description: 'Base64 encoded Jira email and scoped API token'
+      JIRA_BASE_URL:
+        required: true
+        description: 'Scoped Jira API base URL, e.g. https://api.atlassian.com/ex/jira/<cloudId>'
 
 permissions:
   pull-requests: write
@@ -40,7 +43,8 @@ jobs:
         working-directory: branch-suggestion
         env:
           VISOR_WORKSPACE_ENABLED: "false"
-          JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
+          JIRA_READ_AUTH: ${{ secrets.JIRA_READ_AUTH }}
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
