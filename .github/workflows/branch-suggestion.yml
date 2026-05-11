@@ -21,12 +21,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout github-actions repository for PR
-        if: github.event_name == 'pull_request'
+      - name: Checkout github-actions PR code
+        if: github.event_name == 'pull_request' && github.event.pull_request.base.repo.name == 'github-actions'
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
-      - name: Checkout github-actions repository for reusable workflow
-        if: github.event_name != 'pull_request'
+      - name: Checkout github-actions main for external repos
+        if: github.event_name != 'pull_request' || github.event.pull_request.base.repo.name != 'github-actions'
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           repository: TykTechnologies/github-actions
