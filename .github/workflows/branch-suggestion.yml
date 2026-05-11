@@ -21,11 +21,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout github-actions repository
+      - name: Checkout github-actions repository for PR
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Checkout github-actions repository for reusable workflow
+        if: github.event_name != 'pull_request'
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           repository: TykTechnologies/github-actions
-          ref: ${{ github.workflow_sha }}
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
