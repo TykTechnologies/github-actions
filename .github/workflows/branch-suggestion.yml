@@ -22,11 +22,11 @@ jobs:
 
     steps:
       - name: Checkout github-actions PR code
-        if: github.event_name == 'pull_request' && github.event.pull_request.base.repo.name == 'github-actions'
+        if: github.repository == 'TykTechnologies/github-actions' && github.event_name == 'pull_request'
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Checkout github-actions main for external repos
-        if: github.event_name != 'pull_request' || github.event.pull_request.base.repo.name != 'github-actions'
+        if: github.repository != 'TykTechnologies/github-actions' || github.event_name != 'pull_request'
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           repository: TykTechnologies/github-actions
