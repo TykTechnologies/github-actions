@@ -46,7 +46,14 @@ jobs:
             done
           fi
 
-          CHANGED=$(git diff --name-only "origin/$BASE_REF"...HEAD -- "${PATHS[@]}")
+          if git merge-base "origin/$BASE_REF" HEAD >/dev/null 2>&1; then
+            CHANGED=$(git diff --name-only "origin/$BASE_REF"...HEAD -- "${PATHS[@]}")
+          else
+            echo "::warning title=Dependency Guard::No merge base found between HEAD and origin/$BASE_REF. Falling back to HEAD~1 comparison."
+            if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+              CHANGED=$(git diff --name-only HEAD~1 HEAD -- "${PATHS[@]}")
+            fi
+          fi
 
           if [ -n "$CHANGED" ]; then
             echo "::error::Dependency files changed in this PR. A reviewer must verify the changes and add the '${{ inputs.label_name }}' label to unblock CI."
