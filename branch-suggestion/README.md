@@ -28,7 +28,7 @@ Add this workflow to your repository to enable automatic branch suggestions:
 ```yaml
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review, closed]
 
 permissions:
   pull-requests: write
