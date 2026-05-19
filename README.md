@@ -177,6 +177,40 @@ Adoption: Gateway, Dashboard.
 
 Source: [/.github/workflows/jira-lint.yaml](/.github/workflows/jira-lint.yaml)
 
+## Keepalive PR
+
+Creates a temporary pull request and closes it after a configurable delay.
+This is intended for low-traffic repositories where scheduled workflows may be
+disabled after long periods without repository activity.
+
+Example usage:
+
+```yaml
+jobs:
+  open:
+    uses: TykTechnologies/github-actions/.github/workflows/keepalive-pr.yaml@main
+    permissions:
+      contents: write
+      pull-requests: write
+    with:
+      mode: open
+      base-branch: main
+
+  close:
+    uses: TykTechnologies/github-actions/.github/workflows/keepalive-pr.yaml@main
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    with:
+      mode: close
+      close-after-minutes: "10"
+```
+
+Grant at least the permissions shown on each calling job.
+
+Source: [/.github/workflows/keepalive-pr.yaml](/.github/workflows/keepalive-pr.yaml)
+
 ## Nancy Scan
 
 OSS scanner which helps find CVEs in Go dependencies

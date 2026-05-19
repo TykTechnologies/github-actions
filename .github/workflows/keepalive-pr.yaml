@@ -1,0 +1,148 @@
+name: Keepalive PR
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        type: string
+        default: "open"
+        description: "Operation to run. Must be open or close."
+      close-after-minutes:
+        type: string
+        default: "10"
+        description: "Minimum PR age, in minutes, before mode: close closes it."
+      base-branch:
+        type: string
+        default: ""
+        description: "Base branch for the keepalive PR. Defaults to current ref name."
+
+concurrency:
+  group: keepalive-pr-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate mode
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+
+          case "${MODE}" in
+            open|close) ;;
+            *)
+              echo "mode must be 'open' or 'close', got: ${MODE}" >&2
+              exit 1
+              ;;
+          esac
+
+  open:
+    name: Open keepalive PR
+    needs: validate
+    if: ${{ inputs.mode == 'open' }}
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 1
+          ref: ${{ inputs.base-branch || github.ref_name }}
+
+      - name: Create pull request
+        id: create-pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_BRANCH: ${{ inputs.base-branch }}
+        run: |
+          set -euo pipefail
+
+          base_branch="${BASE_BRANCH:-${GITHUB_REF_NAME}}"
+          branch_prefix="automation/keepalive"
+          branch="${branch_prefix}-${GITHUB_RUN_ID}"
+          marker_file=".github/keepalive.md"
+          pr_title="chore: keep repository workflows active [skip ci]"
+          pr_body="Temporary keepalive PR created by automation. It will be closed automatically."
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B "${branch}"
+
+          {
+            echo "# Keepalive"
+            echo
+            echo "Repository activity marker for ${GITHUB_REPOSITORY}."
+            echo
+            echo "- Run: ${GITHUB_RUN_ID}"
+            echo "- Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          } > "${marker_file}"
+
+          git add -- "${marker_file}"
+          git commit -m "${pr_title}"
+          git push --set-upstream origin "${branch}"
+
+          pr_url="$(gh pr create \
+            --base="${base_branch}" \
+            --head="${branch}" \
+            --title="${pr_title}" \
+            --body="${pr_body}")"
+
+          pr_number="${pr_url##*/}"
+
+          echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
+          echo "number=${pr_number}" >> "${GITHUB_OUTPUT}"
+          echo "url=${pr_url}" >> "${GITHUB_OUTPUT}"
+
+  close:
+    name: Close keepalive PRs
+    needs: validate
+    if: ${{ inputs.mode == 'close' }}
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close stale keepalive pull requests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOSE_AFTER_MINUTES: ${{ inputs.close-after-minutes }}
+        run: |
+          set -euo pipefail
+
+          if ! printf '%s' "${CLOSE_AFTER_MINUTES}" | grep -Eq '^[1-9][0-9]*$'; then
+            echo "close-after-minutes must be a positive integer." >&2
+            exit 1
+          fi
+
+          branch_prefix="automation/keepalive"
+          now="$(date -u +%s)"
+          min_age_seconds="$((CLOSE_AFTER_MINUTES * 60))"
+
+          gh pr list --state open --limit 100 \
+            --json number,headRefName,createdAt \
+            --jq '.[] | [.number, .headRefName, .createdAt] | @tsv' |
+          while IFS="$(printf '\t')" read -r number branch created_at; do
+            case "${branch}" in
+              "${branch_prefix}-"*) ;;
+              *) continue ;;
+            esac
+
+            created_at_seconds="$(date -u -d "${created_at}" +%s)"
+            age_seconds="$((now - created_at_seconds))"
+
+            if [ "${age_seconds}" -lt "${min_age_seconds}" ]; then
+              echo "PR #${number} is not old enough to close yet."
+              continue
+            fi
+
+            gh pr close --comment="Closing temporary keepalive PR." \
+              --delete-branch \
+              -- "${number}"
+          done
