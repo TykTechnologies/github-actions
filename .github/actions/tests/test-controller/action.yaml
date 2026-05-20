@@ -11,7 +11,7 @@ inputs:
   test_type:
     description: 'Type of test, e.g. api or ui'
     required: true
-  default_branch:
+  fallback_ref:
     description: 'Branch to fall back to when base_ref has no config in the API'
     required: false
     default: 'master'
@@ -37,7 +37,7 @@ runs:
         REPO_NAME: ${{ github.event.repository.name }}
         TEST_TYPE: ${{ inputs.test_type }}
         TRIGGER: ${{ github.event_name }}
-        DEFAULT_BRANCH: ${{ inputs.default_branch }}
+        FALLBACK_REF: ${{ inputs.fallback_ref }}
       run: |
         set -eo pipefail
         BASE_URL="http://tui.internal.dev.tyk.technology/v2/$VARIATION/$REPO_NAME"
@@ -48,9 +48,9 @@ runs:
           "$BASE_URL/$BASE_REF/$ENDPOINT")
 
         if [ "$HTTP_CODE" = "404" ]; then
-          echo "::warning::No test config for branch '$BASE_REF', falling back to '$DEFAULT_BRANCH'"
+          echo "::warning::No test config for branch '$BASE_REF', falling back to '$FALLBACK_REF'"
           curl -s --retry 2 --retry-delay 10 --fail-with-body \
-            "$BASE_URL/$DEFAULT_BRANCH/$ENDPOINT" | tee -a "$GITHUB_OUTPUT"
+            "$BASE_URL/$FALLBACK_REF/$ENDPOINT" | tee -a "$GITHUB_OUTPUT"
         elif [ "$HTTP_CODE" != "200" ]; then
           echo "API returned HTTP $HTTP_CODE for branch '$BASE_REF'" >&2
           cat /tmp/tui_response.txt >&2
