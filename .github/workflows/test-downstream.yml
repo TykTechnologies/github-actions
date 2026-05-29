@@ -57,20 +57,29 @@ jobs:
     if: needs.detect.outputs.changed_paths != '[]' && needs.detect.outputs.changed_paths != 'null'
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ secrets.ORG_GITHUB_TOKEN }}
       DOWNSTREAM: TykTechnologies/tyk-analytics
       BRANCH: ga-pr-${{ github.event.pull_request.number }}
     steps:
+      - name: Generate cross-repo token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547  # v1
+        with:
+          app-id: ${{ secrets.PROBE_APP_ID }}
+          private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
+          owner: TykTechnologies
+
       - name: Checkout tyk-analytics
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
         with:
           repository: ${{ env.DOWNSTREAM }}
-          token: ${{ secrets.ORG_GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           path: downstream
 
       # Delete any leftover branch from a previous run of this PR so each
       # push starts clean (handles synchronize events and re-runs).
       - name: Clean up previous test branch
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           gh api -X DELETE \
             "repos/$DOWNSTREAM/git/refs/heads/$BRANCH" \
@@ -154,6 +163,8 @@ jobs:
       - name: Trigger affected workflows
         id: trigger
         if: steps.prepare.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           TRIGGERED=()
           SKIPPED=()
@@ -198,6 +209,8 @@ jobs:
       - name: Wait for results
         id: wait
         if: steps.trigger.outputs.triggered != '' && steps.trigger.outputs.triggered != '[]'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           OUTCOMES=()
           ALL_OK=true
@@ -243,7 +256,7 @@ jobs:
         if: always() && steps.affected.outputs.list != '[]' && steps.affected.outputs.list != 'null'
         uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410  # v6
         with:
-          github-token: ${{ secrets.ORG_GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
           script: |
             const outcomes = JSON.parse(process.env.OUTCOMES || '[]');
             const skipped  = JSON.parse(process.env.SKIPPED  || '[]');
@@ -298,6 +311,8 @@ jobs:
 
       - name: Delete test branch
         if: always()
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           gh api -X DELETE \
             "repos/$DOWNSTREAM/git/refs/heads/$BRANCH" \
