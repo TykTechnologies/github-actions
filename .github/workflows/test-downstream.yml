@@ -1,0 +1,297 @@
+name: Test downstream consumers
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ── Job 1 ───────────────────────────────────────────────────────────────────
+  # Detect which action/workflow paths changed in this PR.
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      changed_paths: ${{ steps.detect.outputs.changed_paths }}
+      pr_sha: ${{ steps.detect.outputs.pr_sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed action paths
+        id: detect
+        run: |
+          echo "pr_sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+
+          git fetch origin "${{ github.base_ref }}" --depth=1
+
+          CHANGED=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          # For action dirs: strip the filename, keep the directory.
+          # For workflow files: keep the full path.
+          PATHS=$(echo "$CHANGED" \
+            | grep -E "^\.github/(actions|workflows)/" \
+            | while IFS= read -r f; do
+                if [[ "$f" == .github/actions/* ]]; then
+                  dirname "$f"
+                else
+                  echo "$f"
+                fi
+              done \
+            | sort -u \
+            | jq -R -s -c 'split("\n") | map(select(length > 0))')
+
+          echo "changed_paths=$PATHS" >> "$GITHUB_OUTPUT"
+          echo "Detected paths: $PATHS"
+
+  # ── Job 2 ───────────────────────────────────────────────────────────────────
+  # Find affected tyk-analytics workflows, run them against the PR SHA,
+  # report results, and clean up.
+  downstream:
+    needs: detect
+    if: needs.detect.outputs.changed_paths != '[]' && needs.detect.outputs.changed_paths != 'null'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.ORG_GITHUB_TOKEN }}
+      DOWNSTREAM: TykTechnologies/tyk-analytics
+      BRANCH: ga-pr-${{ github.event.pull_request.number }}
+    steps:
+      - name: Checkout tyk-analytics
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+        with:
+          repository: ${{ env.DOWNSTREAM }}
+          token: ${{ secrets.ORG_GITHUB_TOKEN }}
+          path: downstream
+
+      # Delete any leftover branch from a previous run of this PR so each
+      # push starts clean (handles synchronize events and re-runs).
+      - name: Clean up previous test branch
+        run: |
+          gh api -X DELETE \
+            "repos/$DOWNSTREAM/git/refs/heads/$BRANCH" \
+            2>/dev/null || true
+
+      - name: Find affected workflows
+        id: affected
+        run: |
+          CHANGED='${{ needs.detect.outputs.changed_paths }}'
+          DIR=downstream/.github/workflows
+
+          declare -A SEEN
+          FOUND=()
+
+          while IFS= read -r path; do
+            [[ -z "$path" ]] && continue
+            while IFS= read -r f; do
+              name=$(basename "$f")
+              [[ -n "${SEEN[$name]:-}" ]] && continue
+              SEEN["$name"]=1
+              FOUND+=("$name")
+            done < <(grep -rl "TykTechnologies/github-actions/${path}@" "$DIR" 2>/dev/null || true)
+          done < <(echo "$CHANGED" | jq -r '.[]')
+
+          if [[ ${#FOUND[@]} -eq 0 ]]; then
+            echo "No affected workflows found in $DOWNSTREAM"
+            echo "list=[]" >> "$GITHUB_OUTPUT"
+          else
+            LIST=$(printf '%s\n' "${FOUND[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            echo "list=$LIST" >> "$GITHUB_OUTPUT"
+            echo "Affected workflows: $LIST"
+          fi
+
+      - name: Prepare test branch
+        id: prepare
+        if: steps.affected.outputs.list != '[]'
+        run: |
+          SHA="${{ needs.detect.outputs.pr_sha }}"
+
+          cd downstream
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${{ env.BRANCH }}"
+
+          while IFS= read -r wf; do
+            f=".github/workflows/$wf"
+            [[ -f "$f" ]] || continue
+
+            # Redirect every pinned github-actions reference to the PR SHA.
+            sed -i -E \
+              "s|(TykTechnologies/github-actions/[^@]+)@[a-f0-9]{40}|\1@${SHA}|g" \
+              "$f"
+
+            # Inject workflow_dispatch so we can trigger via API.
+            # Uses Python to avoid fragile multi-line sed on the 'on:' block.
+            if ! grep -q "workflow_dispatch" "$f"; then
+              python3 - "$f" << 'PY'
+          import sys, re
+          path = sys.argv[1]
+          text = open(path).read()
+          # Insert workflow_dispatch as the first key under 'on:' (handles bare 'on:' lines).
+          text = re.sub(r'^(on:)\s*$', r'\1\n  workflow_dispatch: {}', text, flags=re.MULTILINE)
+          open(path, 'w').write(text)
+          PY
+            fi
+          done < <(echo '${{ steps.affected.outputs.list }}' | jq -r '.[]')
+
+          git add .github/workflows/
+          git diff --cached --stat
+          git commit -m "ci: test TykTechnologies/github-actions PR #${{ github.event.pull_request.number }}"
+          git push origin "${{ env.BRANCH }}"
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger affected workflows
+        id: trigger
+        if: steps.prepare.outputs.ok == 'true'
+        run: |
+          TRIGGERED=()
+          SKIPPED=()
+
+          while IFS= read -r wf; do
+            WF_ID=$(gh api "repos/$DOWNSTREAM/actions/workflows" \
+              --jq ".workflows[] | select(.path == \".github/workflows/$wf\") | .id")
+
+            if [[ -z "$WF_ID" ]]; then
+              echo "::warning::$wf not found in GitHub Actions API — skipping"
+              SKIPPED+=("${wf}:not_found")
+              continue
+            fi
+
+            echo "Triggering $wf (id $WF_ID) on ${{ env.BRANCH }}..."
+            gh api -X POST \
+              "repos/$DOWNSTREAM/actions/workflows/$WF_ID/dispatches" \
+              -f ref="${{ env.BRANCH }}"
+
+            # Poll up to 60 s for the new run to appear.
+            RUN_ID=""
+            for i in $(seq 1 12); do
+              sleep 5
+              RUN_ID=$(gh api \
+                "repos/$DOWNSTREAM/actions/workflows/$WF_ID/runs?branch=${{ env.BRANCH }}&per_page=1" \
+                --jq '.workflow_runs[0].id // empty')
+              [[ -n "$RUN_ID" ]] && break
+            done
+
+            if [[ -n "$RUN_ID" ]]; then
+              TRIGGERED+=("${wf}:${RUN_ID}")
+              echo "  → run $RUN_ID"
+            else
+              echo "::warning::Could not obtain run ID for $wf"
+              SKIPPED+=("${wf}:no_run_id")
+            fi
+          done < <(echo '${{ steps.affected.outputs.list }}' | jq -r '.[]')
+
+          echo "triggered=$(printf '%s\n' "${TRIGGERED[@]}" | jq -R -s -c 'split("\n")|map(select(length>0))')" >> "$GITHUB_OUTPUT"
+          echo "skipped=$(printf '%s\n' "${SKIPPED[@]}" | jq -R -s -c 'split("\n")|map(select(length>0))')" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for results
+        id: wait
+        if: steps.trigger.outputs.triggered != '' && steps.trigger.outputs.triggered != '[]'
+        run: |
+          OUTCOMES=()
+          ALL_OK=true
+          TOTAL=$(echo '${{ steps.trigger.outputs.triggered }}' | jq length)
+          IDX=0
+
+          while IFS= read -r entry; do
+            WF="${entry%%:*}"
+            RUN_ID="${entry#*:}"
+            URL="https://github.com/$DOWNSTREAM/actions/runs/$RUN_ID"
+            IDX=$((IDX + 1))
+
+            echo "[$IDX/$TOTAL] Polling run $RUN_ID ($WF)..."
+
+            CONCLUSION=""
+            for attempt in $(seq 1 60); do
+              read -r STATUS CONCLUSION_RAW <<< "$(gh api "repos/$DOWNSTREAM/actions/runs/$RUN_ID" \
+                --jq '[.status, (.conclusion // "")] | @tsv')"
+              CONCLUSION="$CONCLUSION_RAW"
+
+              if [[ -n "$CONCLUSION" ]]; then
+                echo "  → $WF: $CONCLUSION"
+                break
+              fi
+
+              echo "  attempt $attempt/60: status=$STATUS"
+              sleep 30
+            done
+
+            if [[ -z "$CONCLUSION" ]]; then
+              CONCLUSION="timed_out"
+            fi
+
+            OUTCOMES+=("${WF}|${RUN_ID}|${CONCLUSION}|${URL}")
+            [[ "$CONCLUSION" == "success" ]] || ALL_OK=false
+
+          done < <(echo '${{ steps.trigger.outputs.triggered }}' | jq -r '.[]')
+
+          echo "outcomes=$(printf '%s\n' "${OUTCOMES[@]}" | jq -R -s -c 'split("\n")|map(select(length>0))')" >> "$GITHUB_OUTPUT"
+          echo "all_ok=$ALL_OK" >> "$GITHUB_OUTPUT"
+
+      - name: Post results on PR
+        if: always() && steps.affected.outputs.list != '[]' && steps.affected.outputs.list != 'null'
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410  # v6
+        with:
+          github-token: ${{ secrets.ORG_GITHUB_TOKEN }}
+          script: |
+            const outcomes = JSON.parse(process.env.OUTCOMES || '[]');
+            const skipped  = JSON.parse(process.env.SKIPPED  || '[]');
+            const allOk    = process.env.ALL_OK === 'true';
+            const prSha    = '${{ needs.detect.outputs.pr_sha }}'.slice(0, 8);
+            const branch   = process.env.BRANCH;
+            const downstream = process.env.DOWNSTREAM;
+
+            const statusIcon = c =>
+              c === 'success'   ? '✅' :
+              c === 'timed_out' ? '⏱️' :
+              c === 'skipped'   ? '⏭️' : '❌';
+
+            const runRows = outcomes.map(row => {
+              const [wf, id, conclusion, url] = row.split('|');
+              return `| \`${wf}\` | [${id}](${url}) | ${statusIcon(conclusion)} \`${conclusion}\` |`;
+            });
+
+            const skipRows = skipped.map(row => {
+              const [wf, reason] = row.split(':');
+              return `| \`${wf}\` | — | ⏭️ skipped (\`${reason}\`) |`;
+            });
+
+            const headerIcon = runRows.length === 0 ? '⚠️' : (allOk ? '✅' : '❌');
+
+            const body = [
+              `## ${headerIcon} Downstream test results — \`${downstream}\``,
+              '',
+              `Tested against commit \`${prSha}\` on temp branch \`${branch}\` (now deleted).`,
+              '',
+              '| Workflow | Run | Result |',
+              '|----------|-----|--------|',
+              ...runRows,
+              ...skipRows,
+              ...(runRows.length === 0 && skipRows.length === 0
+                ? ['| — | — | No affected workflows found |']
+                : []),
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+        env:
+          OUTCOMES: ${{ steps.wait.outputs.outcomes || '[]' }}
+          SKIPPED:  ${{ steps.trigger.outputs.skipped || '[]' }}
+          ALL_OK:   ${{ steps.wait.outputs.all_ok || 'false' }}
+          BRANCH:   ${{ env.BRANCH }}
+          DOWNSTREAM: ${{ env.DOWNSTREAM }}
+
+      - name: Delete test branch
+        if: always()
+        run: |
+          gh api -X DELETE \
+            "repos/$DOWNSTREAM/git/refs/heads/$BRANCH" \
+            2>/dev/null || true
