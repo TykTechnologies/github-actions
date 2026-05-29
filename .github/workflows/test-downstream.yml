@@ -125,14 +125,15 @@ jobs:
               "$f"
 
             # Inject workflow_dispatch so we can trigger via API.
-            # Uses Python to avoid fragile multi-line sed on the 'on:' block.
+            # Uses Python to safely handle both bare 'on:' and 'on:  # comment' forms.
             if ! grep -q "workflow_dispatch" "$f"; then
               python3 - "$f" << 'PY'
           import sys, re
           path = sys.argv[1]
           text = open(path).read()
-          # Insert workflow_dispatch as the first key under 'on:' (handles bare 'on:' lines).
-          text = re.sub(r'^(on:)\s*$', r'\1\n  workflow_dispatch: {}', text, flags=re.MULTILINE)
+          # Insert workflow_dispatch right after the 'on:' line.
+          # Matches 'on:' with any optional trailing comment, then appends the new key.
+          text = re.sub(r'^(on:[^\n]*\n)', r'\1  workflow_dispatch: {}\n', text, flags=re.MULTILINE)
           open(path, 'w').write(text)
           PY
             fi
@@ -140,9 +141,15 @@ jobs:
 
           git add .github/workflows/
           git diff --cached --stat
-          git commit -m "ci: test TykTechnologies/github-actions PR #${{ github.event.pull_request.number }}"
-          git push origin "${{ env.BRANCH }}"
-          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+          if git diff --cached --quiet; then
+            echo "No workflow files were modified (SHAs already match the PR commit?)"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "ci: test TykTechnologies/github-actions PR #${{ github.event.pull_request.number }}"
+            git push origin "${{ env.BRANCH }}"
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Trigger affected workflows
         id: trigger
