@@ -21,6 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
         with:
+          filter: tree:0
           fetch-depth: 0
 
       - name: Check for dependency changes
