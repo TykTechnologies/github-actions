@@ -45,7 +45,6 @@ runs:
         DASHBOARD_IMAGE: ${{ inputs.dashboard_image }}
       run: |
         match_tag=$ECR/$REPO_NAME:$BASE_REF
-        # just a test change
         # Extract the non-SHA tag from TAGS
         # Debug: Show the raw TAGS input
         echo "Raw TAGS input:"
