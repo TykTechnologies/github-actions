@@ -1,0 +1,23 @@
+name: 'Distro Matrix'
+description: 'Returns the matrix of deb and rpm distributions for upgrade tests'
+author: 'konrad'
+outputs:
+  deb:
+    description: 'JSON array of deb-based distro images'
+    value: ${{ steps.params.outputs.deb }}
+  rpm:
+    description: 'JSON array of rpm-based distro images'
+    value: ${{ steps.params.outputs.rpm }}
+runs:
+  using: "composite"
+  steps:
+    - name: Set distro matrix
+      shell: bash
+      id: params
+      run: |
+        echo 'deb<<EOF' >> $GITHUB_OUTPUT
+        echo '["ubuntu:xenial","debian:bullseye","ubuntu:bionic","ubuntu:focal","ubuntu:jammy","debian:bookworm","debian:trixie"]' >> $GITHUB_OUTPUT
+        echo 'EOF' >> $GITHUB_OUTPUT
+        echo 'rpm<<EOF' >> $GITHUB_OUTPUT
+        echo '["amazonlinux:2","registry.access.redhat.com/ubi8/ubi","amazonlinux:2023","registry.access.redhat.com/ubi9/ubi"]' >> $GITHUB_OUTPUT
+        echo 'EOF' >> $GITHUB_OUTPUT
