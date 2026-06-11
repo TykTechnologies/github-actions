@@ -16,8 +16,8 @@ runs:
       id: params
       run: |
         echo 'deb<<EOF' >> $GITHUB_OUTPUT
-        echo '["ubuntu:xenial","debian:bullseye","ubuntu:bionic","ubuntu:focal","ubuntu:jammy","debian:bookworm","debian:trixie"]' >> $GITHUB_OUTPUT
+        echo '["debian:bullseye","ubuntu:focal","ubuntu:jammy","debian:bookworm","debian:trixie","ubuntu:noble"]' >> $GITHUB_OUTPUT
         echo 'EOF' >> $GITHUB_OUTPUT
         echo 'rpm<<EOF' >> $GITHUB_OUTPUT
-        echo '["amazonlinux:2","registry.access.redhat.com/ubi8/ubi","amazonlinux:2023","registry.access.redhat.com/ubi9/ubi"]' >> $GITHUB_OUTPUT
+        echo '["registry.access.redhat.com/ubi8/ubi","amazonlinux:2023","registry.access.redhat.com/ubi9/ubi","registry.access.redhat.com/ubi10/ubi","rockylinux:9"]' >> $GITHUB_OUTPUT
         echo 'EOF' >> $GITHUB_OUTPUT
