@@ -25,7 +25,7 @@ jobs:
           fetch-depth: 0
 
       - name: Check for dependency changes
-        if: ${{ !contains(github.event.pull_request.labels.*.name, inputs.label_name) }}
+        if: ${{ github.event.pull_request && !contains(github.event.pull_request.labels.*.name, inputs.label_name) }}
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
           EXTRA_PATHS: ${{ inputs.extra_paths }}
@@ -47,7 +47,12 @@ jobs:
             done
           fi
 
-          CHANGED=$(git diff --name-only "origin/$BASE_REF"...HEAD -- "${PATHS[@]}")
+          if git merge-base "origin/$BASE_REF" HEAD >/dev/null 2>&1; then
+            CHANGED=$(git diff --name-only "origin/$BASE_REF"...HEAD -- "${PATHS[@]}")
+          else
+            echo "::warning title=Dependency Guard::No merge base found between HEAD and origin/$BASE_REF. Falling back to direct tree comparison (two-dot diff)."
+            CHANGED=$(git diff --name-only "origin/$BASE_REF"..HEAD -- "${PATHS[@]}")
+          fi
 
           if [ -n "$CHANGED" ]; then
             echo "::error::Dependency files changed in this PR. A reviewer must verify the changes and add the '${{ inputs.label_name }}' label to unblock CI."
