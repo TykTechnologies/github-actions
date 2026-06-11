@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 
 dotenv.config();
 
@@ -14,32 +14,35 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 async function githubAPI(endpoint, options = {}) {
   if (!GITHUB_TOKEN) {
-    throw new Error('GITHUB_TOKEN must be set in .env file');
+    throw new Error("GITHUB_TOKEN must be set in .env file");
   }
 
-    const url = endpoint.startsWith('http')
-        ? endpoint
-        : `https://api.github.com${endpoint}`;
+  const url = endpoint.startsWith("http")
+    ? endpoint
+    : `https://api.github.com${endpoint}`;
   const response = await fetch(url, {
     ...options,
     headers: {
-      'Authorization': `token ${GITHUB_TOKEN}`,
-      'Accept': 'application/vnd.github.v3+json',
-      ...options.headers
-    }
+      Authorization: `token ${GITHUB_TOKEN}`,
+      Accept: "application/vnd.github.v3+json",
+      ...options.headers,
+    },
   });
 
   if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`GitHub API Error (${response.status}): ${error}`);
+    const error = await response.text();
+    throw new Error(`GitHub API Error (${response.status}): ${error}`);
   }
 
   // Handle 204 No Content responses
-    if(response.status === 204 || response.headers.get('content-length') === '0'){
-        return {}
-    }
+  if (
+    response.status === 204 ||
+    response.headers.get("content-length") === "0"
+  ) {
+    return {};
+  }
 
-    return response.json();
+  return response.json();
 }
 
 /**
@@ -49,8 +52,8 @@ async function githubAPI(endpoint, options = {}) {
  * @returns {Promise<Array>} Array of branch objects
  */
 async function getRepoBranches(owner, repo) {
-    const branches = await githubAPI(`/repos/${owner}/${repo}/branches`);
-    return branches;
+  const branches = await githubAPI(`/repos/${owner}/${repo}/branches`);
+  return branches;
 }
 
 /**
@@ -61,8 +64,21 @@ async function getRepoBranches(owner, repo) {
  * @returns {Promise<object>} PR object
  */
 async function getPullRequest(owner, repo, prNumber) {
-    const pr = await githubAPI(`/repos/${owner}/${repo}/pulls/${prNumber}`);
-    return pr;
+  const pr = await githubAPI(`/repos/${owner}/${repo}/pulls/${prNumber}`);
+  return pr;
+}
+
+/**
+ * Parse repository string in format "owner/repo"
+ * @param {string} repoString - Repository in "owner/repo" format
+ * @returns {object} {owner, repo}
+ */
+function parseRepo(repoString) {
+  const parts = repoString.split("/");
+  if (parts.length !== 2) {
+    throw new Error('Repository must be in format "owner/repo"');
+  }
+  return { owner: parts[0], repo: parts[1] };
 }
 
 /**
@@ -74,11 +90,14 @@ async function getPullRequest(owner, repo, prNumber) {
  * @returns {Promise<object>} Created comment object
  */
 async function createPRComment(owner, repo, prNumber, body) {
-    const comment = await githubAPI(`/repos/${owner}/${repo}/issues/${prNumber}/comments`, {
-        method: 'POST',
-        body: JSON.stringify({ body })
-    });
-    return comment;
+  const comment = await githubAPI(
+    `/repos/${owner}/${repo}/issues/${prNumber}/comments`,
+    {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    },
+  );
+  return comment;
 }
 
 /**
@@ -90,11 +109,14 @@ async function createPRComment(owner, repo, prNumber, body) {
  * @returns {Promise<object>} Updated comment object
  */
 async function updatePRComment(owner, repo, commentId, body) {
-    const comment = await githubAPI(`/repos/${owner}/${repo}/issues/comments/${commentId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ body })
-    });
-    return comment;
+  const comment = await githubAPI(
+    `/repos/${owner}/${repo}/issues/comments/${commentId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ body }),
+    },
+  );
+  return comment;
 }
 
 /**
@@ -105,8 +127,26 @@ async function updatePRComment(owner, repo, commentId, body) {
  * @returns {Promise<Array>} Array of comment objects
  */
 async function listPRComments(owner, repo, prNumber) {
-    const comments = await githubAPI(`/repos/${owner}/${repo}/issues/${prNumber}/comments`);
-    return comments;
+  let comments = [];
+  let page = 1;
+  const perPage = 100;
+  
+  while (true) {
+    const pageComments = await githubAPI(
+      `/repos/${owner}/${repo}/issues/${prNumber}/comments?per_page=${perPage}&page=${page}`,
+    );
+    
+    if (!Array.isArray(pageComments)) {
+      break;
+    }
+    
+    comments = comments.concat(pageComments);
+    if (pageComments.length < perPage) {
+      break;
+    }
+    page++;
+  }
+  return comments;
 }
 
 /**
@@ -119,16 +159,17 @@ async function listPRComments(owner, repo, prNumber) {
  * @returns {Promise<object|null>} Comment object if found, null otherwise
  */
 async function findCommentByMarker(owner, repo, prNumber, marker) {
-    const comments = await listPRComments(owner, repo, prNumber);
-    return comments.find(comment => comment.body.includes(marker)) || null;
+  const comments = await listPRComments(owner, repo, prNumber);
+  return comments.find((comment) => comment.body.includes(marker)) || null;
 }
 
 export {
-    githubAPI,
-    getRepoBranches,
-    getPullRequest,
-    createPRComment,
-    updatePRComment,
-    listPRComments,
-    findCommentByMarker
+  githubAPI,
+  getRepoBranches,
+  getPullRequest,
+  createPRComment,
+  updatePRComment,
+  listPRComments,
+  findCommentByMarker,
+  parseRepo,
 };
