@@ -93,10 +93,10 @@ runs:
         confs_dir=./pro-ha
         env_file=local.env' >> versions.env
         if [[ $REPO_NAME != "tyk-pump" ]]; then
-          tyk_pump_image=${{ matrix.pump }}
+          tyk_pump_image=${{ matrix.envfiles.pump || matrix.pump }}
         fi
         if [[ $REPO_NAME != "tyk-sink" ]]; then
-          tyk_sink_image=${{ matrix.sink }}
+          tyk_sink_image=${{ matrix.envfiles.sink || matrix.sink }}
         fi
         cat ./confs/${{ matrix.envfiles.config }}.env local-${{ matrix.envfiles.db }}.env > local.env
         echo "::group::versions"
