@@ -14,7 +14,7 @@ inputs:
   fallback_ref:
     description: 'Branch to fall back to when base_ref has no config in the API'
     required: false
-    default: 'master'
+    default: 'default'
 outputs:
   envfiles:
     description: 'Environment files for the test'
