@@ -60,7 +60,7 @@ jobs:
           fetch-depth: 0
 
       - name: Configure SentinelOne Shift Left CLI
-        run: s1-cns-cli config --service-user-api-token "$S1_TOKEN" --management-console-url "$CONSOLE_URL" --scope-type "$SCOPE_TYPE" --scope-id "$SCOPE_ID" --tag "$TAG"
+        run: s1-cns-cli config --debug --service-user-api-token "$S1_TOKEN" --management-console-url "$CONSOLE_URL" --scope-type "$SCOPE_TYPE" --scope-id "$SCOPE_ID" --tag "$TAG"
         env:
           S1_TOKEN: ${{ secrets.S1_API_TOKEN  }}
           CONSOLE_URL: ${{ secrets.CONSOLE_URL }}
@@ -77,21 +77,23 @@ jobs:
         # only available on pull requests.
         if: github.event_name  == 'pull_request' && inputs.secrets_enabled
         id: secret-detector
-        run: s1-cns-cli scan secret -d "$PWD" --pull-request "$SRC" "$DEST" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --provider GITHUB --publish-result
+        run: s1-cns-cli scan secret --debug -d "$PWD" --pull-request "$SRC" "$DEST" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --provider GITHUB --publish-result
         env:
+          GODEBUG: http2debug=1
           DEST: ${{ github.event.pull_request.base.sha }}
           SRC: ${{ github.event.pull_request.head.sha }}
 
       - name: Run IaC Scanner
         if: inputs.iac_enabled
-        run: s1-cns-cli scan iac -d "$PWD" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --branch "$BRANCH" --provider GITHUB --publish-result
+        run: s1-cns-cli scan iac --debug -d "$PWD" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --branch "$BRANCH" --provider GITHUB --publish-result
         id: iac-scanner
         env:
+          GODEBUG: http2debug=1
           BRANCH: ${{ github.head_ref || github.ref_name }}
 
       - name: Run Vulnerability Scanner
         if: inputs.vuln_enabled
         id: vuln-scanner
-        run: s1-cns-cli scan vuln --repo-full-name "$REPO_FULL_NAME" ${{ inputs.skip_paths != '' && '--skip-paths "$SKIP_PATHS"' || '' }} -d "$PWD"
+        run: s1-cns-cli scan vuln --debug --repo-full-name "$REPO_FULL_NAME" ${{ inputs.skip_paths != '' && '--skip-paths "$SKIP_PATHS"' || '' }} -d "$PWD"
         env:
           SKIP_PATHS: ${{ inputs.skip_paths }}
