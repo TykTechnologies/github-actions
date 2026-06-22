@@ -3,31 +3,34 @@ name: JIRA linter
 on:
   workflow_call:
     secrets:
+      JIRA_USER_EMAIL:
+        required: true
       JIRA_TOKEN:
         required: true
-      PROBE_APP_ID:
-        required: true
-      PROBE_APP_PRIVATE_KEY:
-        required: true
+
+permissions:
+  pull-requests: write
+  contents: read
 
 jobs:
   jira-lint:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
-        with:
-          app-id: ${{ secrets.PROBE_APP_ID }}
-          private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
-          owner: TykTechnologies
+      - name: Checkout github-actions PR code
+        if: github.repository == 'TykTechnologies/github-actions' && github.event_name == 'pull_request'
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
-      - uses: cyrus-za/jira-lint@68fe771c843a59c7c7020e6b98817897abecb44b  # master
-        name: jira-lint
+      - name: Checkout github-actions main for external repos
+        if: github.repository != 'TykTechnologies/github-actions' || github.event_name != 'pull_request'
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
-          github-token: ${{ steps.app-token.outputs.token }}
-          jira-token: ${{ secrets.JIRA_TOKEN }}
-          jira-base-url: https://tyktech.atlassian.net/
-          skip-branches: '^(release-[0-9.-]+(lts)?|master|main)$'
-          validate_issue_status: true
-          allowed_issue_statuses: "In Dev,In Code Review,Ready for Testing,In Test,In Progress,In Review"
+          repository: TykTechnologies/github-actions
+          ref: main
+
+      - name: Lint PR based on attached Jira ticket
+        uses: ./jira-linter
+        with:
+          jira-base-url: 'https://tyktech.atlassian.net'
+          jira-user-email: ${{ secrets.JIRA_USER_EMAIL }}
+          jira-api-token: ${{ secrets.JIRA_TOKEN }}

@@ -5,17 +5,18 @@ on:
     branches:
       - main
       - 'release-*'
+    paths:
+      - 'branch-suggestion/**'
+      - 'jira-linter/**'
+      - '.github/workflows/ci-test.yml'
   pull_request:
     paths:
       - 'branch-suggestion/**'
+      - 'jira-linter/**'
       - '.github/workflows/ci-test.yml'
 
-defaults:
-  run:
-    working-directory: branch-suggestion
-
 jobs:
-  test:
+  test-branch-suggestion:
     runs-on: ubuntu-latest
 
     steps:
@@ -30,12 +31,15 @@ jobs:
           cache-dependency-path: branch-suggestion/package-lock.json
 
       - name: Install dependencies
+        working-directory: branch-suggestion
         run: npm ci --ignore-scripts
 
       - name: Run tests
+        working-directory: branch-suggestion
         run: npm test
 
       - name: Generate coverage report
+        working-directory: branch-suggestion
         run: npm run test:coverage
 
       - name: Upload coverage reports
@@ -44,3 +48,19 @@ jobs:
         with:
           files: ./branch-suggestion/coverage/coverage-final.json
           flags: branch-suggestion
+
+  test-jira-linter:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Setup Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
+        with:
+          go-version: '1.24.7'
+
+      - name: Run tests
+        working-directory: jira-linter
+        run: go test ./...
