@@ -30,7 +30,14 @@ runs:
     - name: 'Fetch the other branch with enough history for a common merge-base commit'
       shell: bash
       run: |
-        git fetch origin ${{ github.event.pull_request.base.sha || github.event.before }}
+        # On new branch pushes or workflow_dispatch events, GitHub sets the base SHA to the
+        # null hash (0000...0000) or leaves it empty. Fetching it would cause a fatal git error.
+        base_sha="${{ github.event.pull_request.base.sha || github.event.before }}"
+        if [[ -z "$base_sha" || "$base_sha" == "0000000000000000000000000000000000000000" ]]; then
+          echo "Skipping fetch: base SHA is empty or null hash."
+        else
+          git fetch origin "$base_sha"
+        fi
 
     - name: 'Print git position'
       shell: bash
