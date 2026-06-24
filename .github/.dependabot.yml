@@ -11,3 +11,13 @@ updates:
       prefix: "Actions"
     reviewers:
       - "TykTechnologies/engineering"
+
+  - package-ecosystem: gomod
+    directory: /jira-linter
+    schedule:
+      interval: weekly
+    commit-message:
+      include: scope
+      prefix: "Go"
+    reviewers:
+      - "TykTechnologies/engineering"

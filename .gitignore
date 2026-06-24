@@ -9,6 +9,11 @@ yarn-error.log*
 .env.local
 .env.*.local
 
+# Go
+*.exe
+*.test
+*.out
+
 # OS files
 .DS_Store
 Thumbs.db
