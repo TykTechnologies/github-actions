@@ -156,9 +156,10 @@ func (t *basicAuthTransport) RoundTrip(req *http.Request) (*http.Response, error
 	return http.DefaultTransport.RoundTrip(req)
 }
 
+var issueIDRegex = regexp.MustCompile(`(?i)^.*?([A-Z]{1,10}-[0-9]{1,10}).*?$`)
+
 func findIssueID(input string) (string, error) {
-	re := regexp.MustCompile(`(?i)^.*?([A-Z]{1,10}-[0-9]{1,10}).*?$`)
-	match := re.FindStringSubmatch(input)
+	match := issueIDRegex.FindStringSubmatch(input)
 
 	if len(match) < 2 {
 		return "", fmt.Errorf("no valid Jira ticket ID found")
