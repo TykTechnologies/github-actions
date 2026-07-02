@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"flag"
 	"fmt"
 	"net/http"
@@ -40,12 +39,8 @@ func loadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to validate Jira base URL, cannot be empty or whitespace")
 	}
 
-	if strings.TrimSpace(config.Jira.UserEmail) == "" {
-		return nil, fmt.Errorf("Jira user email is required for API authentication")
-	}
-
-	if strings.TrimSpace(config.Jira.APIToken) == "" {
-		return nil, fmt.Errorf("Jira API token is required for API authentication")
+	if strings.TrimSpace(config.Jira.ReadAuth) == "" {
+		return nil, fmt.Errorf("Jira read auth token is required for API authentication (JL_JIRA_READAUTH)")
 	}
 
 	if config.PR.Number <= 0 {
@@ -132,8 +127,7 @@ func validateBranchAndTitle(config *Config, branchName string) (string, error) {
 func getJiraClient(config *Config) (*jira.Client, error) {
 	httpClient := &http.Client{
 		Transport: &basicAuthTransport{
-			Email:    config.Jira.UserEmail,
-			APIToken: config.Jira.APIToken,
+			ReadAuth: config.Jira.ReadAuth,
 		},
 	}
 
@@ -146,13 +140,11 @@ func getJiraClient(config *Config) (*jira.Client, error) {
 }
 
 type basicAuthTransport struct {
-	Email    string
-	APIToken string
+	ReadAuth string
 }
 
 func (t *basicAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	creds := base64.StdEncoding.EncodeToString([]byte(t.Email + ":" + t.APIToken))
-	req.Header.Set("Authorization", "Basic "+creds)
+	req.Header.Set("Authorization", "Basic "+t.ReadAuth)
 	return http.DefaultTransport.RoundTrip(req)
 }
 
@@ -196,6 +188,7 @@ func getPrCtx(config *Config) (*prCtx, error) {
 }
 
 const (
+	jiraSiteURL            = "https://tyktech.atlassian.net"
 	jiraSectionMarkerStart = "<!---TykTechnologies/jira-linter starts here-->"
 	jiraSectionMarkerEnd   = "<!---TykTechnologies/jira-linter ends here-->"
 )
@@ -296,7 +289,7 @@ func getJiraIssue(config *Config, issueID string) (*jira.Issue, error) {
 }
 
 func updatePRDescription(config *Config, issue *jira.Issue) error {
-	issueLink := fmt.Sprintf("%s/browse/%s", strings.TrimSuffix(config.Jira.BaseURL, "/"), issue.Key)
+	issueLink := fmt.Sprintf("%s/browse/%s", jiraSiteURL, issue.Key)
 	jiraInfo := fmt.Sprintf(`
 ### Ticket Details
 

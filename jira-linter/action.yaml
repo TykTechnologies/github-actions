@@ -3,13 +3,10 @@ description: 'Ensures pull requests align with the Jira tickets'
 
 inputs:
   jira-base-url:
-    description: 'The base URL of your Jira instance (e.g., https://tyktech.atlassian.net).'
+    description: 'The Jira API base URL (e.g., https://api.atlassian.com/ex/jira/<cloudId>).'
     required: true
-  jira-user-email:
-    description: 'The email of the user account associated with the Jira API token.'
-    required: true
-  jira-api-token:
-    description: 'The API token for your Jira account.'
+  jira-read-auth:
+    description: 'Base64-encoded Jira email and scoped API token for read-only access.'
     required: true
 
 runs:
@@ -36,8 +33,7 @@ runs:
         linter --branch="$BRANCH_NAME" 2> ${{ github.action_path }}/stderr.txt
       env:
         JL_JIRA_BASEURL: ${{ inputs.jira-base-url }}
-        JL_JIRA_USEREMAIL: ${{ inputs.jira-user-email }}
-        JL_JIRA_APITOKEN: ${{ inputs.jira-api-token }}
+        JL_JIRA_READAUTH: ${{ inputs.jira-read-auth }}
         # the following environment variables will be populated for each PR by GitHub itself.
         GITHUB_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}

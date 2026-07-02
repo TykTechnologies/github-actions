@@ -33,18 +33,16 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate Jira ticket
-        uses: TykTechnologies/github-actions/jira-linter@main
+        uses: TykTechnologies/github-actions/jira-linter@production
         with:
-          jira-base-url: 'https://your-org.atlassian.net'
-          jira-user-email: 'your-email@example.com'
-          jira-api-token: ${{ secrets.JIRA_API_TOKEN }}
+          jira-base-url: ${{ secrets.JIRA_BASE_URL }}
+          jira-read-auth: ${{ secrets.JIRA_READ_AUTH }}
 ```
 
 **Inputs:**
 
-- `jira-base-url` (required): Base URL of your Jira instance
-- `jira-user-email` (required): Email associated with Jira API token
-- `jira-api-token` (required): Jira API token (store in GitHub secrets)
+- `jira-base-url` (required): Jira API base URL (e.g., `https://api.atlassian.com/ex/jira/<cloudId>`)
+- `jira-read-auth` (required): Base64-encoded Jira email and scoped API token (store in GitHub Secrets)
 
 **Behavior:**
 
@@ -61,9 +59,8 @@ jobs:
 Set up environment variables:
 
 ```bash
-export JL_JIRA_BASEURL="https://your-domain.atlassian.net"
-export JL_JIRA_USEREMAIL="your-email@example.com"
-export JL_JIRA_APITOKEN="your-api-token"
+export JL_JIRA_BASEURL="https://api.atlassian.com/ex/jira/<cloudId>"
+export JL_JIRA_READAUTH="<base64-encoded-email:token>"
 export JL_PR_NUMBER=123
 export JL_PR_TITLE="ABC-123: Your PR title"
 export GITHUB_TOKEN="your-github-token"
@@ -96,12 +93,13 @@ linter -branch "chore/DEF-789-update-deps" -statuses ""
 
 ## Authentication
 
-### Jira API Token
+### Jira Read Auth
 
-1. Generate API token from [Atlassian Account Settings](https://id.atlassian.com/manage-profile/security/api-tokens)
-2. Set `JL_JIRA_USEREMAIL` to the email associated with the token
-3. Set `JL_JIRA_APITOKEN` to the raw API token (no base64 encoding needed)
-4. For GitHub Action, store both values in GitHub Secrets
+1. Generate a scoped API token from [Atlassian Account Settings](https://id.atlassian.com/manage-profile/security/api-tokens)
+2. Base64-encode the string `your-email@example.com:your-scoped-token`
+3. Set `JL_JIRA_READAUTH` to the resulting base64 string
+4. Set `JL_JIRA_BASEURL` to the scoped API URL (e.g., `https://api.atlassian.com/ex/jira/<cloudId>`)
+5. For GitHub Action, store as `JIRA_READ_AUTH` and `JIRA_BASE_URL` secrets
 
 ### GitHub Token
 
