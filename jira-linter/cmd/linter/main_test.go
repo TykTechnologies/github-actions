@@ -20,6 +20,8 @@ func TestFindIssueID(t *testing.T) {
 		{"mixed case", "Tt-16922-some-feature", "TT-16922", false},
 		{"uppercase in title", "TT-16922: Run resilience tests", "TT-16922", false},
 		{"feature branch prefix", "feature/tt-123-add-login", "TT-123", false},
+		{"long suffix with hyphens and numbers", "TT-17123-poc-api-to-mcp-v3-part-1", "TT-17123", false},
+		{"feat prefix with slashes", "feat/TT-17507/refactor-jira-linter-auth", "TT-17507", false},
 		{"no ID", "main", "", true},
 		{"empty string", "", "", true},
 	}
@@ -90,7 +92,7 @@ func TestBasicAuthTransport(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	transport := &basicAuthTransport{Email: "user@example.com", APIToken: "my-token"}
+	transport := &basicAuthTransport{ReadAuth: "dXNlckBleGFtcGxlLmNvbTpteS10b2tlbg=="}
 	client := &http.Client{Transport: transport}
 
 	_, err := client.Get(srv.URL)
@@ -98,7 +100,6 @@ func TestBasicAuthTransport(t *testing.T) {
 		t.Fatalf("failed to GET %s: %v", srv.URL, err)
 	}
 
-	// base64("user@example.com:my-token") = "dXNlckBleGFtcGxlLmNvbTpteS10b2tlbg=="
 	want := "Basic dXNlckBleGFtcGxlLmNvbTpteS10b2tlbg=="
 	if gotHeader != want {
 		t.Errorf("Authorization header = %q, want %q", gotHeader, want)
