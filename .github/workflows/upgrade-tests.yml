@@ -26,9 +26,10 @@ on:
         type: string
         required: true
       from_ver:
-        description: 'Package version to upgrade from'
+        description: 'Package version to upgrade from (overrides built-in default for the package)'
         type: string
-        required: true
+        required: false
+        default: ''
       runs_on:
         description: 'Runner label'
         type: string
@@ -41,7 +42,27 @@ on:
         default: false
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      from_ver: ${{ steps.resolve.outputs.from_ver }}
+    steps:
+      - name: Resolve upgrade-from version
+        id: resolve
+        run: |
+          case "${{ inputs.package_name }}" in
+            tyk)            DEFAULT=3.0.9 ;;
+            tyk-dashboard)  DEFAULT=3.0.9 ;;
+            tyk-pump)       DEFAULT=1.6.0 ;;
+            tyk-sink)       DEFAULT=1.8.2 ;;
+            *)              DEFAULT="" ;;
+          esac
+          echo "from_ver=${INPUT:-$DEFAULT}" >> $GITHUB_OUTPUT
+        env:
+          INPUT: ${{ inputs.from_ver }}
+
   upgrade-deb:
+    needs: [setup]
     services:
       httpbin.org:
         image: kennethreitz/httpbin
@@ -75,7 +96,7 @@ jobs:
           RUN apt-get update && apt-get install -y curl
           # TODO(security): curl|bash - consider fetching script and verifying checksum before execution
           RUN curl -fsSL https://packagecloud.io/install/repositories/tyk/${{ inputs.upgrade_repo }}/script.deb.sh | bash || echo "Repository setup failed, but continuing" # SECURITY: accepted risk, see TODO above
-          RUN apt-get install -y ${{ inputs.package_name }}=${{ inputs.from_ver }} || echo "Previous version not found, testing fresh install"
+          RUN apt-get install -y ${{ inputs.package_name }}=${{ needs.setup.outputs.from_ver }} || echo "Previous version not found, testing fresh install"
           RUN dpkg -i /${{ inputs.package_name }}.deb
           ' | tee Dockerfile
 
@@ -106,6 +127,7 @@ jobs:
           docker stop test || true
 
   upgrade-rpm:
+    needs: [setup]
     services:
       httpbin.org:
         image: kennethreitz/httpbin
@@ -140,7 +162,7 @@ jobs:
           RUN command -v useradd || yum install -y shadow-utils
           # TODO(security): curl|bash - consider fetching script and verifying checksum before execution
           RUN curl -fsSL https://packagecloud.io/install/repositories/tyk/${{ inputs.upgrade_repo }}/script.rpm.sh | bash || echo "Repository setup failed, but continuing" # SECURITY: accepted risk, see TODO above
-          RUN yum install -y ${{ inputs.package_name }}-${{ inputs.from_ver }}-1 || echo "Previous version not found, testing fresh install"
+          RUN yum install -y ${{ inputs.package_name }}-${{ needs.setup.outputs.from_ver }}-1 || echo "Previous version not found, testing fresh install"
           RUN curl https://keyserver.tyk.io/tyk.io.rpm.signing.key.2020 -o ${{ inputs.upgrade_repo }}.key && rpm --import ${{ inputs.upgrade_repo }}.key
           RUN rpm --checksig /${{ inputs.package_name }}.rpm
           RUN rpm -Uvh --force /${{ inputs.package_name }}.rpm
@@ -175,6 +197,7 @@ jobs:
           docker stop test || true
 
   upgrade-rpm-amd64:
+    needs: [setup]
     if: inputs.rpm_amd64 != '' && inputs.rpm_amd64 != '[]'
     services:
       httpbin.org:
@@ -207,7 +230,7 @@ jobs:
           RUN command -v useradd || yum install -y shadow-utils
           # TODO(security): curl|bash - consider fetching script and verifying checksum before execution
           RUN curl -fsSL https://packagecloud.io/install/repositories/tyk/${{ inputs.upgrade_repo }}/script.rpm.sh | bash || echo "Repository setup failed, but continuing" # SECURITY: accepted risk, see TODO above
-          RUN yum install -y ${{ inputs.package_name }}-${{ inputs.from_ver }}-1 || echo "Previous version not found, testing fresh install"
+          RUN yum install -y ${{ inputs.package_name }}-${{ needs.setup.outputs.from_ver }}-1 || echo "Previous version not found, testing fresh install"
           RUN curl https://keyserver.tyk.io/tyk.io.rpm.signing.key.2020 -o ${{ inputs.upgrade_repo }}.key && rpm --import ${{ inputs.upgrade_repo }}.key
           RUN rpm --checksig /${{ inputs.package_name }}.rpm
           RUN rpm -Uvh --force /${{ inputs.package_name }}.rpm
