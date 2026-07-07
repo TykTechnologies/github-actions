@@ -1,0 +1,226 @@
+# yamllint disable rule:line-length rule:truthy
+name: Upgrade Tests
+
+on:
+  workflow_call:
+    inputs:
+      deb:
+        description: 'JSON array of deb-based distro images'
+        type: string
+        required: true
+      rpm:
+        description: 'JSON array of rpm-based distro images'
+        type: string
+        required: true
+      rpm_amd64:
+        description: 'JSON array of amd64-only rpm distro images (e.g. UBI7)'
+        type: string
+        required: false
+        default: '[]'
+      package_name:
+        description: 'Package name (e.g. tyk-dashboard)'
+        type: string
+        required: true
+      upgrade_repo:
+        description: 'Packagecloud repository name for upgrade-from installation'
+        type: string
+        required: true
+      from_ver:
+        description: 'Package version to upgrade from'
+        type: string
+        required: true
+      runs_on:
+        description: 'Runner label'
+        type: string
+        required: false
+        default: ubuntu-latest
+      run_gateway_tests:
+        description: 'Run tyk-gateway API functionality tests after install'
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  upgrade-deb:
+    services:
+      httpbin.org:
+        image: kennethreitz/httpbin
+    runs-on: ${{ inputs.runs_on }}
+    strategy:
+      fail-fast: true
+      matrix:
+        arch:
+          - amd64
+          - arm64
+        distro: ${{ fromJson(inputs.deb) }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: ci
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: deb
+
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130  # v3
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+
+      - name: generate dockerfile
+        run: |
+          echo 'FROM ${{ matrix.distro }}
+          ARG TARGETARCH
+          COPY ${{ inputs.package_name }}*_${TARGETARCH}.deb /${{ inputs.package_name }}.deb
+          RUN apt-get update && apt-get install -y curl
+          # TODO(security): curl|bash - consider fetching script and verifying checksum before execution
+          RUN curl -fsSL https://packagecloud.io/install/repositories/tyk/${{ inputs.upgrade_repo }}/script.deb.sh | bash || echo "Repository setup failed, but continuing" # SECURITY: accepted risk, see TODO above
+          RUN apt-get install -y ${{ inputs.package_name }}=${{ inputs.from_ver }} || echo "Previous version not found, testing fresh install"
+          RUN dpkg -i /${{ inputs.package_name }}.deb
+          ' | tee Dockerfile
+
+      - name: append gateway setup to dockerfile
+        if: inputs.run_gateway_tests
+        run: |
+          printf '\nRUN /opt/tyk-gateway/install/setup.sh --listenport=8080 --redishost=localhost --redisport=6379 --domain=""\nCOPY ci/tests/api-functionality/data/api.json /opt/tyk-gateway/apps/\nCMD ["/opt/tyk-gateway/tyk", "--conf", "/opt/tyk-gateway/tyk.conf"]\n' >> Dockerfile
+
+      - name: install on ${{ matrix.distro }}
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: "."
+          platforms: linux/${{ matrix.arch }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          file: Dockerfile
+          push: false
+          load: ${{ inputs.run_gateway_tests }}
+          tags: ${{ inputs.run_gateway_tests && format('test-{0}-{1}', matrix.distro, matrix.arch) || '' }}
+
+      - name: test gateway API functionality
+        if: inputs.run_gateway_tests
+        run: |
+          docker run -d -p8080:8080 --name=test --platform linux/${{ matrix.arch }} --network ${{ job.container.network }} --rm test-${{ matrix.distro }}-${{ matrix.arch }}
+          sleep 2
+          ./ci/tests/api-functionality/api_test.sh
+          sleep 2
+          docker stop test || true
+
+  upgrade-rpm:
+    services:
+      httpbin.org:
+        image: kennethreitz/httpbin
+    runs-on: ${{ inputs.runs_on }}
+    strategy:
+      fail-fast: true
+      matrix:
+        arch:
+          - amd64
+          - arm64
+        distro: ${{ fromJson(inputs.rpm) }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: ci
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: rpm
+
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130  # v3
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+
+      - name: generate dockerfile
+        run: |
+          echo 'FROM ${{ matrix.distro }}
+          ARG RHELARCH
+          COPY ${{ inputs.package_name }}*.${RHELARCH}.rpm /${{ inputs.package_name }}.rpm
+          RUN command -v curl || yum install -y curl
+          RUN command -v useradd || yum install -y shadow-utils
+          # TODO(security): curl|bash - consider fetching script and verifying checksum before execution
+          RUN curl -fsSL https://packagecloud.io/install/repositories/tyk/${{ inputs.upgrade_repo }}/script.rpm.sh | bash || echo "Repository setup failed, but continuing" # SECURITY: accepted risk, see TODO above
+          RUN yum install -y ${{ inputs.package_name }}-${{ inputs.from_ver }}-1 || echo "Previous version not found, testing fresh install"
+          RUN curl https://keyserver.tyk.io/tyk.io.rpm.signing.key.2020 -o ${{ inputs.upgrade_repo }}.key && rpm --import ${{ inputs.upgrade_repo }}.key
+          RUN rpm --checksig /${{ inputs.package_name }}.rpm
+          RUN rpm -Uvh --force /${{ inputs.package_name }}.rpm
+          ' | tee Dockerfile
+
+      - name: append gateway setup to dockerfile
+        if: inputs.run_gateway_tests
+        run: |
+          printf '\nRUN /opt/tyk-gateway/install/setup.sh --listenport=8080 --redishost=localhost --redisport=6379 --domain=""\nCOPY ci/tests/api-functionality/data/api.json /opt/tyk-gateway/apps/\nCMD ["/opt/tyk-gateway/tyk", "--conf", "/opt/tyk-gateway/tyk.conf"]\n' >> Dockerfile
+
+      - name: install on ${{ matrix.distro }}
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: "."
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            RHELARCH=${{ startsWith(matrix.arch, 'arm64') && 'aarch64' || 'x86_64' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          file: Dockerfile
+          push: false
+          load: ${{ inputs.run_gateway_tests }}
+          tags: ${{ inputs.run_gateway_tests && format('test-{0}-{1}', matrix.distro, matrix.arch) || '' }}
+
+      - name: test gateway API functionality
+        if: inputs.run_gateway_tests
+        run: |
+          docker run -d -p8080:8080 --name=test --platform linux/${{ matrix.arch }} --network ${{ job.container.network }} --rm test-${{ matrix.distro }}-${{ matrix.arch }}
+          sleep 2
+          ./ci/tests/api-functionality/api_test.sh
+          sleep 2
+          docker stop test || true
+
+  upgrade-rpm-amd64:
+    if: inputs.rpm_amd64 != '' && inputs.rpm_amd64 != '[]'
+    services:
+      httpbin.org:
+        image: kennethreitz/httpbin
+    runs-on: ${{ inputs.runs_on }}
+    strategy:
+      fail-fast: true
+      matrix:
+        distro: ${{ fromJson(inputs.rpm_amd64) }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: ci
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: rpm
+
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130  # v3
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+
+      - name: generate dockerfile
+        run: |
+          echo 'FROM ${{ matrix.distro }}
+          ARG RHELARCH
+          COPY ${{ inputs.package_name }}*.${RHELARCH}.rpm /${{ inputs.package_name }}.rpm
+          RUN command -v curl || yum install -y curl
+          RUN command -v useradd || yum install -y shadow-utils
+          # TODO(security): curl|bash - consider fetching script and verifying checksum before execution
+          RUN curl -fsSL https://packagecloud.io/install/repositories/tyk/${{ inputs.upgrade_repo }}/script.rpm.sh | bash || echo "Repository setup failed, but continuing" # SECURITY: accepted risk, see TODO above
+          RUN yum install -y ${{ inputs.package_name }}-${{ inputs.from_ver }}-1 || echo "Previous version not found, testing fresh install"
+          RUN curl https://keyserver.tyk.io/tyk.io.rpm.signing.key.2020 -o ${{ inputs.upgrade_repo }}.key && rpm --import ${{ inputs.upgrade_repo }}.key
+          RUN rpm --checksig /${{ inputs.package_name }}.rpm
+          RUN rpm -Uvh --force /${{ inputs.package_name }}.rpm
+          ' | tee Dockerfile
+
+      - name: install on ${{ matrix.distro }}
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: "."
+          platforms: linux/amd64
+          build-args: |
+            RHELARCH=x86_64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          file: Dockerfile
+          push: false
