@@ -8,6 +8,9 @@ outputs:
   rpm:
     description: 'JSON array of rpm-based distro images'
     value: ${{ steps.params.outputs.rpm }}
+  rpm_amd64:
+    description: 'JSON array of rpm-based distro images requiring linux/amd64 platform (e.g. UBI7)'
+    value: ${{ steps.params.outputs.rpm_amd64 }}
 runs:
   using: "composite"
   steps:
@@ -16,8 +19,11 @@ runs:
       id: params
       run: |
         echo 'deb<<EOF' >> $GITHUB_OUTPUT
-        echo '["debian:bullseye","ubuntu:focal","ubuntu:jammy","debian:bookworm","debian:trixie","ubuntu:noble"]' >> $GITHUB_OUTPUT
+        echo '["debian:bullseye","ubuntu:focal","ubuntu:jammy","debian:bookworm","debian:trixie","ubuntu:noble","ubuntu:26.04"]' >> $GITHUB_OUTPUT
         echo 'EOF' >> $GITHUB_OUTPUT
         echo 'rpm<<EOF' >> $GITHUB_OUTPUT
         echo '["registry.access.redhat.com/ubi8/ubi","amazonlinux:2023","registry.access.redhat.com/ubi9/ubi","registry.access.redhat.com/ubi10/ubi","rockylinux:9"]' >> $GITHUB_OUTPUT
+        echo 'EOF' >> $GITHUB_OUTPUT
+        echo 'rpm_amd64<<EOF' >> $GITHUB_OUTPUT
+        echo '["registry.access.redhat.com/ubi7/ubi"]' >> $GITHUB_OUTPUT
         echo 'EOF' >> $GITHUB_OUTPUT
