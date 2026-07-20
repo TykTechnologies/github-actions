@@ -1,0 +1,77 @@
+name: Gromit Drift Check
+
+on:
+  workflow_call:
+    inputs:
+      label_name:
+        description: 'PR label that bypasses the drift check'
+        default: 'drift-override'
+        type: string
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Break-glass bypass
+        if: ${{ contains(github.event.pull_request.labels.*.name, inputs.label_name) }}
+        run: |
+          echo "::warning title=Drift check bypassed::'${{ inputs.label_name }}' label present. This change bypasses gromit; backport it into gromit's templates or it will be overwritten by the next policy sync."
+          {
+            echo "## :rotating_light: Drift check bypassed"
+            echo ""
+            echo "The \`${{ inputs.label_name }}\` label is present on this PR."
+            echo "Backport this change into gromit's templates, otherwise the next \`policy sync\` will overwrite it."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkout
+        if: ${{ !contains(github.event.pull_request.labels.*.name, inputs.label_name) }}
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+
+      - name: Set up Go
+        if: ${{ !contains(github.event.pull_request.labels.*.name, inputs.label_name) }}
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff  # v5
+        with:
+          go-version: "1.22"
+
+      - name: Build gromit from master
+        if: ${{ !contains(github.event.pull_request.labels.*.name, inputs.label_name) }}
+        run: go install github.com/TykTechnologies/gromit@master
+
+      - name: Check for drift from gromit
+        if: ${{ !contains(github.event.pull_request.labels.*.name, inputs.label_name) }}
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -o pipefail
+          export PATH="$PATH:$(go env GOPATH)/bin"
+
+          REPO=$(basename "${{ github.repository }}")
+
+          if ! out=$(gromit policy gen --repo "$REPO" --branch "$BASE_REF" . 2>&1); then
+            if echo "$out" | grep -q "unknown among"; then
+              echo "::notice title=Drift check skipped::Branch '$BASE_REF' of $REPO is not managed by gromit."
+              exit 0
+            fi
+            echo "$out"
+            exit 1
+          fi
+
+          git add -A
+          if ! gromit policy diff .; then
+            echo "::error title=Drift from gromit detected::Files in this PR differ from what gromit generates for $REPO/$BASE_REF. These files are managed by gromit; make this change in gromit's templates instead (https://github.com/TykTechnologies/gromit). For release emergencies, a repo admin can add the '${{ inputs.label_name }}' label to bypass this check."
+            {
+              echo "## :x: Drift from gromit detected"
+              echo ""
+              echo "Gromit-managed files in this PR differ from what gromit generates for \`$REPO\`/\`$BASE_REF\`."
+              echo ""
+              echo '```'
+              git --no-pager diff --staged --stat
+              echo '```'
+              echo ""
+              echo "Make this change in [gromit](https://github.com/TykTechnologies/gromit) instead. For release emergencies, a repo admin can add the \`${{ inputs.label_name }}\` label to bypass this check."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "No drift detected: $REPO/$BASE_REF matches gromit."
