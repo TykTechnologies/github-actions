@@ -1,0 +1,13 @@
+## Release bot
+
+```
+name: Release bot
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  release_bot:
+    uses: TykTechnologies/github-actions/.github/workflows/release-bot.yaml@main
+```

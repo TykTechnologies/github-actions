@@ -30,11 +30,11 @@ Adoption: gateway, dashboard, reuse in shared CI workflows.
 
 Source: [/.github/actions/checkout-pr/action.yml](/.github/actions/checkout-pr/action.yml)
 
-## Github to slack
+## Upload Failed Job Logs
 
-Maps github email with slack user, based on a key value map. Maps needs to be mantained manually.
+On workflow job failure, fetch and send relevant logs with branch information to an external API
 
-Source: [/.github/actions/github-to-slack/action.yaml](/.github/actions/github-to-slack/action.yaml)
+Source: [/.github/actions/gh-logs-analyser/action.yaml](/.github/actions/gh-logs-analyser/action.yaml)
 
 ## Calculate tests tags
 
@@ -43,6 +43,12 @@ Calculates corresponding CI image tags based on github events for a group of tyk
 Source: [/.github/actions/latest-versions/action.yaml](/.github/actions/latest-versions/action.yaml)
 
 # Reusable workflows
+
+## Branch Suggestion for PRs
+
+Undocumented action.
+
+Source: [/.github/workflows/branch-suggestion.yml](/.github/workflows/branch-suggestion.yml)
 
 ## CI tooling
 
@@ -107,11 +113,94 @@ Adoption: Internal use for PR workflows on the repository.
 
 Source: [/.github/workflows/ci-lint.yml](/.github/workflows/ci-lint.yml)
 
+## CI Tests
+
+Undocumented action.
+
+Source: [/.github/workflows/ci-test.yml](/.github/workflows/ci-test.yml)
+
 ## Create or update a GitHub comment
 
 Undocumented action.
 
 Source: [/.github/workflows/create-update-comment.yaml](/.github/workflows/create-update-comment.yaml)
+
+## Dependency Change Guard
+
+Undocumented action.
+
+Source: [/.github/workflows/dependency-guard.yml](/.github/workflows/dependency-guard.yml)
+
+## Docs preview
+
+Renders the generated-documentation diff (config docs, OAS/x-tyk-gateway,
+swagger) for a PR in a source repo, posts it as a sticky PR comment, and
+requests an **advisory** review from a PM team. The goal is to catch PM
+feedback on doc-bearing code changes before they merge, instead of after the
+[tyk-docs sync](https://github.com/TykTechnologies/exp/actions/workflows/tyk-docs.yml)
+has already opened a docs PR (which forces a fix-regenerate-review loop).
+
+Behavior:
+
+- No touched doc-bearing path → the workflow ends silently.
+- Touched paths but identical generated output (pure refactor) → updates an
+  existing preview comment to "No documentation impact"; stays silent otherwise.
+- Generated output changed → sticky comment with the rendered docs diff
+  (truncated at 60k chars; full diff as the `docs-preview-diff` artifact) and a
+  one-time advisory review request to `pm_team`.
+- Fork PRs are skipped (secrets unavailable to forks).
+- Never make this a required check — it is advisory by design.
+
+Inputs:
+
+- `component` (required): `gateway`, `dashboard`, `pump`, `mdcb` or `portal` —
+  selects the generator set, mirroring the tyk-docs sync jobs.
+- `docs_paths` (required): newline-separated globs of doc-bearing paths,
+  matched against the PR's changed files.
+- `pm_team` (optional): GitHub team slug to request as advisory reviewer.
+- `comment_marker` (optional): sticky-comment identity marker.
+
+Secrets: `PROBE_APP_ID`, `PROBE_APP_PRIVATE_KEY` (org-wide App; used for the
+private `tyk-config-info-generator` checkout and the team review request).
+
+Example usage (tyk):
+
+```yaml
+name: Docs preview
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  docs-preview:
+    uses: TykTechnologies/github-actions/.github/workflows/docs-preview.yml@main
+    with:
+      component: gateway
+      docs_paths: |
+        apidef/oas/**
+        config/**
+        swagger.yml
+      pm_team: product-managers
+    secrets: inherit
+```
+
+Generation logic intentionally mirrors exp's `tyk-docs.yml`; if you change
+one, change the other (until both consume shared composite actions).
+
+Source: [/.github/workflows/docs-preview.yml](/.github/workflows/docs-preview.yml)
+
+## Gromit Drift Check
+
+Undocumented action.
+
+Source: [/.github/workflows/drift-check.yml](/.github/workflows/drift-check.yml)
+
+## Force Merge PR (Reusable)
+
+Undocumented action.
+
+Source: [/.github/workflows/force-merge.yaml](/.github/workflows/force-merge.yaml)
 
 ## Print Go API Changes
 
@@ -173,6 +262,53 @@ Source: [/.github/workflows/govulncheck.yaml](/.github/workflows/govulncheck.yam
 
 ## JIRA linter
 
+Validates pull requests against Jira tickets. Extracts Jira issue IDs from branch names or PR titles, fetches issue 
+details from Jira, updates PR descriptions with ticket information, and validates issue status.
+
+### Features
+
+- Extracts Jira issue IDs from branch names (e.g., `feature/ABC-123-description`)
+- Validates PR title contains matching Jira ticket ID
+- Fetches Jira issue details via API
+- Updates PR description with ticket details (status, summary, link)
+- Validates issue status against accepted statuses
+- Posts sticky PR comment on failure with error details
+
+### Usage as a reusable workflow
+
+```yaml
+jobs:
+  jira-lint:
+    uses: TykTechnologies/github-actions/.github/workflows/jira-lint.yaml@main
+    secrets:
+      JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+      JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
+```
+
+### Usage as a composite action
+
+```yaml
+jobs:
+  jira-lint:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: TykTechnologies/github-actions/jira-linter@main
+        with:
+          jira-base-url: 'https://tyktech.atlassian.net'
+          jira-user-email: ${{ secrets.JIRA_USER_EMAIL }}
+          jira-api-token: ${{ secrets.JIRA_TOKEN }}
+```
+
+### Secrets
+
+| Secret            | Description                              |
+|-------------------|------------------------------------------|
+| `JIRA_USER_EMAIL` | Email associated with the Jira API token |
+| `JIRA_TOKEN`      | Jira API token for authentication        |
+
 Adoption: Gateway, Dashboard.
 
 Source: [/.github/workflows/jira-lint.yaml](/.github/workflows/jira-lint.yaml)
@@ -204,6 +340,12 @@ jobs:
 
 Source: [/.github/workflows/nancy.yaml](/.github/workflows/nancy.yaml)
 
+## Path-Based OSV Scan
+
+Undocumented action.
+
+Source: [/.github/workflows/osv-path-scan.yml](/.github/workflows/osv-path-scan.yml)
+
 ## OWASP scanner
 
 Example usage:
@@ -232,11 +374,45 @@ jobs:
     uses: TykTechnologies/github-actions/.github/workflows/release-bot.yaml@main
 ```
 
-## PR Agent
+Source: [/.github/workflows/release-bot.yaml](/.github/workflows/release-bot.yaml)
 
-Undocumented action.
+## Sentinel One CNS Scans
 
-Source: [/.github/workflows/pr-agent.yaml](/.github/workflows/pr-agent.yaml)
+This runs the S1 scans and publishes the results to the S1 console.
+It has three available scanners.
+- Secret scanner
+- IaC scanner
+- Vulnerability scanner
+
+By default, all three are enabled, but it could be controlled by setting the flags appropriately
+while calling the workflow.
+Also, keep in mind that the secret scanner runs only on pull request events, as the scanner only supports
+publishing results on pull requsts.
+
+Example usage:
+
+```yaml
+name: SentinelOne CNS Scan
+
+on:
+  pull_request:
+    types: [ opened, reopened, synchronize ]
+    branches: [ master ]
+
+jobs:
+  s1_scanner:
+    uses: TykTechnologies/github-actions/.github/workflows/s1-cns-scan.yml@main
+    with:
+      iac_enabled: false
+      tag: service:vulnscan
+      scope_type: ACCOUNT
+    secrets:
+      S1_API_TOKEN: ${{ secrets.S1_API_TOKEN }}
+      CONSOLE_URL: ${{ secrets.S1_CONSOLE_URL }}
+      SCOPE_ID: ${{ secrets.S1_SCOPE_ID }}
+```
+
+Source: [/.github/workflows/s1-cns-scan.yml](/.github/workflows/s1-cns-scan.yml)
 
 ## SBOM - source bill of materials (dev)
 
@@ -308,40 +484,15 @@ jobs:
 
 Source: [/.github/workflows/sonarcloud.yaml](/.github/workflows/sonarcloud.yaml)
 
-## Sentinel One CNS Scans
+## Upgrade Tests
 
-This runs the S1 scans and publishes the results to the S1 console.
-It has three available scanners.
-- Secret scanner
-- IaC scanner
-- Vulnerability scanner
+Undocumented action.
 
-By default, all three are enabled, but it could be controlled by setting the flags appropriately
-while calling the workflow.
-Also, keep in mind that the secret scanner runs only on pull request events, as the scanner only supports
-publishing results on pull requsts.
+Source: [/.github/workflows/upgrade-tests.yml](/.github/workflows/upgrade-tests.yml)
 
-Example usage:
+## Visor
 
-```yaml
-name: SentinelOne CNS Scan
+Undocumented action.
 
-on:
-  pull_request:
-    types: [ opened, reopened, synchronize ]
-    branches: [ master ]
+Source: [/.github/workflows/visor.yaml](/.github/workflows/visor.yaml)
 
-jobs:
-  s1_scanner:
-    uses: TykTechnologies/github-actions/.github/workflows/s1-cns-scan.yml@main
-    with:
-      iac_enabled: false
-      tag: service:vulnscan
-      scope_type: ACCOUNT
-    secrets:
-      S1_API_TOKEN: ${{ secrets.S1_API_TOKEN }}
-      CONSOLE_URL: ${{ secrets.S1_CONSOLE_URL }}
-      SCOPE_ID: ${{ secrets.S1_SCOPE_ID }}
-```
-
-Source: [/.github/workflows/s1-cns-scan.yml](/.github/workflows/s1-cns-scan.yml)

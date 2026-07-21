@@ -1,0 +1,328 @@
+# yamllint disable rule:line-length
+---
+name: Docs preview
+
+# Renders the generated-docs diff (config docs, OAS/x-tyk-gateway, swagger)
+# for a PR in a source repo, posts it as a sticky PR comment, and requests
+# an ADVISORY review from a PM team. Never a required check.
+#
+# Generation steps mirror the tyk-docs sync:
+# https://github.com/TykTechnologies/exp/blob/main/.github/workflows/tyk-docs.yml
+# Keep them in sync until they are factored into shared composite actions.
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        description: 'Generator set to run: gateway, dashboard, pump, mdcb or portal'
+        required: true
+        type: string
+      docs_paths:
+        description: 'Newline-separated globs of doc-bearing paths; the workflow no-ops unless the PR touches one'
+        required: true
+        type: string
+      pm_team:
+        description: 'GitHub team slug to request as advisory reviewer (empty = comment only)'
+        required: false
+        default: ''
+        type: string
+      comment_marker:
+        description: 'Hidden marker identifying the sticky PR comment'
+        required: false
+        default: '<!-- docs-preview -->'
+        type: string
+    secrets:
+      PROBE_APP_ID:
+        required: true
+      PROBE_APP_PRIVATE_KEY:
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  detect:
+    name: Detect docs-bearing changes
+    # Fork PRs: secrets are unavailable and the config generator needs remote branch names.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      docs_affected: ${{ steps.match.outputs.docs_affected }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Match changed files against docs paths
+        id: match
+        env:
+          DOCS_PATHS: ${{ inputs.docs_paths }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          affected=false
+          changed=$(git diff --name-only "origin/${BASE_REF}...HEAD")
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            while IFS= read -r pat; do
+              [ -z "$pat" ] && continue
+              # bash [[ == ]] pattern matching: * matches across '/', so ** and * behave the same here
+              if [[ "$file" == $pat ]]; then
+                echo "docs-bearing change: $file (pattern: $pat)"
+                affected=true
+                break 2
+              fi
+            done <<< "$DOCS_PATHS"
+          done <<< "$changed"
+          echo "docs_affected=$affected" >> "$GITHUB_OUTPUT"
+
+  preview:
+    name: Generate docs preview
+    needs: [detect]
+    if: needs.detect.outputs.docs_affected == 'true'
+    runs-on: ubuntu-latest
+    env:
+      BASE_REF: ${{ github.event.pull_request.base.ref }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547  # v1
+        with:
+          app-id: ${{ secrets.PROBE_APP_ID }}
+          private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
+          owner: TykTechnologies
+
+      - name: Checkout head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          fetch-depth: 1
+
+      - name: Checkout base
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: base
+          fetch-depth: 1
+
+      - name: Prepare output directories
+        run: mkdir -p out-base out-head
+
+      - name: Set up Go
+        if: inputs.component == 'gateway'
+        uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed  # v5.1.0
+        with:
+          go-version: '1.21'
+
+      - name: Checkout exp (schema-gen + cleanup script)
+        if: inputs.component == 'gateway'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          repository: TykTechnologies/exp
+          path: exp
+          fetch-depth: 1
+
+      - name: Install schema-gen
+        if: inputs.component == 'gateway'
+        run: cd exp/cmd/schema-gen && GOBIN=/usr/local/bin go install .
+
+      - name: Generate x-tyk-gateway docs (base and head)
+        if: inputs.component == 'gateway'
+        run: |
+          for side in base head; do
+            (
+              cd "$side/apidef/oas"
+              schema-gen extract -o - | schema-gen markdown -i - \
+                --root XTykAPIGateway \
+                --skip "OldOAS,APIDef,OAS,TykExtensionConfigParams,ServerRegenerationConfig" \
+                --title "## Tyk vendor extension reference" \
+                --replace "tyktime.ReadableDuration=string,model.ObjectID=string,apidef.MiddlewareDriver=string,apidef.IdExtractorSource=string,apidef.IdExtractorType=string,apidef.RequestInputType=string,apidef.AuthTypeEnum=string,[]osin.AuthorizeRequestType=[]string" \
+                --heading-format "### **%s**" \
+                --trim "Tyk classic API definition" \
+                -o "$GITHUB_WORKSPACE/out-$side/x-tyk-gateway.mdx"
+            )
+            (
+              cd exp
+              python3 scripts/remove-oas-dublicates/index.py --input-file "$GITHUB_WORKSPACE/out-$side/x-tyk-gateway.mdx"
+            )
+          done
+
+      - name: Generate gateway swagger (base and head)
+        if: inputs.component == 'gateway'
+        run: |
+          massage() {
+            cp "$1" ./swagger-modified.yml
+            sed -i "s|'https://raw.githubusercontent.com/TykTechnologies/tyk/refs/heads/master/apidef/oas/schema/3.0.json'|'#/components/schemas/OpenAPI3Schema'|g" ./swagger-modified.yml
+            sed -i "s|https://raw.githubusercontent.com/TykTechnologies/tyk/refs/heads/master/apidef/oas/schema/3.0.json|'#/components/schemas/OpenAPI3Schema'|g" ./swagger-modified.yml
+            awk '
+              {print}
+              /schemas:/ && !done {
+                print "    OpenAPI3Schema:"
+                print "      type: object"
+                print "      additionalProperties: true"
+                done=1
+              }
+            ' ./swagger-modified.yml > "$2"
+          }
+          for side in base head; do
+            massage "$side/swagger.yml" "out-$side/gateway-swagger.yml"
+          done
+
+      - name: Generate dashboard docs (base and head)
+        if: inputs.component == 'dashboard'
+        run: |
+          massage() {
+            cp "$1" ./swagger-modified.yml
+            sed -i "s|'https://raw.githubusercontent.com/TykTechnologies/tyk/refs/heads/master/apidef/oas/schema/3.0.json'|'#/components/schemas/OpenAPI3Schema'|g" ./swagger-modified.yml
+            sed -i "s|https://raw.githubusercontent.com/TykTechnologies/tyk/refs/heads/master/apidef/oas/schema/3.0.json|'#/components/schemas/OpenAPI3Schema'|g" ./swagger-modified.yml
+            awk '
+              {print}
+              /schemas:/ && !done {
+                print "    OpenAPI3Schema:"
+                print "      type: object"
+                print "      additionalProperties: true"
+                done=1
+              }
+            ' ./swagger-modified.yml > "$2"
+          }
+          for side in base head; do
+            massage "$side/swagger.yml" "out-$side/dashboard-swagger.yml"
+            cp "$side/swagger-admin.yml" "out-$side/dashboard-admin-swagger.yml"
+            cp "$side/docs/opa/opa-rules.md" "out-$side/opa-rules.mdx"
+          done
+
+      - name: Generate MDCB swagger (base and head)
+        if: inputs.component == 'mdcb'
+        run: |
+          for side in base head; do
+            cp "$side/swagger.yml" "out-$side/mdcb-swagger.yml"
+          done
+
+      - name: Generate portal swagger (base and head)
+        if: inputs.component == 'portal'
+        run: |
+          for side in base head; do
+            cp "$side/docs/api/enterprise-developer-portal-swagger.yaml" "out-$side/enterprise-developer-portal-swagger.yaml"
+          done
+
+      - name: Checkout config info generator
+        if: contains(fromJSON('["gateway","dashboard","pump","mdcb"]'), inputs.component)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          repository: TykTechnologies/tyk-config-info-generator
+          token: ${{ steps.app-token.outputs.token }}
+          path: tyk-config-info-generator
+          ref: main
+
+      - name: Generate config docs (base and head)
+        if: contains(fromJSON('["gateway","dashboard","pump","mdcb"]'), inputs.component)
+        working-directory: ./tyk-config-info-generator/src
+        run: |
+          repo="${{ inputs.component }}"
+          for side in base head; do
+            if [ "$side" = "base" ]; then branch="$BASE_REF"; else branch="$HEAD_REF"; fi
+            sudo TOKEN=${{ steps.app-token.outputs.token }} node app.js "$repo:$branch"
+            cp "/node/home/tyk-config-info-generator/info/$branch/$repo.md" "$GITHUB_WORKSPACE/out-$side/$repo-config.mdx"
+          done
+
+      - name: Diff rendered docs
+        id: diff
+        run: |
+          set +e
+          diff -ruN out-base out-head > docs.diff
+          rc=$?
+          set -e
+          if [ "$rc" -gt 1 ]; then
+            echo "diff failed with exit code $rc" >&2
+            exit "$rc"
+          fi
+          if [ "$rc" -eq 1 ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+          wc -c docs.diff
+
+      - name: Upload full diff as artifact
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882  # v4.4.3
+        with:
+          name: docs-preview-diff
+          path: docs.diff
+
+      - name: Build comment body
+        env:
+          MARKER: ${{ inputs.comment_marker }}
+          PM_TEAM: ${{ inputs.pm_team }}
+          COMPONENT: ${{ inputs.component }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CHANGED: ${{ steps.diff.outputs.changed }}
+        run: |
+          if [ "$CHANGED" != "true" ]; then
+            {
+              echo "$MARKER"
+              echo "## 📚 Documentation preview"
+              echo
+              echo "No documentation impact — the latest changes do not alter generated docs."
+            } > comment-body.md
+            exit 0
+          fi
+          limit=60000
+          size=$(wc -c < docs.diff)
+          {
+            echo "$MARKER"
+            echo "## 📚 Documentation preview"
+            echo
+            echo "This PR changes generated documentation (component: \`$COMPONENT\`)."
+            if [ -n "$PM_TEAM" ]; then
+              echo
+              echo "cc @TykTechnologies/$PM_TEAM — advisory review requested; this does **not** block merging."
+            fi
+            echo
+            echo '<details><summary>Rendered docs diff</summary>'
+            echo
+            echo '````diff'
+            head -c "$limit" docs.diff
+            echo
+            echo '````'
+            echo
+            echo '</details>'
+            if [ "$size" -gt "$limit" ]; then
+              echo
+              echo "_Diff truncated (${size} bytes total). Full diff: \`docs-preview-diff\` artifact on the [workflow run]($RUN_URL)._"
+            fi
+          } > comment-body.md
+
+      - name: Find existing preview comment
+        id: fc
+        uses: peter-evans/find-comment@a54c31d7fa095754bfef525c0c8e5e5674c4b4b1  # v2
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-includes: ${{ inputs.comment_marker }}
+
+      # Post when there is a docs diff; when there is none, only update an
+      # existing comment (a PR that never had docs impact stays silent).
+      - name: Create or update preview comment
+        if: steps.diff.outputs.changed == 'true' || steps.fc.outputs.comment-id != ''
+        uses: peter-evans/create-or-update-comment@23ff15729ef2fc348714a3bb66d2f655ca9066f2  # v3
+        with:
+          comment-id: ${{ steps.fc.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: comment-body.md
+          edit-mode: replace
+
+      # Advisory only, requested once per PR: on the first push that produces
+      # a docs diff (no pre-existing sticky comment). Uses the App token —
+      # GITHUB_TOKEN cannot request org team reviews.
+      - name: Request PM team review (advisory)
+        if: steps.diff.outputs.changed == 'true' && steps.fc.outputs.comment-id == '' && inputs.pm_team != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PM_TEAM: ${{ inputs.pm_team }}
+        run: |
+          gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers" \
+            -f "team_reviewers[]=$PM_TEAM" \
+            || echo "::warning::Could not request review from team '$PM_TEAM' — check the slug and that the PROBE App can write PRs in this repo"
