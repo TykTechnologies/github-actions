@@ -181,7 +181,7 @@ jobs:
         apidef/oas/**
         config/**
         swagger.yml
-      pm_team: product-managers
+      pm_team: pms
     secrets: inherit
 ```
 

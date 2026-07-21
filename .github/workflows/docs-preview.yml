@@ -50,19 +50,16 @@ jobs:
     outputs:
       docs_affected: ${{ steps.match.outputs.docs_affected }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-        with:
-          fetch-depth: 0
-
+      # No checkout: the PR files API is much cheaper than a full-history
+      # clone on large repos, and returns exactly the PR's own changes.
       - name: Match changed files against docs paths
         id: match
         env:
+          GH_TOKEN: ${{ github.token }}
           DOCS_PATHS: ${{ inputs.docs_paths }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           affected=false
-          changed=$(git diff --name-only "origin/${BASE_REF}...HEAD")
+          changed=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --paginate --jq '.[].filename')
           while IFS= read -r file; do
             [ -z "$file" ] && continue
             while IFS= read -r pat; do
@@ -323,6 +320,6 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PM_TEAM: ${{ inputs.pm_team }}
         run: |
-          gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers" \
-            -f "team_reviewers[]=$PM_TEAM" \
+          jq -n --arg team "$PM_TEAM" '{team_reviewers: [$team]}' \
+            | gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers" --input - \
             || echo "::warning::Could not request review from team '$PM_TEAM' — check the slug and that the PROBE App can write PRs in this repo"
