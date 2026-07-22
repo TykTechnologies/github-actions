@@ -7,12 +7,15 @@ concurrency:
   group: promote-production
   cancel-in-progress: false
 
+# GITHUB_TOKEN stays read-only on purpose: the tag push authenticates with the
+# app token below, which is on the ruleset bypass list. contents: write here
+# would neither help nor be used.
 permissions:
   contents: read
 
 jobs:
   promote:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Generate GitHub App token
         id: app-token
