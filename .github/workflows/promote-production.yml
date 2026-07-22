@@ -1,0 +1,56 @@
+name: Promote production tag
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: promote-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        with:
+          app-id: ${{ secrets.PROBE_APP_ID }}
+          private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Promote production to main
+        run: |
+          set -euo pipefail
+          OLD=$(git rev-parse production^{commit} 2>/dev/null || echo "none")
+          NEW=$(git rev-parse origin/main)
+
+          if [ "$OLD" = "$NEW" ]; then
+            echo "production already points at main ($NEW), nothing to do"
+            echo "## :white_check_mark: production already up to date (\`$NEW\`)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git tag -f production "$NEW"
+          git push -f origin refs/tags/production
+
+          echo "promoted production: $OLD -> $NEW (by ${{ github.actor }})"
+          {
+            echo "## :rocket: production tag promoted"
+            echo ""
+            echo "| | commit |"
+            echo "|---|---|"
+            echo "| from | \`$OLD\` |"
+            echo "| to | \`$NEW\` |"
+            echo ""
+            echo "Promoted by @${{ github.actor }}. All \`@production\` consumers now use this commit."
+          } >> "$GITHUB_STEP_SUMMARY"
