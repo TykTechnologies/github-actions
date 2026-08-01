@@ -1,0 +1,142 @@
+# EoL Notifier
+
+This action reads the [endoflife.date](https://endoflife.date) API and sends one
+Slack message per run. It sends an alert when:
+
+- a version we track gets close to the end of one of its support phases, or
+- a new version appears.
+
+The action only sends alerts. It does not change any test matrix. Adding or
+removing a version is still a manual PR in this repository, and only after the
+approval that the dependency policy asks for.
+
+## Usage
+
+```yaml
+- name: Check dependency lifecycles
+  uses: TykTechnologies/github-actions/eol-notifier@main
+  with:
+    config-path: .github/eol-notifier/dependencies.yaml
+    state-path: ${{ runner.temp }}/state.json
+    slack-webhook-url: ${{ secrets.EOL_SLACK_WEBHOOK_URL }}
+```
+
+| Input               | Required | Default | Description                                                                     |
+|---------------------|----------|---------|---------------------------------------------------------------------------------|
+| `config-path`       | yes      |         | YAML file with the list of dependencies to track                                |
+| `state-path`        | yes      |         | JSON file with the versions that the last run saw                               |
+| `slack-webhook-url` | no       |         | Slack incoming webhook for the channel. Needed unless `dry-run` is `true`       |
+| `dry-run`           | no       | `false` | Print the message in the job log, send nothing, and do not touch the state file |
+
+The caller owns both files. So a second workflow can track other dependencies
+with its own config file and its own state file.
+
+The action reads and writes `state-path`, but it does not keep the file between
+runs. That is the workflow's job. In this repository the file lives on a branch
+called `eol-notifier-state`, because `main` needs a reviewed PR and the job
+cannot push to it. See
+[.github/workflows/eol-notifier.yaml](/.github/workflows/eol-notifier.yaml).
+
+## Config
+
+```yaml
+thresholds_months: [12, 6, 1]
+
+dependencies:
+  - name: PostgreSQL
+    product: postgresql
+    track: [eol]
+
+  - name: Amazon RDS PostgreSQL
+    product: amazon-rds-postgresql
+    track: [eol, eoes]
+
+  - name: GCP Cloud SQL
+    product: postgresql
+    upstream_proxy: true
+```
+
+`thresholds_months` sets how many months before the end date to send an alert.
+The default is `[12, 6, 1]`.
+
+Each entry under `dependencies` takes these keys:
+
+- `name` is the name shown in the alert. It must be unique.
+- `product` is the product name that endoflife.date uses in its URL. Two
+  dependencies can use the same product. The action then calls the API once and
+  puts both names in the same alert.
+- `track` lists the support phases to watch. The default is `[eol]`.
+  - `eol` is the end of life, or the end of security support. Every product
+    publishes this date.
+  - `eoas` is the end of active support. For example `redis` and `valkey`.
+  - `eoes` is the end of extended support. For example `amazon-rds-postgresql`.
+- `upstream_proxy` is for a service that endoflife.date does not track. The
+  action then uses the dates of the open source engine under it. GCP MemoryStore
+  uses `redis`, GCP Cloud SQL uses `postgresql`, and Azure DocumentDB uses
+  `mongodb`. The alert marks these dates as a hint only, because a cloud
+  provider usually supports a version for a different length of time than the
+  open source project.
+
+The action checks the config before it makes any network call. It fails the run
+if a phase name is unknown, a name is used twice, a product is empty, or a key is
+misspelled.
+
+## How it works
+
+### Alerts before the end of support
+
+The action looks at every phase it tracks, but only where the API gives an end
+date. Some versions have no date yet, and the action skips those. It sends an
+alert when today is exactly 12, 6 or 1 month before the date.
+
+It counts backwards from the end date. If the target month is shorter, it uses
+the last day of that month. For example, one month before 31 March is
+28 February. So each date sends each alert on one day only. Nothing is sent
+twice, and nothing is missed in a short month.
+
+### Alerts for new versions
+
+The state file lists the versions that the last run saw. If the API shows a
+version that is not in the file, the action sends an alert.
+
+Sometimes a version is already end of life when it first appears. This is an old
+version that someone added to endoflife.date later, so it is not news. The action
+saves it but sends no alert.
+
+If there is no state file, the action saves the current versions and sends no
+new-version alerts. This stops the first run from posting every old version into
+the channel.
+
+The action writes the state file only after Slack accepts the message. So a
+version is never saved as seen if its alert did not arrive. A dry run never
+writes the file.
+
+### Errors
+
+If the action cannot read a product, it tries once more and then skips it. It
+still sends the alerts for the other products. The run then exits with a non-zero
+code and lists the products it could not read.
+
+An end date the action cannot read works the same way. It skips that version,
+still checks the versions around it, and exits with a non-zero code naming the
+version and the date it saw. A version with no end date at all is not an error.
+There is nothing to count down to yet, so the action passes over it in silence.
+
+Both cases cost a version the alert it was due, and that alert only comes on one
+day. The run fails so that the loss is visible. The state file is still written,
+so the alerts that did arrive are not sent again the next day.
+
+If there is nothing to report, the action sends no message at all.
+
+## Run it locally
+
+```console
+$ go test ./...
+$ go run ./cmd/notifier \
+    --config ../.github/eol-notifier/dependencies.yaml \
+    --state /tmp/eol-state.json \
+    --dry-run
+```
+
+With `--dry-run` the action prints the message it would send and does not touch
+the state file. Without it, set `EN_SLACK_WEBHOOK_URL` in the environment.

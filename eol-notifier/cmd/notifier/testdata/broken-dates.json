@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.2.1",
+  "last_modified": "2026-05-14T00:08:56+00:00",
+  "result": {
+    "name": "broken-dates",
+    "label": "Broken Dates",
+    "category": "database",
+    "labels": {
+      "eoas": null,
+      "discontinued": null,
+      "eol": "Security Support",
+      "eoes": null
+    },
+    "links": {
+      "icon": null,
+      "html": "https://endoflife.date/broken-dates",
+      "releasePolicy": null
+    },
+    "releases": [
+      {
+        "name": "1",
+        "codename": null,
+        "label": "1",
+        "releaseDate": "2025-09-25",
+        "isLts": false,
+        "ltsFrom": null,
+        "isEol": false,
+        "eolFrom": "November 2027",
+        "isMaintained": true,
+        "latest": null,
+        "custom": null
+      }
+    ]
+  }
+}

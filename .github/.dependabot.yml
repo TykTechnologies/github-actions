@@ -21,3 +21,13 @@ updates:
       prefix: "Go"
     reviewers:
       - "TykTechnologies/engineering"
+
+  - package-ecosystem: gomod
+    directory: /eol-notifier
+    schedule:
+      interval: weekly
+    commit-message:
+      include: scope
+      prefix: "Go"
+    reviewers:
+      - "TykTechnologies/engineering"
