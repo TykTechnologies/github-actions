@@ -40,12 +40,23 @@ on:
         type: boolean
         required: false
         default: false
+      pr_minimal:
+        description: >-
+          Opt-in: on pull_request events, reduce coverage to the single package a
+          PR-minimal build produces — deb / amd64 / first distro only, and skip
+          all rpm. No effect on non-PR events (full matrix always runs there).
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   setup:
     runs-on: ubuntu-latest
     outputs:
       from_ver: ${{ steps.resolve.outputs.from_ver }}
+      deb_arch: ${{ steps.matrix.outputs.deb_arch }}
+      deb_distro: ${{ steps.matrix.outputs.deb_distro }}
+      run_rpm: ${{ steps.matrix.outputs.run_rpm }}
     steps:
       - name: Resolve upgrade-from version
         id: resolve
@@ -60,6 +71,23 @@ jobs:
           echo "from_ver=${INPUT:-$DEFAULT}" >> $GITHUB_OUTPUT
         env:
           INPUT: ${{ inputs.from_ver }}
+      # Reduce coverage on PRs when pr_minimal is set: a PR-minimal build only
+      # produces the amd64 .deb, so test just that (first deb distro, amd64) and
+      # skip rpm. Non-PR events always get the full matrix regardless of the flag.
+      - name: Compute matrices
+        id: matrix
+        env:
+          DEB: ${{ inputs.deb }}
+        run: |
+          if [ "${{ inputs.pr_minimal }}" = "true" ] && [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo 'deb_arch=["amd64"]' >> "$GITHUB_OUTPUT"
+            echo "deb_distro=$(printf '%s' "$DEB" | jq -c '[.[0]]')" >> "$GITHUB_OUTPUT"
+            echo 'run_rpm=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'deb_arch=["amd64","arm64"]' >> "$GITHUB_OUTPUT"
+            echo "deb_distro=$DEB" >> "$GITHUB_OUTPUT"
+            echo 'run_rpm=true' >> "$GITHUB_OUTPUT"
+          fi
 
   upgrade-deb:
     needs: [setup]
@@ -70,10 +98,8 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        arch:
-          - amd64
-          - arm64
-        distro: ${{ fromJson(inputs.deb) }}
+        arch: ${{ fromJson(needs.setup.outputs.deb_arch) }}
+        distro: ${{ fromJson(needs.setup.outputs.deb_distro) }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
@@ -128,6 +154,7 @@ jobs:
 
   upgrade-rpm:
     needs: [setup]
+    if: ${{ needs.setup.outputs.run_rpm == 'true' }}
     services:
       httpbin.org:
         image: kennethreitz/httpbin
@@ -198,7 +225,7 @@ jobs:
 
   upgrade-rpm-amd64:
     needs: [setup]
-    if: inputs.rpm_amd64 != '' && inputs.rpm_amd64 != '[]'
+    if: ${{ needs.setup.outputs.run_rpm == 'true' && inputs.rpm_amd64 != '' && inputs.rpm_amd64 != '[]' }}
     services:
       httpbin.org:
         image: kennethreitz/httpbin
