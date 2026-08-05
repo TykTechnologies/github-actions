@@ -41,9 +41,9 @@ jobs:
   s1-shift-left-cli:
     runs-on: ubuntu-latest
     container:
-      # latest version v0.5.4 - update digest after checking the image when
+      # latest version v1.0.4 - update digest after checking the image when
       # new version comes out.
-      image: pingsafe/s1-shift-left-cli@sha256:acd49cfd5ad72d488daf4e2418bd56891fbdef4d5da4729ccdafd6b9bbc5c8ad
+      image: pingsafe/s1-shift-left-cli@sha256:1bceb426867bd3389fcff6174d06e6bfee23f029903d8d006a52444e12867c06
       options: --entrypoint ""
     permissions:
       contents: read
