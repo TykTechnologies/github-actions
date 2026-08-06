@@ -3,9 +3,9 @@ name: SentinelOne CNS Scan
 on:
   workflow_call:
     inputs:
-      tag:
-        description: 'The tag configured for the scan policy in S1 Console'
-        default: "scan:tykchecks"
+      policy_id:
+        description: 'The S1 scan policy'
+        default: ""
         type: string
       scope_type:
         description: 'The scope in which the scan policy is configured'
@@ -60,13 +60,13 @@ jobs:
           fetch-depth: 0
 
       - name: Configure SentinelOne Shift Left CLI
-        run: s1-cns-cli config --service-user-api-token "$S1_TOKEN" --management-console-url "$CONSOLE_URL" --scope-type "$SCOPE_TYPE" --scope-id "$SCOPE_ID" --tag "$TAG"
+        run: s1-cns-cli config --service-user-api-token "$S1_TOKEN" --management-console-url "$CONSOLE_URL" --scope-type "$SCOPE_TYPE" --scope-id "$SCOPE_ID" --policy-id "$POLICY_ID"
         env:
           S1_TOKEN: ${{ secrets.S1_API_TOKEN  }}
           CONSOLE_URL: ${{ secrets.CONSOLE_URL }}
           SCOPE_TYPE: ${{ inputs.scope_type }}
           SCOPE_ID: ${{ secrets.SCOPE_ID }}
-          TAG: ${{ inputs.tag }}
+          POLICY_ID: ${{ inputs.policy_id }}
 
 
       - name: Configure git config
@@ -77,6 +77,7 @@ jobs:
         # only available on pull requests.
         if: github.event_name  == 'pull_request' && inputs.secrets_enabled
         id: secret-detector
+        continue-on-error: true
         run: s1-cns-cli scan secret -d "$PWD" --pull-request "$SRC" "$DEST" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --provider GITHUB --publish-result
         env:
           DEST: ${{ github.event.pull_request.base.sha }}
@@ -84,6 +85,7 @@ jobs:
 
       - name: Run IaC Scanner
         if: inputs.iac_enabled
+        continue-on-error: true
         run: s1-cns-cli scan iac -d "$PWD" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --branch "$BRANCH" --provider GITHUB --publish-result
         id: iac-scanner
         env:
@@ -92,6 +94,11 @@ jobs:
       - name: Run Vulnerability Scanner
         if: inputs.vuln_enabled
         id: vuln-scanner
-        run: s1-cns-cli scan vuln --repo-full-name "$REPO_FULL_NAME" ${{ inputs.skip_paths != '' && '--skip-paths "$SKIP_PATHS"' || '' }} -d "$PWD"
+        continue-on-error: true
+        run: s1-cns-cli scan vuln --repo-full-name "$REPO_FULL_NAME" ${{ inputs.skip_paths != '' && '--skip-paths "$SKIP_PATHS"' || '' }} -d "$PWD" --publish-result
         env:
           SKIP_PATHS: ${{ inputs.skip_paths }}
+
+      - name: Check for failures
+        if: steps.secret-detector.outcome == 'failure' || steps.iac-scanner.outcome == 'failure' || steps.vuln-scanner.outcome == 'failure'
+        run: exit 1
