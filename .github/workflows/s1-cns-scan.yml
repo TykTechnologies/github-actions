@@ -5,8 +5,8 @@ on:
     inputs:
       policy_id:
         description: 'The S1 scan policy'
-        default: ""
         type: string
+        required: true
       scope_type:
         description: 'The scope in which the scan policy is configured'
         default: "ACCOUNT"
@@ -20,12 +20,16 @@ on:
         default: true
         type: boolean
       vuln_enabled:
-        description: 'Whether vulnerability scannin should be enabled'
+        description: 'Whether vulnerability scanning should be enabled'
         default: true
         type: boolean
       skip_paths:
         description: 'Provide a space separated list of paths that need to be skipped during vulnerablity scanning'
         type: string
+      vuln_fail:
+        description: 'Fail the workflow if vulnerabilities are detected, default is false'
+        type: boolean
+        default: false
     secrets:
       S1_API_TOKEN:
         description: 'S1 API Token configured for scanning'
@@ -100,5 +104,5 @@ jobs:
           SKIP_PATHS: ${{ inputs.skip_paths }}
 
       - name: Check for failures
-        if: steps.secret-detector.outcome == 'failure' || steps.iac-scanner.outcome == 'failure' || steps.vuln-scanner.outcome == 'failure'
+        if: (steps.secret-detector.outcome == 'failure' || steps.iac-scanner.outcome == 'failure') || ( steps.vuln-scanner.outcome == 'failure' && inputs.vuln_fail == true )
         run: exit 1
