@@ -1,0 +1,154 @@
+---
+name: zizmor
+
+# Reusable workflow that audits the calling repository's GitHub Actions
+# with zizmor (https://docs.zizmor.sh). Findings are annotated inline and
+# summarised to Slack; SARIF upload to code scanning is opt-in.
+
+on:
+  workflow_call:
+    inputs:
+      zizmor_version:
+        required: false
+        type: string
+        default: "1.29.0"
+        description: "zizmor version to run"
+      persona:
+        required: false
+        type: string
+        default: regular
+        description: "zizmor persona: regular, pedantic or auditor"
+      upload_sarif:
+        required: false
+        type: boolean
+        default: false
+        description: "Upload SARIF to GitHub code scanning; off by default to match the Slack-first flow of the other scanners"
+      enforce:
+        required: false
+        type: boolean
+        default: false
+        description: "Fail the job when findings at or above min_severity are present"
+      min_severity:
+        required: false
+        type: string
+        default: medium
+        description: "Severity threshold used when enforce is true (low, medium or high)"
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: false
+        description: "If set, the severity summary is posted here when there are findings"
+    outputs:
+      slack_summary:
+        description: "A pre-formatted severity summary for Slack"
+        value: ${{ jobs.scan.outputs.slack_summary }}
+
+permissions: {}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # upload-sarif
+      contents: read # actions/checkout on private repos
+      actions: read # upload-sarif on private repos
+    outputs:
+      slack_summary: ${{ steps.summary.outputs.summary }}
+    env:
+      ZIZMOR_VERSION: ${{ inputs.zizmor_version }}
+      ZIZMOR_PERSONA: ${{ inputs.persona }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+      - name: Run zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uvx "zizmor@${ZIZMOR_VERSION}" --persona "${ZIZMOR_PERSONA}" --format sarif . > results.sarif
+          uvx "zizmor@${ZIZMOR_VERSION}" --persona "${ZIZMOR_PERSONA}" --format json --no-exit-codes . > results.json
+
+      # Needs an Advanced Security license on private repos, so skipped there.
+      - name: Upload SARIF
+        if: ${{ inputs.upload_sarif && !github.event.repository.private }}
+        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        with:
+          sarif_file: results.sarif
+          category: zizmor
+
+      - name: Annotate findings
+        if: ${{ !inputs.upload_sarif || github.event.repository.private }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Annotations are capped at 10 per step; the log has everything.
+          uvx "zizmor@${ZIZMOR_VERSION}" --persona "${ZIZMOR_PERSONA}" --format github --no-exit-codes .
+
+      - name: Summarise findings
+        id: summary
+        run: |
+          count() {
+            jq --arg sev "$1" 'map(select(.determinations.severity == $sev)) | length' results.json
+          }
+          HIGH=$(count High)
+          MEDIUM=$(count Medium)
+          LOW=$(count Low)
+          INFO=$(count Informational)
+          TOTAL=$(jq length results.json)
+
+          {
+            echo "## zizmor findings"
+            echo ""
+            echo "| Severity | Count |"
+            echo "|----------|-------|"
+            echo "| High     | $HIGH |"
+            echo "| Medium   | $MEDIUM |"
+            echo "| Low      | $LOW |"
+            echo "| Info     | $INFO |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          SUMMARY=":large_orange_circle: High: $HIGH  :large_yellow_circle: Medium: $MEDIUM  :white_circle: Low: $LOW  ${{ github.repository }} (zizmor)"
+          {
+            echo "summary=$SUMMARY"
+            echo "high=$HIGH"
+            echo "medium=$MEDIUM"
+            echo "low=$LOW"
+            echo "total=$TOTAL"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SUMMARY: ${{ steps.summary.outputs.summary }}
+          TOTAL: ${{ steps.summary.outputs.total }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ] || [ "$TOTAL" = "0" ]; then
+            echo "Slack notification skipped (no webhook or no findings)"
+            exit 0
+          fi
+          jq -n --arg text "$SUMMARY — $RUN_URL" '{text: $text}' \
+            | curl -sf -X POST -H 'Content-Type: application/json' -d @- "$SLACK_WEBHOOK_URL"
+
+      - name: Enforce threshold
+        if: ${{ inputs.enforce }}
+        env:
+          MIN_SEVERITY: ${{ inputs.min_severity }}
+          HIGH: ${{ steps.summary.outputs.high }}
+          MEDIUM: ${{ steps.summary.outputs.medium }}
+          LOW: ${{ steps.summary.outputs.low }}
+        run: |
+          case "$MIN_SEVERITY" in
+            high) GATED=$HIGH ;;
+            medium) GATED=$((HIGH + MEDIUM)) ;;
+            low) GATED=$((HIGH + MEDIUM + LOW)) ;;
+            *) echo "unknown min_severity: $MIN_SEVERITY" >&2; exit 2 ;;
+          esac
+          if [ "$GATED" -gt 0 ]; then
+            echo "::error::zizmor found $GATED finding(s) at or above $MIN_SEVERITY severity"
+            exit 1
+          fi
