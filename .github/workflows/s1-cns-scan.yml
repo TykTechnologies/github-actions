@@ -3,10 +3,10 @@ name: SentinelOne CNS Scan
 on:
   workflow_call:
     inputs:
-      tag:
-        description: 'The tag configured for the scan policy in S1 Console'
-        default: "scan:tykchecks"
+      policy_id:
+        description: 'The S1 scan policy'
         type: string
+        required: true
       scope_type:
         description: 'The scope in which the scan policy is configured'
         default: "ACCOUNT"
@@ -20,12 +20,16 @@ on:
         default: true
         type: boolean
       vuln_enabled:
-        description: 'Whether vulnerability scannin should be enabled'
+        description: 'Whether vulnerability scanning should be enabled'
         default: true
         type: boolean
       skip_paths:
         description: 'Provide a space separated list of paths that need to be skipped during vulnerablity scanning'
         type: string
+      vuln_fail:
+        description: 'Fail the workflow if vulnerabilities are detected, default is false'
+        type: boolean
+        default: false
     secrets:
       S1_API_TOKEN:
         description: 'S1 API Token configured for scanning'
@@ -41,9 +45,9 @@ jobs:
   s1-shift-left-cli:
     runs-on: ubuntu-latest
     container:
-      # latest version v0.5.4 - update digest after checking the image when
+      # latest version v1.0.4 - update digest after checking the image when
       # new version comes out.
-      image: pingsafe/s1-shift-left-cli@sha256:acd49cfd5ad72d488daf4e2418bd56891fbdef4d5da4729ccdafd6b9bbc5c8ad
+      image: pingsafe/s1-shift-left-cli@sha256:1bceb426867bd3389fcff6174d06e6bfee23f029903d8d006a52444e12867c06
       options: --entrypoint ""
     permissions:
       contents: read
@@ -60,13 +64,13 @@ jobs:
           fetch-depth: 0
 
       - name: Configure SentinelOne Shift Left CLI
-        run: s1-cns-cli config --service-user-api-token "$S1_TOKEN" --management-console-url "$CONSOLE_URL" --scope-type "$SCOPE_TYPE" --scope-id "$SCOPE_ID" --tag "$TAG"
+        run: s1-cns-cli config --service-user-api-token "$S1_TOKEN" --management-console-url "$CONSOLE_URL" --scope-type "$SCOPE_TYPE" --scope-id "$SCOPE_ID" --policy-id "$POLICY_ID"
         env:
           S1_TOKEN: ${{ secrets.S1_API_TOKEN  }}
           CONSOLE_URL: ${{ secrets.CONSOLE_URL }}
           SCOPE_TYPE: ${{ inputs.scope_type }}
           SCOPE_ID: ${{ secrets.SCOPE_ID }}
-          TAG: ${{ inputs.tag }}
+          POLICY_ID: ${{ inputs.policy_id }}
 
 
       - name: Configure git config
@@ -77,6 +81,7 @@ jobs:
         # only available on pull requests.
         if: github.event_name  == 'pull_request' && inputs.secrets_enabled
         id: secret-detector
+        continue-on-error: true
         run: s1-cns-cli scan secret -d "$PWD" --pull-request "$SRC" "$DEST" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --provider GITHUB --publish-result
         env:
           DEST: ${{ github.event.pull_request.base.sha }}
@@ -84,6 +89,7 @@ jobs:
 
       - name: Run IaC Scanner
         if: inputs.iac_enabled
+        continue-on-error: true
         run: s1-cns-cli scan iac -d "$PWD" --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --branch "$BRANCH" --provider GITHUB --publish-result
         id: iac-scanner
         env:
@@ -92,6 +98,16 @@ jobs:
       - name: Run Vulnerability Scanner
         if: inputs.vuln_enabled
         id: vuln-scanner
-        run: s1-cns-cli scan vuln --repo-full-name "$REPO_FULL_NAME" ${{ inputs.skip_paths != '' && '--skip-paths "$SKIP_PATHS"' || '' }} -d "$PWD"
+        continue-on-error: true
+        run: |
+          args=(--repo-full-name "$REPO_FULL_NAME" --repo-url "$REPO_URL/$REPO_FULL_NAME" --provider GITHUB --repository-type organization)
+          if [ -n "$SKIP_PATHS" ]; then
+            args+=(--skip-paths "$SKIP_PATHS")
+          fi
+          s1-cns-cli scan vuln "${args[@]}" -d "$PWD" --publish-result
         env:
           SKIP_PATHS: ${{ inputs.skip_paths }}
+
+      - name: Check for failures
+        if: (steps.secret-detector.outcome == 'failure' || steps.iac-scanner.outcome == 'failure') || ( steps.vuln-scanner.outcome == 'failure' && inputs.vuln_fail == true )
+        run: exit 1
