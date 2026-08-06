@@ -99,7 +99,12 @@ jobs:
         if: inputs.vuln_enabled
         id: vuln-scanner
         continue-on-error: true
-        run: s1-cns-cli scan vuln --repo-full-name "$REPO_FULL_NAME"  --repo-url "$REPO_URL/$REPO_FULL_NAME" --provider GITHUB --repository-type organization  ${{ inputs.skip_paths != '' && '--skip-paths "$SKIP_PATHS"' || '' }} -d "$PWD" --publish-result
+        run: |
+          args=(--repo-full-name "$REPO_FULL_NAME" --repo-url "$REPO_URL/$REPO_FULL_NAME" --provider GITHUB --repository-type organization)
+          if [ -n "$SKIP_PATHS" ]; then
+            args+=(--skip-paths "$SKIP_PATHS")
+          fi
+          s1-cns-cli scan vuln "${args[@]}" -d "$PWD" --publish-result
         env:
           SKIP_PATHS: ${{ inputs.skip_paths }}
 
