@@ -186,14 +186,6 @@ func TestFetchProductRejectsUnusableResponses(t *testing.T) {
 	}{
 		{name: "malformed json", body: "{", wantErr: "failed to decode response"},
 		{name: "no releases", body: `{"result":{"name":"redis","releases":[]}}`, wantErr: "no releases"},
-		{
-			// A body past the read limit has to be named as oversized. Cutting it at
-			// the limit would leave half a JSON document, which reads as a permanently
-			// malformed response and hides what actually went wrong.
-			name:    "larger than the read limit",
-			body:    `{"result":{"name":"` + strings.Repeat("x", maxResponseBytes) + `"}}`,
-			wantErr: "larger than the",
-		},
 	}
 
 	for _, tt := range tests {

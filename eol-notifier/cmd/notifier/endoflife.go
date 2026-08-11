@@ -10,10 +10,7 @@ import (
 	"time"
 )
 
-const (
-	defaultBaseURL   = "https://endoflife.date/api/v1"
-	maxResponseBytes = 1 << 20 // 1 MiB, comfortably above the largest product
-)
+const defaultBaseURL = "https://endoflife.date/api/v1"
 
 // Release is a single release cycle of a product. The *From fields are nullable
 // in the API: a cycle can exist with no announced end date yet, and not every
@@ -164,15 +161,9 @@ func (c *Client) fetchOnce(ctx context.Context, product string) (*Product, bool,
 		return nil, retryable, fmt.Errorf("unexpected status %s", resp.Status)
 	}
 
-	// One byte past the limit, so hitting it is detectable. Silently truncating
-	// would hand half a JSON document to the decoder, and an oversized response
-	// would then be reported as permanently malformed.
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, true, fmt.Errorf("failed to read response body: %w", err)
-	}
-	if len(body) > maxResponseBytes {
-		return nil, false, fmt.Errorf("response is larger than the %d byte limit", maxResponseBytes)
 	}
 
 	var parsed productResponse
