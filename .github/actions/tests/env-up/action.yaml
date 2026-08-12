@@ -106,7 +106,17 @@ runs:
         # keycloak's own healthcheck (start_period: 30s, retries: 15 x
         # interval: 10s) has a 180s worst case on its own — give the whole
         # profile enough headroom to clear that.
-        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile master-datacenter up --quiet-pull -d --wait --wait-timeout 240
+        # DEBUG: keycloak has consistently failed this --wait on every prior
+        # run regardless of --wait-timeout (120s/240s) or runner size
+        # (8x/16x) — dump its logs on failure to find the real cause instead
+        # of continuing to guess at timeout/resource tuning.
+        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile master-datacenter up --quiet-pull -d --wait --wait-timeout 240 || {
+          echo "::group::keycloak logs"
+          docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml logs keycloak
+          echo "::endgroup::"
+          docker inspect keycloak --format '{{json .State.Health}}' || true
+          exit 1
+        }
         # dash-bootstrap.sh has no retry of its own (set -e on the first curl),
         # so without --wait above it could hit tyk-analytics before it's
         # actually serving, failing the whole step or leaving the org/user
