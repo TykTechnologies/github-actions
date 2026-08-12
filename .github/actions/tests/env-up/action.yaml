@@ -103,7 +103,10 @@ runs:
         cat versions.env local.env
         echo "::endgroup::"
         # bring up env, the project name is important
-        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile master-datacenter up --quiet-pull -d --wait --wait-timeout 120
+        # keycloak's own healthcheck (start_period: 30s, retries: 15 x
+        # interval: 10s) has a 180s worst case on its own — give the whole
+        # profile enough headroom to clear that.
+        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile master-datacenter up --quiet-pull -d --wait --wait-timeout 240
         # dash-bootstrap.sh has no retry of its own (set -e on the first curl),
         # so without --wait above it could hit tyk-analytics before it's
         # actually serving, failing the whole step or leaving the org/user
