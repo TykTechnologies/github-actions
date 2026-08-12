@@ -37,6 +37,13 @@ jobs:
 
       - name: Build gromit from master
         if: ${{ !contains(github.event.pull_request.labels.*.name, inputs.label_name) }}
+        # GOPROXY=direct bypasses proxy.golang.org's CDN, which caches the
+        # @master ref's resolved commit for 30 minutes (Cache-Control:
+        # max-age=1800). Without this, a merge to gromit's master can take
+        # up to half an hour to be picked up here, making this check flag
+        # false drift against a stale render.
+        env:
+          GOPROXY: direct
         run: go install github.com/TykTechnologies/gromit@master
 
       - name: Check for drift from gromit

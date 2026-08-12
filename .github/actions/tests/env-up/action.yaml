@@ -103,9 +103,13 @@ runs:
         cat versions.env local.env
         echo "::endgroup::"
         # bring up env, the project name is important
-        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile master-datacenter up --quiet-pull -d
+        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile master-datacenter up --quiet-pull -d --wait --wait-timeout 120
+        # dash-bootstrap.sh has no retry of its own (set -e on the first curl),
+        # so without --wait above it could hit tyk-analytics before it's
+        # actually serving, failing the whole step or leaving the org/user
+        # bootstrap incomplete for the slave gateways started next.
         ./dash-bootstrap.sh http://localhost:3000
-        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile slave-datacenter up --quiet-pull -d
+        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile slave-datacenter up --quiet-pull -d --wait --wait-timeout 120
         echo "$(cat pytest.env | grep USER_API_SECRET)" >> $GITHUB_OUTPUT
         echo "ts=$(date +%s%N)" >> $GITHUB_OUTPUT
         echo "::group::Docker images"
