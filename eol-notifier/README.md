@@ -34,8 +34,7 @@ with its own config file and its own state file.
 The action reads and writes `state-path`, but it does not keep the file between
 runs. That is the workflow's job. In this repository the file lives on a branch
 called `eol-notifier-state`, because `main` needs a reviewed PR and the job
-cannot push to it. See
-[.github/workflows/eol-notifier.yaml](/.github/workflows/eol-notifier.yaml).
+cannot push to it. See [.github/workflows/eol-notifier.yaml](/.github/workflows/eol-notifier.yaml).
 
 ## Config
 

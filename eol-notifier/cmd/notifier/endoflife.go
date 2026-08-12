@@ -92,7 +92,7 @@ type productResponse struct {
 }
 
 // Client polls the endoflife.date API. BaseURL and HTTPClient are fields rather
-// than constants so tests can point it at an httptest server.
+// than constants, so tests can point it at a httptest server.
 type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client

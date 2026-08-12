@@ -16,7 +16,7 @@ env:
   STATE_REF: refs/eol-notifier/previous
   STATE_FILE: state.json
 
-# Two runs would build their commits on the same parent and the second push
+# Two runs would build their commits on the same parent, and the second push
 # would be rejected, so a manual run waits for the scheduled one to finish.
 concurrency:
   group: eol-notifier-state
