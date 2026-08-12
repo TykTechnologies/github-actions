@@ -103,14 +103,9 @@ runs:
         cat versions.env local.env
         echo "::endgroup::"
         # bring up env, the project name is important
-        # --wait requires TykTechnologies/tyk-pro's keycloak healthcheck fix
-        # (TT-17868_fix_keycloak_healthcheck_timeout / Connection: close) --
-        # without it, keycloak's healthcheck hangs until Docker's own 10s
-        # timeout on every attempt even though keycloak itself is fully up,
-        # so --wait never returns cleanly.
-        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile master-datacenter up --quiet-pull -d --wait
+        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile master-datacenter up --quiet-pull -d
         ./dash-bootstrap.sh http://localhost:3000
-        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile slave-datacenter up --quiet-pull -d --wait
+        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile slave-datacenter up --quiet-pull -d
         echo "$(cat pytest.env | grep USER_API_SECRET)" >> $GITHUB_OUTPUT
         echo "ts=$(date +%s%N)" >> $GITHUB_OUTPUT
         echo "::group::Docker images"
