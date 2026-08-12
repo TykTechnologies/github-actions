@@ -112,7 +112,7 @@ runs:
         # of continuing to guess at timeout/resource tuning.
         docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile master-datacenter up --quiet-pull -d --wait --wait-timeout 240 || {
           echo "::group::keycloak logs"
-          docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml logs keycloak
+          docker logs keycloak
           echo "::endgroup::"
           docker inspect keycloak --format '{{json .State.Health}}' || true
           exit 1
