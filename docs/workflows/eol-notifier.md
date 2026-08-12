@@ -74,6 +74,17 @@ when the run of that day is skipped or fails. The next threshold still fires, so
 a missed 12-month alert is followed by the 6-month one. If you expected an alert
 and it never arrived, check the run history of the workflow.
 
+### Products that give no notice
+
+Some vendors set the end date only once it has arrived. HashiCorp gives a Vault or
+Consul version its end-of-life date on the day a newer release pushes it out of
+support: for Vault that is the next release, for Consul the third one after it.
+The date is that same day, so it is never in the future and there is nothing to
+count down from. For those two products the 12, 6 and 1 month alerts never fire.
+
+The new-version alert covers them instead. A new release means an older one lost
+support that day, so check the older versions when such a message arrives.
+
 ### Failures
 
 A product the API does not return is logged and skipped. The job still posts the

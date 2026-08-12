@@ -21,6 +21,16 @@ dependencies:
     product: mongodb
     track: [eol]
 
+  # HashiCorp tooling. A version gets its end-of-life date on the day a newer
+  # release drops it out of support, so the date is never in the future: expect
+  # new-version alerts from these, not the 12/6/1 month countdown.
+  - name: HashiCorp Vault
+    product: hashicorp-vault
+    track: [eol]
+  - name: HashiCorp Consul
+    product: consul
+    track: [eol]
+
   # Managed services with their own published lifecycle.
   - name: Amazon ElastiCache (Redis)
     product: amazon-elasticache-redis
