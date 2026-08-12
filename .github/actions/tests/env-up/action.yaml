@@ -109,7 +109,11 @@ runs:
         # actually serving, failing the whole step or leaving the org/user
         # bootstrap incomplete for the slave gateways started next.
         ./dash-bootstrap.sh http://localhost:3000
-        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile slave-datacenter up --quiet-pull -d --wait --wait-timeout 120
+        # slave-datacenter brings up 6 gateways (2 per mini-datacenter) each
+        # behind its own checker with retries: 30 x interval: 5s — worst case
+        # is close to 150s per service, so give this profile more headroom
+        # than the single-dashboard master-datacenter wait above.
+        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile slave-datacenter up --quiet-pull -d --wait --wait-timeout 240
         echo "$(cat pytest.env | grep USER_API_SECRET)" >> $GITHUB_OUTPUT
         echo "ts=$(date +%s%N)" >> $GITHUB_OUTPUT
         echo "::group::Docker images"
