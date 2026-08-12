@@ -65,11 +65,11 @@ Each entry under `dependencies` takes these keys:
   dependencies can use the same product. The action then calls the API once and
   puts both names in the same alert.
 - `track` lists the support phases to watch. The default is `[eol]`.
-  - `eol` is the end of life, or the end of security support. Every product
-    publishes this date.
+  - `eol` is the end of life, or the end of security support. Every product has
+    this phase, but a version keeps no date until the vendor announces one.
   - `eoas` is the end of active support. For example `redis` and `valkey`.
   - `eoes` is the end of extended support. For example `amazon-rds-postgresql`.
-- `upstream_proxy` is for a service that endoflife.date does not track. The
+- `upstream_proxy` is for a service that `endoflife.date` does not track. The
   action then uses the dates of the open source engine under it. GCP MemoryStore
   uses `redis`, GCP Cloud SQL uses `postgresql`, and Azure DocumentDB uses
   `mongodb`. The alert marks these dates as a hint only, because a cloud
@@ -77,8 +77,9 @@ Each entry under `dependencies` takes these keys:
   open source project.
 
 The action checks the config before it makes any network call. It fails the run
-if a phase name is unknown, a name is used twice, a product is empty, or a key is
-misspelled.
+if a phase name is unknown, a product is empty, or a key is misspelled. It also
+fails if the list of dependencies is empty, if a name or a phase is listed twice,
+or if a threshold is repeated or is not above zero.
 
 ## How it works
 
@@ -90,8 +91,8 @@ alert when today is exactly 12, 6 or 1 month before the date.
 
 It counts backwards from the end date. If the target month is shorter, it uses
 the last day of that month. For example, one month before 31 March is
-28 February. So each date sends each alert on one day only. Nothing is sent
-twice, and nothing is missed in a short month.
+28 February, and 29 February in a leap year. So each date sends each alert on one
+day only. Nothing is sent twice, and nothing is missed in a short month.
 
 ### Alerts for new versions
 
