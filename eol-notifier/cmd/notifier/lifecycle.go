@@ -115,7 +115,10 @@ func hasProxyRef(refs []DependencyRef) bool {
 //
 // seed only drives the wording of the report; whether a product's releases count
 // as new is decided per product, so adding a dependency to the config does not
-// announce that product's entire back catalogue.
+// announce that product's entire back catalogue. What it does announce is every
+// warning that product is still counting down to, missed days included: a
+// version weeks from the end of its support is the first thing a new tracker
+// owes the channel, not something to swallow as history.
 //
 // Releases carrying a date the API states in a form we cannot read are returned
 // through the second value rather than only logged. Dropping one quietly would
@@ -134,8 +137,11 @@ func detectAlerts(config *DependencyConfig, products map[string]*Product, state 
 		seen := state.seen(name)
 		sent := state.sent(name)
 
-		// A product with no recorded history is a baseline, not news. This covers
-		// both the first ever run and a product newly added to the config.
+		// A product with no recorded history is a baseline: its releases are not
+		// news, and the phases that ended before anyone was watching are not
+		// either. What it is still counting down to is news, however, and is
+		// announced like any other warning. This covers both the first ever run
+		// and a product newly added to the config.
 		baseline := !state.has(name)
 		if baseline && !seed {
 			log("%s has no recorded history, recording its current releases as a baseline", name)
@@ -176,7 +182,7 @@ func detectAlerts(config *DependencyConfig, products map[string]*Product, state 
 					if sent[due.key] {
 						continue
 					}
-					if baseline {
+					if baseline && due.ended {
 						report.BaselineKeys[name] = append(report.BaselineKeys[name], due.key)
 						continue
 					}

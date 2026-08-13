@@ -267,11 +267,13 @@ func TestDetectAlertsRefiresAfterDateRevision(t *testing.T) {
 	}
 }
 
-// TestDetectAlertsBaselineRecordsWithoutAlerting covers a product with no
+// TestDetectAlertsBaselineAnnouncesLiveWarnings covers a product with no
 // recorded history: on the first run, or when a dependency is added to the
-// config, its elapsed thresholds are already spent and must not be emptied into
-// the channel. They are recorded as delivered so they stay that way.
-func TestDetectAlertsBaselineRecordsWithoutAlerting(t *testing.T) {
+// config. The phases that ended before anyone was watching are spent and are
+// recorded without being posted. A version still counting down is the opposite:
+// its warning is announced, missed trigger day or not, because a version weeks
+// from the end of its support is exactly what the channel is there for.
+func TestDetectAlertsBaselineAnnouncesLiveWarnings(t *testing.T) {
 	config := testConfig(t, Dependency{Name: "PostgreSQL", Product: "postgresql"})
 	products := map[string]*Product{
 		"postgresql": {
@@ -284,16 +286,20 @@ func TestDetectAlertsBaselineRecordsWithoutAlerting(t *testing.T) {
 		},
 	}
 
-	report, _ := detectAlerts(config, products, State{}, mustDate(t, "2026-11-11"), true)
+	// Nine days after 15's twelve-month warning came up, so it was missed rather
+	// than due today.
+	report, _ := detectAlerts(config, products, State{}, mustDate(t, "2026-11-20"), true)
 
-	if len(report.EOL) != 0 {
-		t.Errorf("a product with no recorded history announced %d alert(s)", len(report.EOL))
+	if got := firedMonths(report); !slices.Equal(got, []int{12}) {
+		t.Fatalf("fired %v, want the warning 15 is still counting down to", got)
+	}
+	if report.EOL[0].Release != "15" {
+		t.Errorf("alert is for release %q, want 15", report.EOL[0].Release)
 	}
 
-	want := []string{
-		alertKey("13", phaseEOL, endedMarker, "2025-11-13"),
-		alertKey("15", phaseEOL, "12", "2027-11-11"),
-	}
+	// 13 was out of support before this product was ever polled. Nobody needs to
+	// hear it now, and recording it keeps it that way.
+	want := []string{alertKey("13", phaseEOL, endedMarker, "2025-11-13")}
 	if got := report.BaselineKeys["postgresql"]; !slices.Equal(got, want) {
 		t.Errorf("baseline keys = %v, want %v", got, want)
 	}

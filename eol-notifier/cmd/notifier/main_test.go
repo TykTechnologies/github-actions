@@ -114,6 +114,50 @@ func TestExecuteSeedRun(t *testing.T) {
 	}
 }
 
+// TestExecuteSeedRunAnnouncesLiveWarnings covers the first run against a product
+// already inside one of its warning windows. Recording the warning silently
+// would leave it in a file nobody reads while the channel, which is where people
+// actually find out, hears nothing.
+func TestExecuteSeedRunAnnouncesLiveWarnings(t *testing.T) {
+	dir := t.TempDir()
+	slack := newCaptureServer(t, http.StatusOK)
+	// postgresql 15's twelve-month warning came up the day before, and no run
+	// has ever happened to deliver it.
+	opts := e2eOptions(t, dir, slack, "2026-11-12", e2eConfig)
+
+	if err := execute(context.Background(), opts); err != nil {
+		t.Fatalf("execute() error = %v", err)
+	}
+
+	if slack.requests != 1 {
+		t.Fatalf("posted %d message(s), want the warning announced", slack.requests)
+	}
+
+	var message slackMessage
+	if err := json.Unmarshal(slack.body, &message); err != nil {
+		t.Fatalf("posted body is not a valid Slack message: %v", err)
+	}
+	rendered := blockText(message)
+
+	for _, want := range []string{"*In 12 months*", "*15* — Support Status ends 2027-11-11"} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("digest is missing %q:\n%s", want, rendered)
+		}
+	}
+
+	// The back catalogue still stays out of it: no new-version alerts, and the
+	// phase that ended before the first run is recorded rather than announced.
+	if strings.Contains(rendered, "New versions detected") {
+		t.Errorf("the first run announced new versions:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Already ended") {
+		t.Errorf("the first run announced a phase that ended before it:\n%s", rendered)
+	}
+	if !readState(t, opts.statePath).sent("redis")[alertKey("8.2", phaseEOL, endedMarker, "2026-05-25")] {
+		t.Error("the spent alert was not recorded, so the next run would announce it")
+	}
+}
+
 // TestExecuteReportsNewVersionAndEOL is the main path: a release the previous
 // run did not see, alongside a release hitting a threshold today.
 func TestExecuteReportsNewVersionAndEOL(t *testing.T) {

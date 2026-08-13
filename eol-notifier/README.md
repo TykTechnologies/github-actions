@@ -118,9 +118,14 @@ saves it and sends no new-version alert, only the alert that says the phase has
 ended.
 
 A product the state file has never seen is a baseline. The action saves its
-versions, counts its due alerts as already sent, and posts nothing. This covers
-the first run and a dependency added to the config later: neither empties years
-of past dates into the channel.
+versions and announces none of them. It also counts the phases that already
+ended as sent, without posting them: a dependency added to the config does not
+empty years of past dates into the channel.
+
+A version still counting down is different. If its 12, 6 or 1 month warning has
+come up, the action sends it on the first run, even though that run is the first
+one. A version weeks away from the end of its support is the first thing the
+channel needs to hear about a new dependency, not something to file away.
 
 The action saves a version as seen only after Slack accepts the message that
 names it. So a version is never saved as seen if its alert did not arrive. A dry
