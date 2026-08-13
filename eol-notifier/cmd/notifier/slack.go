@@ -72,10 +72,44 @@ func (c *slackClient) Post(ctx context.Context, payload []byte) error {
 	return nil
 }
 
-// buildMessage renders a report as a single Block Kit digest. The second return
-// value reports whether the digest had to be cut to fit Slack's block limit, so
-// the caller can put the whole thing in the run log the notice points at.
-func buildMessage(report Report) (slackMessage, bool) {
+// splitReport breaks a report into parts that each render within Slack's block
+// limit. Splitting the report rather than the rendered blocks keeps every part a
+// report in its own right, so the caller still knows which alerts a part carries
+// and can record exactly what was delivered.
+func splitReport(report Report) []Report {
+	if report.alertCount() <= 1 || len(buildMessage(report).Blocks) <= slackMaxBlocks {
+		return []Report{report}
+	}
+
+	first, second := report.split()
+
+	return append(splitReport(first), splitReport(second)...)
+}
+
+// split splits a report's alerts down the middle, new versions first, so both
+// parts carry roughly the same number of lines. It is only called on a report
+// holding at least two alerts, so both parts are strictly smaller.
+func (r Report) split() (Report, Report) {
+	first := Report{Seed: r.Seed}
+	second := Report{Seed: r.Seed}
+
+	if cut := r.alertCount() / 2; cut <= len(r.NewVersions) {
+		first.NewVersions = r.NewVersions[:cut]
+		second.NewVersions = r.NewVersions[cut:]
+		second.EOL = r.EOL
+	} else {
+		first.NewVersions = r.NewVersions
+		first.EOL = r.EOL[:cut-len(r.NewVersions)]
+		second.EOL = r.EOL[cut-len(r.NewVersions):]
+	}
+
+	return first, second
+}
+
+// buildMessage renders a report as a single Block Kit digest. A report too large
+// for Slack's limits is split by splitReport before it gets here, so nothing is
+// dropped to make it fit.
+func buildMessage(report Report) slackMessage {
 	message := slackMessage{
 		Text:   summaryLine(report),
 		Blocks: []slackBlock{headerBlock("Dependency lifecycle digest")},
@@ -94,16 +128,7 @@ func buildMessage(report Report) (slackMessage, bool) {
 
 	message.Blocks = append(message.Blocks, contextBlock(footerText(report)))
 
-	if len(message.Blocks) > slackMaxBlocks {
-		kept := message.Blocks[:slackMaxBlocks-1]
-		message.Blocks = append(kept, contextBlock(
-			"Digest truncated to fit Slack's block limit; the full list is in the workflow run log.",
-		))
-
-		return message, true
-	}
-
-	return message, false
+	return message
 }
 
 // summaryLine is the notification/fallback text shown outside the message body.
@@ -141,9 +166,15 @@ func newVersionLines(report Report) []string {
 }
 
 func eolLines(report Report) []string {
+	var ended []EOLAlert
 	byThreshold := make(map[int][]EOLAlert)
 	thresholds := make([]int, 0)
+
 	for _, alert := range report.EOL {
+		if alert.Ended {
+			ended = append(ended, alert)
+			continue
+		}
 		if _, ok := byThreshold[alert.MonthsLeft]; !ok {
 			thresholds = append(thresholds, alert.MonthsLeft)
 		}
@@ -152,21 +183,35 @@ func eolLines(report Report) []string {
 	sort.Sort(sort.Reverse(sort.IntSlice(thresholds)))
 
 	var lines []string
+	if len(ended) > 0 {
+		lines = append(lines, "*Already ended*")
+		for _, alert := range ended {
+			lines = append(lines, eolLine(alert, "ended"))
+		}
+	}
+
 	for _, months := range thresholds {
 		lines = append(lines, fmt.Sprintf("*In %d %s*", months, noun(months, "month", "months")))
 		for _, alert := range byThreshold[months] {
-			lines = append(lines, fmt.Sprintf(
-				"• %s *%s* — %s ends %s — %s",
-				productLink(alert.ProductLabel, alert.Product, alert.ProductURL),
-				escape(alert.Release),
-				escape(alert.PhaseLabel),
-				alert.Date.Format(dateLayout),
-				affects(alert.Dependencies),
-			))
+			lines = append(lines, eolLine(alert, "ends"))
 		}
 	}
 
 	return lines
+}
+
+// eolLine renders one alert. The verb separates a phase that is over from one
+// still counting down.
+func eolLine(alert EOLAlert, verb string) string {
+	return fmt.Sprintf(
+		"• %s *%s* — %s %s %s — %s",
+		productLink(alert.ProductLabel, alert.Product, alert.ProductURL),
+		escape(alert.Release),
+		escape(alert.PhaseLabel),
+		verb,
+		alert.Date.Format(dateLayout),
+		affects(alert.Dependencies),
+	)
 }
 
 func footerText(report Report) string {

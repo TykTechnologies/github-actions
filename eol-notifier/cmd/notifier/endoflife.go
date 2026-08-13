@@ -30,26 +30,28 @@ type Release struct {
 	IsEOES   bool    `json:"isEoes"`
 }
 
-// phase returns the date the given lifecycle phase ends, whether that date has
-// already passed, and whether the product publishes the phase for this release.
-func (r Release) phase(phase string) (date string, past bool, ok bool) {
+// phase returns the date the given lifecycle phase ends and whether the product
+// publishes the phase for this release. Whether that date has passed is not
+// reported: a phase that is over is still owed an alert saying so, and the date
+// itself answers the question.
+func (r Release) phase(phase string) (date string, ok bool) {
 	var from *string
 	switch phase {
 	case phaseEOL:
-		from, past = r.EOLFrom, r.IsEOL
+		from = r.EOLFrom
 	case phaseEOAS:
-		from, past = r.EOASFrom, r.IsEOAS
+		from = r.EOASFrom
 	case phaseEOES:
-		from, past = r.EOESFrom, r.IsEOES
+		from = r.EOESFrom
 	default:
-		return "", false, false
+		return "", false
 	}
 
 	if from == nil || *from == "" {
-		return "", false, false
+		return "", false
 	}
 
-	return *from, past, true
+	return *from, true
 }
 
 // Product is the endoflife.date representation of a tracked product.

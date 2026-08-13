@@ -8,10 +8,21 @@ import (
 	"sort"
 )
 
-// State records the release cycles seen on the previous run, keyed by product
-// slug. It is what makes "a new version appeared" detectable: the API itself
-// carries no notion of when a cycle was added to it.
-type State map[string][]string
+// State records what previous runs saw and reported, keyed by product slug. It
+// is what makes both detections possible: the API carries no notion of when a
+// cycle was added to it, and no notion of what has already been announced.
+type State map[string]productState
+
+// productState is one product's history.
+type productState struct {
+	// Releases lists the release cycles the last run saw.
+	Releases []string `json:"releases"`
+	// Sent lists the keys of the alerts already delivered for this product. It
+	// is never pruned: an entry is the only thing standing between a delivered
+	// alert and a repeat of it, and an alert is due until it has landed however
+	// long the action was not running.
+	Sent []string `json:"sent"`
+}
 
 // loadState reads the state file. A missing file is not an error: it marks a
 // seed run, reported through the second return value.
@@ -32,11 +43,12 @@ func loadState(path string) (State, bool, error) {
 	return state, true, nil
 }
 
-// saveState writes the state file with sorted keys and releases, so a run that
-// changes nothing produces no diff.
+// saveState writes the state file with everything sorted, so a run that changes
+// nothing produces no diff.
 func saveState(path string, state State) error {
-	for product := range state {
-		sort.Strings(state[product])
+	for _, recorded := range state {
+		sort.Strings(recorded.Releases)
+		sort.Strings(recorded.Sent)
 	}
 
 	data, err := json.MarshalIndent(state, "", "  ")
@@ -62,12 +74,22 @@ func (s State) has(product string) bool {
 
 // seen returns the release names already recorded for a product.
 func (s State) seen(product string) map[string]bool {
-	releases := make(map[string]bool, len(s[product]))
-	for _, release := range s[product] {
+	releases := make(map[string]bool, len(s[product].Releases))
+	for _, release := range s[product].Releases {
 		releases[release] = true
 	}
 
 	return releases
+}
+
+// sent returns the keys of the alerts already delivered for a product.
+func (s State) sent(product string) map[string]bool {
+	keys := make(map[string]bool, len(s[product].Sent))
+	for _, key := range s[product].Sent {
+		keys[key] = true
+	}
+
+	return keys
 }
 
 // record replaces the recorded releases for a product.
@@ -78,5 +100,23 @@ func (s State) record(product string, releases []Release) {
 	}
 	sort.Strings(names)
 
-	s[product] = names
+	recorded := s[product]
+	recorded.Releases = names
+	s[product] = recorded
+}
+
+// markSent records alert keys as delivered, ignoring the ones already there.
+func (s State) markSent(product string, keys []string) {
+	recorded := s[product]
+	already := s.sent(product)
+
+	for _, key := range keys {
+		if already[key] {
+			continue
+		}
+		already[key] = true
+		recorded.Sent = append(recorded.Sent, key)
+	}
+
+	s[product] = recorded
 }

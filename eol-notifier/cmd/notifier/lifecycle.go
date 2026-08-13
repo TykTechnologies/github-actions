@@ -3,10 +3,16 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
 const dateLayout = "2006-01-02"
+
+// endedMarker stands in for the threshold count in the key of an alert that
+// reports a phase as over rather than approaching.
+const endedMarker = "ended"
 
 // DependencyRef names a dependency affected by an alert. Several dependencies
 // can share one product, so alerts are grouped and list every dependency the
@@ -17,7 +23,7 @@ type DependencyRef struct {
 }
 
 // EOLAlert reports that a release cycle reaches the end of a lifecycle phase in
-// exactly MonthsLeft months.
+// MonthsLeft months, or that it already has when Ended is set.
 type EOLAlert struct {
 	Product      string
 	ProductLabel string
@@ -27,7 +33,11 @@ type EOLAlert struct {
 	PhaseLabel   string
 	Date         time.Time
 	MonthsLeft   int
+	Ended        bool
 	Dependencies []DependencyRef
+	// key identifies the alert in the state file, so it is delivered once and
+	// stays due until it has been.
+	key string
 }
 
 // NewVersionAlert reports a release cycle that the API now lists but the
@@ -46,6 +56,11 @@ type NewVersionAlert struct {
 type Report struct {
 	NewVersions []NewVersionAlert
 	EOL         []EOLAlert
+	// BaselineKeys lists, per product, the alert keys a product with no recorded
+	// history was already due. They are recorded as delivered without being
+	// posted: a product added to the config must not empty years of elapsed
+	// thresholds into the channel.
+	BaselineKeys map[string][]string
 	// Seed is true when no previous state existed, in which case new-version
 	// detection is suppressed to avoid announcing every historical release.
 	Seed bool
@@ -53,7 +68,12 @@ type Report struct {
 
 // Empty reports whether there is nothing worth posting.
 func (r Report) Empty() bool {
-	return len(r.NewVersions) == 0 && len(r.EOL) == 0
+	return r.alertCount() == 0
+}
+
+// alertCount is how many alerts the report carries, of either kind.
+func (r Report) alertCount() int {
+	return len(r.NewVersions) + len(r.EOL)
 }
 
 // hasProxy reports whether any alert relies on an upstream engine standing in
@@ -84,21 +104,25 @@ func hasProxyRef(refs []DependencyRef) bool {
 }
 
 // detectAlerts compares the fetched products against the configured thresholds
-// and the previously seen state. Products missing from products (because their
+// and what previous runs recorded. Products missing from products (because their
 // fetch failed) are skipped. now is passed in rather than read from the clock so
 // the whole detection path is testable.
+//
+// An alert is due from the day it comes up until the day it is delivered, not on
+// one day only: a run that does not happen must not cost the channel a warning,
+// however long the gap. What has already been delivered is read from the state,
+// so an alert still fires exactly once.
 //
 // seed only drives the wording of the report; whether a product's releases count
 // as new is decided per product, so adding a dependency to the config does not
 // announce that product's entire back catalogue.
 //
 // Releases carrying a date the API states in a form we cannot read are returned
-// through the second value rather than only logged. Such a release is due its
-// alert on a single day, so dropping it quietly would lose that alert while the
-// job stayed green and nobody had a reason to look.
+// through the second value rather than only logged. Dropping one quietly would
+// leave the job green with nobody a reason to look.
 func detectAlerts(config *DependencyConfig, products map[string]*Product, state State, now time.Time, seed bool) (Report, []string) {
 	today := truncateToDay(now)
-	report := Report{Seed: seed}
+	report := Report{BaselineKeys: map[string][]string{}, Seed: seed}
 	var unreadable []string
 
 	for _, name := range productOrder(config) {
@@ -108,6 +132,7 @@ func detectAlerts(config *DependencyConfig, products map[string]*Product, state 
 		}
 
 		seen := state.seen(name)
+		sent := state.sent(name)
 
 		// A product with no recorded history is a baseline, not news. This covers
 		// both the first ever run and a product newly added to the config.
@@ -135,8 +160,8 @@ func detectAlerts(config *DependencyConfig, products map[string]*Product, state 
 					continue
 				}
 
-				value, past, ok := release.phase(phase)
-				if !ok || past {
+				value, ok := release.phase(phase)
+				if !ok {
 					continue
 				}
 
@@ -147,8 +172,12 @@ func detectAlerts(config *DependencyConfig, products map[string]*Product, state 
 					continue
 				}
 
-				for _, months := range config.ThresholdsMonths {
-					if !monthsBefore(date, months).Equal(today) {
+				for _, due := range dueAlerts(release.Name, phase, date, today, config.ThresholdsMonths) {
+					if sent[due.key] {
+						continue
+					}
+					if baseline {
+						report.BaselineKeys[name] = append(report.BaselineKeys[name], due.key)
 						continue
 					}
 
@@ -160,8 +189,10 @@ func detectAlerts(config *DependencyConfig, products map[string]*Product, state 
 						Phase:        phase,
 						PhaseLabel:   product.phaseLabel(phase),
 						Date:         date,
-						MonthsLeft:   months,
+						MonthsLeft:   due.months,
+						Ended:        due.ended,
 						Dependencies: dependencies,
+						key:          due.key,
 					})
 				}
 			}
@@ -169,16 +200,59 @@ func detectAlerts(config *DependencyConfig, products map[string]*Product, state 
 	}
 
 	sort.SliceStable(report.EOL, func(i, j int) bool {
+		if report.EOL[i].Ended != report.EOL[j].Ended {
+			return report.EOL[i].Ended
+		}
+
 		return report.EOL[i].MonthsLeft > report.EOL[j].MonthsLeft
 	})
 
 	return report, unreadable
 }
 
+// dueAlert is one alert a phase owes: a threshold that has come up, or the phase
+// having ended outright.
+type dueAlert struct {
+	months int
+	ended  bool
+	key    string
+}
+
+// dueAlerts returns what a phase owes as of today, whether it came up today or
+// on a day no run happened. Once the date itself has passed the phase has simply
+// ended, and the thresholds counting down to it would only say something untrue,
+// so the ended alert stands for them.
+//
+// The date is part of every key, so a date the API later revises is due afresh
+// rather than silenced by the alert sent for the date it replaced.
+func dueAlerts(cycle, phase string, date, today time.Time, thresholds []int) []dueAlert {
+	stamp := date.Format(dateLayout)
+
+	if !date.After(today) {
+		return []dueAlert{{ended: true, key: alertKey(cycle, phase, endedMarker, stamp)}}
+	}
+
+	var due []dueAlert
+	for _, months := range thresholds {
+		if monthsBefore(date, months).After(today) {
+			continue
+		}
+
+		due = append(due, dueAlert{months: months, key: alertKey(cycle, phase, strconv.Itoa(months), stamp)})
+	}
+
+	return due
+}
+
+// alertKey identifies one alert across runs.
+func alertKey(cycle, phase, marker, date string) string {
+	return strings.Join([]string{cycle, phase, marker, date}, "|")
+}
+
 // monthsBefore returns the date exactly months months before date, clamped to
 // the last day of the target month. Clamping matters: Go's AddDate turns
-// 2027-03-31 minus one month into 2027-03-03, which would make a single EoL
-// date trigger the same threshold on more than one day.
+// 2027-03-31 minus one month into 2027-03-03, which would hold the one-month
+// warning back to three days into the month it was meant to open.
 func monthsBefore(date time.Time, months int) time.Time {
 	year, month, day := date.Date()
 

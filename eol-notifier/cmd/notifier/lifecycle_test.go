@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +21,27 @@ func mustDate(t *testing.T, value string) time.Time {
 
 func strPtr(value string) *string {
 	return &value
+}
+
+// tracked builds a state that has seen a product before, so detection treats it
+// as tracked rather than as a baseline with nothing to announce.
+func tracked(product string, releases ...string) State {
+	return State{product: {Releases: releases}}
+}
+
+// firedMonths lists what a report alerts on, an ended phase counting as 0, so
+// tests can assert on which thresholds came up rather than only how many.
+func firedMonths(report Report) []int {
+	months := make([]int, 0, len(report.EOL))
+	for _, alert := range report.EOL {
+		if alert.Ended {
+			months = append(months, 0)
+			continue
+		}
+		months = append(months, alert.MonthsLeft)
+	}
+
+	return months
 }
 
 // testConfig builds a validated config, so tests exercise the same defaulting
@@ -63,44 +86,58 @@ func TestMonthsBefore(t *testing.T) {
 	}
 }
 
-// TestThresholdFiresOnExactlyOneDay is the guard against the failure mode that
-// motivated the clamping: a single EoL date must not alert on more than one day,
-// and must not slip through unannounced either.
-func TestThresholdFiresOnExactlyOneDay(t *testing.T) {
+// TestEveryAlertFiresExactlyOnce drives the detection over a stretch of days,
+// recording what each run delivered, and covers both halves of the guarantee:
+// nothing is announced twice, and nothing is lost when the day an alert came up
+// had no run at all. The dates are the ones that motivated the clamping in
+// monthsBefore, where a threshold is most likely to land on the wrong day.
+func TestEveryAlertFiresExactlyOnce(t *testing.T) {
 	eolDates := []string{"2027-01-31", "2027-02-28", "2027-03-31", "2028-02-29", "2027-08-31"}
 
-	for _, eol := range eolDates {
-		t.Run(eol, func(t *testing.T) {
-			config := testConfig(t, Dependency{Name: "PostgreSQL", Product: "postgresql"})
-			products := map[string]*Product{
-				"postgresql": {
-					Name:     "postgresql",
-					Label:    "PostgreSQL",
-					Releases: []Release{{Name: "15", EOLFrom: strPtr(eol)}},
-				},
-			}
+	// Runs every day, and runs that skip four days in five: the outcome must not
+	// depend on which days the action happened to be up.
+	for _, step := range []int{1, 5} {
+		for _, eol := range eolDates {
+			t.Run(fmt.Sprintf("%s every %d day(s)", eol, step), func(t *testing.T) {
+				config := testConfig(t, Dependency{Name: "PostgreSQL", Product: "postgresql"})
+				products := map[string]*Product{
+					"postgresql": {
+						Name:     "postgresql",
+						Label:    "PostgreSQL",
+						Releases: []Release{{Name: "15", EOLFrom: strPtr(eol)}},
+					},
+				}
 
-			for _, months := range config.ThresholdsMonths {
-				trigger := monthsBefore(mustDate(t, eol), months)
+				state := tracked("postgresql", "15")
+				fired := make(map[int]int)
 
-				fired := 0
-				for offset := -20; offset <= 20; offset++ {
-					day := trigger.AddDate(0, 0, offset)
-					report, _ := detectAlerts(config, products, State{}, day, false)
+				end := mustDate(t, eol).AddDate(0, 0, 10)
+				for day := monthsBefore(mustDate(t, eol), 12).AddDate(0, 0, -10); !day.After(end); day = day.AddDate(0, 0, step) {
+					report, _ := detectAlerts(config, products, state, day, false)
+					for _, months := range firedMonths(report) {
+						fired[months]++
+					}
 					for _, alert := range report.EOL {
-						if alert.MonthsLeft == months {
-							fired++
-						}
+						state.markSent(alert.Product, []string{alert.key})
 					}
 				}
 
-				if fired != 1 {
-					t.Errorf("threshold %d months fired on %d days around %s, want exactly 1",
-						months, fired, trigger.Format(dateLayout))
+				for _, months := range append([]int{0}, config.ThresholdsMonths...) {
+					if fired[months] != 1 {
+						t.Errorf("the %s alert fired %d time(s), want exactly 1", thresholdName(months), fired[months])
+					}
 				}
-			}
-		})
+			})
+		}
 	}
+}
+
+func thresholdName(months int) string {
+	if months == 0 {
+		return "ended"
+	}
+
+	return fmt.Sprintf("%d month", months)
 }
 
 func TestDetectAlertsEOL(t *testing.T) {
@@ -115,69 +152,150 @@ func TestDetectAlertsEOL(t *testing.T) {
 		}
 	}
 
+	// The alerts a run would have delivered on the way to 2027-10-11.
+	alreadySent := []string{
+		alertKey("15", phaseEOL, "12", "2027-11-11"),
+		alertKey("15", phaseEOL, "6", "2027-11-11"),
+	}
+
 	tests := []struct {
 		name     string
 		products map[string]*Product
+		sent     []string
 		today    string
-		want     int
+		want     []int
 	}{
 		{
 			name:     "fires twelve months ahead",
 			products: postgres(Release{Name: "15", EOLFrom: strPtr("2027-11-11")}),
 			today:    "2026-11-11",
-			want:     1,
+			want:     []int{12},
 		},
 		{
 			name:     "fires one month ahead",
 			products: postgres(Release{Name: "15", EOLFrom: strPtr("2027-11-11")}),
+			sent:     alreadySent,
 			today:    "2027-10-11",
-			want:     1,
+			want:     []int{1},
 		},
 		{
 			name:     "silent a day early",
 			products: postgres(Release{Name: "15", EOLFrom: strPtr("2027-11-11")}),
+			sent:     alreadySent,
 			today:    "2027-10-10",
-			want:     0,
+			want:     nil,
 		},
 		{
-			name:     "silent a day late",
+			name:     "silent once delivered",
 			products: postgres(Release{Name: "15", EOLFrom: strPtr("2027-11-11")}),
+			sent:     append(alreadySent, alertKey("15", phaseEOL, "1", "2027-11-11")),
 			today:    "2027-10-12",
-			want:     0,
+			want:     nil,
+		},
+		{
+			// The action was down for the days the first two thresholds came up.
+			// Both are still owed, and a missed warning is worth more late than
+			// never.
+			name:     "catches up on every threshold that was missed",
+			products: postgres(Release{Name: "15", EOLFrom: strPtr("2027-11-11")}),
+			today:    "2027-10-11",
+			want:     []int{12, 6, 1},
 		},
 		{
 			name:     "skips a release with no announced date",
 			products: postgres(Release{Name: "18", EOLFrom: nil}),
 			today:    "2026-11-11",
-			want:     0,
+			want:     nil,
 		},
 		{
-			name:     "skips a phase that has already passed",
-			products: postgres(Release{Name: "13", EOLFrom: strPtr("2027-11-11"), IsEOL: true}),
+			// A phase that is over is reported as over rather than skipped: it is
+			// the one thing a channel that missed the countdown still needs.
+			name:     "reports a phase that has already passed",
+			products: postgres(Release{Name: "13", EOLFrom: strPtr("2026-05-25"), IsEOL: true}),
 			today:    "2026-11-11",
-			want:     0,
+			want:     []int{0},
 		},
 		{
 			name:     "skips a product whose fetch failed",
 			products: map[string]*Product{},
 			today:    "2026-11-11",
-			want:     0,
+			want:     nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := testConfig(t, Dependency{Name: "PostgreSQL", Product: "postgresql"})
+			state := tracked("postgresql", "13", "15", "18")
+			state.markSent("postgresql", tt.sent)
 
-			report, _ := detectAlerts(config, tt.products, State{}, mustDate(t, tt.today), false)
+			report, _ := detectAlerts(config, tt.products, state, mustDate(t, tt.today), false)
 
-			if got := len(report.EOL); got != tt.want {
-				t.Fatalf("got %d EoL alert(s), want %d", got, tt.want)
+			if got := firedMonths(report); !slices.Equal(got, tt.want) {
+				t.Fatalf("fired %v, want %v", got, tt.want)
 			}
-			if tt.want > 0 && report.EOL[0].PhaseLabel != "Support Status" {
+			if len(tt.want) > 0 && report.EOL[0].PhaseLabel != "Support Status" {
 				t.Errorf("phase label = %q, want the product's own wording", report.EOL[0].PhaseLabel)
 			}
 		})
+	}
+}
+
+// TestDetectAlertsRefiresAfterDateRevision covers endoflife.date moving a date:
+// the alert delivered for the old date says nothing about the new one, so the
+// new one is due on its own.
+func TestDetectAlertsRefiresAfterDateRevision(t *testing.T) {
+	config := testConfig(t, Dependency{Name: "PostgreSQL", Product: "postgresql"})
+	products := map[string]*Product{
+		"postgresql": {
+			Name:     "postgresql",
+			Label:    "PostgreSQL",
+			Releases: []Release{{Name: "15", EOLFrom: strPtr("2027-09-30")}},
+		},
+	}
+
+	state := tracked("postgresql", "15")
+	state.markSent("postgresql", []string{alertKey("15", phaseEOL, "12", "2027-11-11")})
+
+	report, _ := detectAlerts(config, products, state, mustDate(t, "2026-11-11"), false)
+
+	if got := firedMonths(report); !slices.Equal(got, []int{12}) {
+		t.Fatalf("fired %v, want the twelve-month alert for the revised date", got)
+	}
+	if want := mustDate(t, "2027-09-30"); !report.EOL[0].Date.Equal(want) {
+		t.Errorf("alert date = %s, want the revised date", report.EOL[0].Date.Format(dateLayout))
+	}
+}
+
+// TestDetectAlertsBaselineRecordsWithoutAlerting covers a product with no
+// recorded history: on the first run, or when a dependency is added to the
+// config, its elapsed thresholds are already spent and must not be emptied into
+// the channel. They are recorded as delivered so they stay that way.
+func TestDetectAlertsBaselineRecordsWithoutAlerting(t *testing.T) {
+	config := testConfig(t, Dependency{Name: "PostgreSQL", Product: "postgresql"})
+	products := map[string]*Product{
+		"postgresql": {
+			Name:  "postgresql",
+			Label: "PostgreSQL",
+			Releases: []Release{
+				{Name: "13", EOLFrom: strPtr("2025-11-13"), IsEOL: true},
+				{Name: "15", EOLFrom: strPtr("2027-11-11")},
+			},
+		},
+	}
+
+	report, _ := detectAlerts(config, products, State{}, mustDate(t, "2026-11-11"), true)
+
+	if len(report.EOL) != 0 {
+		t.Errorf("a product with no recorded history announced %d alert(s)", len(report.EOL))
+	}
+
+	want := []string{
+		alertKey("13", phaseEOL, endedMarker, "2025-11-13"),
+		alertKey("15", phaseEOL, "12", "2027-11-11"),
+	}
+	if got := report.BaselineKeys["postgresql"]; !slices.Equal(got, want) {
+		t.Errorf("baseline keys = %v, want %v", got, want)
 	}
 }
 
@@ -198,7 +316,7 @@ func TestDetectAlertsReportsUnreadableDates(t *testing.T) {
 	}
 	config := testConfig(t, Dependency{Name: "PostgreSQL", Product: "postgresql"})
 
-	report, unreadable := detectAlerts(config, products, State{}, mustDate(t, "2026-11-11"), false)
+	report, unreadable := detectAlerts(config, products, tracked("postgresql", "15", "16"), mustDate(t, "2026-11-11"), false)
 
 	if len(unreadable) != 1 {
 		t.Fatalf("got %d unreadable date(s), want 1: %v", len(unreadable), unreadable)
@@ -232,15 +350,24 @@ func TestDetectAlertsTracksConfiguredPhasesOnly(t *testing.T) {
 		},
 	}
 
+	// By 2030 the security support the rows below run past is long delivered.
+	spent := []string{
+		alertKey("15", phaseEOL, "12", "2028-02-29"),
+		alertKey("15", phaseEOL, "6", "2028-02-29"),
+		alertKey("15", phaseEOL, "1", "2028-02-29"),
+		alertKey("15", phaseEOL, endedMarker, "2028-02-29"),
+	}
+
 	tests := []struct {
 		name  string
 		track []string
+		sent  []string
 		today string
 		want  string
 	}{
-		{"eol only, on the eol trigger", []string{phaseEOL}, "2027-02-28", phaseEOL},
-		{"eol only, ignores extended support", []string{phaseEOL}, "2030-02-28", ""},
-		{"extended support tracked", []string{phaseEOL, phaseEOES}, "2030-02-28", phaseEOES},
+		{"eol only, on the eol trigger", []string{phaseEOL}, nil, "2027-02-28", phaseEOL},
+		{"eol only, ignores extended support", []string{phaseEOL}, spent, "2030-02-28", ""},
+		{"extended support tracked", []string{phaseEOL, phaseEOES}, spent, "2030-02-28", phaseEOES},
 	}
 
 	for _, tt := range tests {
@@ -250,8 +377,10 @@ func TestDetectAlertsTracksConfiguredPhasesOnly(t *testing.T) {
 				Product: "amazon-rds-postgresql",
 				Track:   tt.track,
 			})
+			state := tracked("amazon-rds-postgresql", "15")
+			state.markSent("amazon-rds-postgresql", tt.sent)
 
-			report, _ := detectAlerts(config, products, State{}, mustDate(t, tt.today), false)
+			report, _ := detectAlerts(config, products, state, mustDate(t, tt.today), false)
 
 			if tt.want == "" {
 				if len(report.EOL) != 0 {
@@ -286,7 +415,10 @@ func TestDetectAlertsGroupsSharedProduct(t *testing.T) {
 		},
 	}
 
-	report, _ := detectAlerts(config, products, State{}, mustDate(t, "2027-05-11"), false)
+	state := tracked("redis", "7.2")
+	state.markSent("redis", []string{alertKey("7.2", phaseEOL, "12", "2027-11-11")})
+
+	report, _ := detectAlerts(config, products, state, mustDate(t, "2027-05-11"), false)
 
 	if len(report.EOL) != 1 {
 		t.Fatalf("got %d alert(s), want 1 grouped alert", len(report.EOL))
@@ -337,24 +469,26 @@ func TestDetectAlertsNewVersions(t *testing.T) {
 		},
 		{
 			name:  "unseen release is announced",
-			state: State{"postgresql": {"17"}},
+			state: tracked("postgresql", "17"),
 			want:  []string{"18"},
 		},
 		{
 			name:  "everything already seen is silent",
-			state: State{"postgresql": {"13", "17", "18"}},
+			state: tracked("postgresql", "13", "17", "18"),
 			want:  nil,
 		},
 		{
-			name:  "backfilled dead release is not announced",
-			state: State{"postgresql": {"17", "18"}},
+			// A release that was already dead when it first appeared is a
+			// backfill, not news. It still gets an end-of-life alert saying so.
+			name:  "backfilled dead release is not announced as new",
+			state: tracked("postgresql", "17", "18"),
 			want:  nil,
 		},
 		{
 			// Adding a dependency to the config must not announce that product's
 			// entire back catalogue on the next run.
 			name:  "product with no recorded history is a baseline",
-			state: State{"redis": {"8.8"}},
+			state: tracked("redis", "8.8"),
 			want:  nil,
 		},
 	}

@@ -6,7 +6,7 @@ inputs:
     description: 'Path to the YAML file listing the dependencies to track.'
     required: true
   state-path:
-    description: 'Path to the JSON file recording previously seen release cycles. A missing file seeds a baseline without announcing new versions.'
+    description: 'Path to the JSON file recording previously seen release cycles and the alerts already delivered. A missing file seeds a baseline without announcing anything.'
     required: true
   slack-webhook-url:
     description: 'Slack incoming webhook URL for the target channel. Required unless dry-run is true.'

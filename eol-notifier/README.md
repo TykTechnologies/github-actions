@@ -24,7 +24,7 @@ approval that the dependency policy asks for.
 | Input               | Required | Default | Description                                                                     |
 |---------------------|----------|---------|---------------------------------------------------------------------------------|
 | `config-path`       | yes      |         | YAML file with the list of dependencies to track                                |
-| `state-path`        | yes      |         | JSON file with the versions that the last run saw                               |
+| `state-path`        | yes      |         | JSON file with the versions the last run saw and the alerts already sent        |
 | `slack-webhook-url` | no       |         | Slack incoming webhook for the channel. Needed unless `dry-run` is `true`       |
 | `dry-run`           | no       | `false` | Print the message in the job log, send nothing, and do not touch the state file |
 
@@ -87,12 +87,25 @@ or if a threshold is repeated or is not above zero.
 
 The action looks at every phase it tracks, but only where the API gives an end
 date. Some versions have no date yet, and the action skips those. It sends an
-alert when today is exactly 12, 6 or 1 month before the date.
+alert when the date is 12, 6 or 1 month away.
 
 It counts backwards from the end date. If the target month is shorter, it uses
 the last day of that month. For example, one month before 31 March is
-28 February, and 29 February in a leap year. So each date sends each alert on one
-day only. Nothing is sent twice, and nothing is missed in a short month.
+28 February, and 29 February in a leap year.
+
+An alert stays due from the day it comes up until the day it is sent. So a day,
+a week or a year with no run costs nothing: the first run after the gap sends
+everything that came up while the action was down. The state file lists the
+alerts already sent, so each one still goes out once and once only.
+
+### Alerts after the end of support
+
+When the end date itself passes, the action sends one alert saying the phase has
+ended. It replaces the countdown for that version, because a version that is
+already out of support is not one month from anything.
+
+This alert is sent once, on the first run after the date passes. If
+endoflife.date later moves the date, the new date is a new alert.
 
 ### Alerts for new versions
 
@@ -101,15 +114,23 @@ version that is not in the file, the action sends an alert.
 
 Sometimes a version is already end of life when it first appears. This is an old
 version that someone added to endoflife.date later, so it is not news. The action
-saves it but sends no alert.
+saves it and sends no new-version alert, only the alert that says the phase has
+ended.
 
-If there is no state file, the action saves the current versions and sends no
-new-version alerts. This stops the first run from posting every old version into
-the channel.
+A product the state file has never seen is a baseline. The action saves its
+versions, counts its due alerts as already sent, and posts nothing. This covers
+the first run and a dependency added to the config later: neither empties years
+of past dates into the channel.
 
-The action writes the state file only after Slack accepts the message. So a
-version is never saved as seen if its alert did not arrive. A dry run never
-writes the file.
+The action saves a version as seen only after Slack accepts the message that
+names it. So a version is never saved as seen if its alert did not arrive. A dry
+run never writes the file.
+
+### Long digests
+
+Slack takes a limited number of blocks in one message. If the digest does not
+fit, the action splits it and posts every part. Nothing is cut. A part that
+Slack rejects is not saved as sent, so the next run posts it again.
 
 ### Errors
 
@@ -122,9 +143,10 @@ still checks the versions around it, and exits with a non-zero code naming the
 version and the date it saw. A version with no end date at all is not an error.
 There is nothing to count down to yet, so the action passes over it in silence.
 
-Both cases cost a version the alert it was due, and that alert only comes on one
-day. The run fails so that the loss is visible. The state file is still written,
-so the alerts that did arrive are not sent again the next day.
+Both cases delay a version the alert it was due. The run fails so that the delay
+is visible. Nothing is lost: an alert stays due until it is sent, so the next run
+that can read the product sends it. The state file is still written, so the
+alerts that did arrive are not sent again.
 
 If there is nothing to report, the action sends no message at all.
 

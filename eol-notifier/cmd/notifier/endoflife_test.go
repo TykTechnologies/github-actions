@@ -50,7 +50,6 @@ func TestFetchProductDecodesNullableFields(t *testing.T) {
 		phase      string
 		wantOK     bool
 		wantDate   string
-		wantPast   bool
 		phaseLabel string
 	}{
 		{
@@ -80,13 +79,12 @@ func TestFetchProductDecodesNullableFields(t *testing.T) {
 			phaseLabel: "Security Support",
 		},
 		{
-			name:       "elapsed phase is flagged",
+			name:       "elapsed phase still reports its date",
 			product:    "redis",
 			release:    "8.2",
 			phase:      phaseEOL,
 			wantOK:     true,
 			wantDate:   "2026-05-25",
-			wantPast:   true,
 			phaseLabel: "Security Support",
 		},
 		{
@@ -116,15 +114,12 @@ func TestFetchProductDecodesNullableFields(t *testing.T) {
 				t.Fatalf("fixture %s has no release %s", tt.product, tt.release)
 			}
 
-			date, past, ok := release.phase(tt.phase)
+			date, ok := release.phase(tt.phase)
 			if ok != tt.wantOK {
 				t.Fatalf("phase(%q) ok = %v, want %v", tt.phase, ok, tt.wantOK)
 			}
 			if ok && date != tt.wantDate {
 				t.Errorf("phase(%q) date = %q, want %q", tt.phase, date, tt.wantDate)
-			}
-			if past != tt.wantPast {
-				t.Errorf("phase(%q) past = %v, want %v", tt.phase, past, tt.wantPast)
 			}
 			if got := product.phaseLabel(tt.phase); got != tt.phaseLabel {
 				t.Errorf("phaseLabel(%q) = %q, want %q", tt.phase, got, tt.phaseLabel)

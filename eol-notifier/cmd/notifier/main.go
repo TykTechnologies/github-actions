@@ -83,34 +83,77 @@ func execute(ctx context.Context, opts options) error {
 	report, unreadable := detectAlerts(dependencyConfig, products, state, opts.now, !existed)
 	log("found %d new version(s) and %d end-of-life alert(s)", len(report.NewVersions), len(report.EOL))
 
-	if err := publish(ctx, opts.slack, report, opts.dryRun); err != nil {
-		return err
-	}
+	delivered, publishErr := publish(ctx, opts.slack, report, opts.dryRun)
 
-	// State is written only after a successful publish: recording a release the
-	// channel never heard about would silence it forever.
+	// Only what reached the channel is recorded, and it is recorded even when a
+	// later part of the digest failed: an alert the channel never heard is due
+	// again tomorrow, and one it did hear must not be repeated.
 	if opts.dryRun {
 		log("dry run, leaving %s untouched", opts.statePath)
 	} else {
-		for name, product := range products {
-			state.record(name, product.Releases)
-		}
+		recordRun(state, products, report, delivered)
 		if err := saveState(opts.statePath, state); err != nil {
 			return err
 		}
 	}
 
-	return runProblems(failed, unreadable)
+	return runProblems(publishErr, failed, unreadable)
+}
+
+// recordRun folds a finished run into the state: the alerts that were delivered,
+// the ones a product with no history was due but never had posted, and the
+// release cycles of the products that owe the channel nothing.
+func recordRun(state State, products map[string]*Product, report Report, delivered []Report) {
+	for product, keys := range report.BaselineKeys {
+		state.markSent(product, keys)
+	}
+
+	for _, part := range delivered {
+		for _, alert := range part.EOL {
+			state.markSent(alert.Product, []string{alert.key})
+		}
+	}
+
+	owed := undeliveredProducts(report, delivered)
+	for name, product := range products {
+		if owed[name] {
+			continue
+		}
+		state.record(name, product.Releases)
+	}
+}
+
+// undeliveredProducts names the products still owed a new-version alert. Their
+// release cycles must stay unrecorded: a release marked as seen is never
+// announced again, so recording one whose alert never landed would lose it.
+func undeliveredProducts(report Report, delivered []Report) map[string]bool {
+	landed := make(map[string]bool)
+	for _, part := range delivered {
+		for _, alert := range part.NewVersions {
+			landed[alert.Product+"|"+alert.Release] = true
+		}
+	}
+
+	owed := make(map[string]bool)
+	for _, alert := range report.NewVersions {
+		if !landed[alert.Product+"|"+alert.Release] {
+			owed[alert.Product] = true
+		}
+	}
+
+	return owed
 }
 
 // runProblems turns the problems a run survived into its exit status. They are
 // reported only here, after the digest went out and the state was written: the
-// alerts that did work should still reach the channel, but a product that could
-// not be read and a date that could not be parsed both cost a release its alert
-// on the one day it was due, so the job has to go red or the loss is invisible.
-func runProblems(failed, unreadable []string) error {
+// alerts that did work should still reach the channel, but each of these delays
+// a release its alert, so the job has to go red or the delay is invisible.
+func runProblems(publishErr error, failed, unreadable []string) error {
 	var problems []string
 
+	if publishErr != nil {
+		problems = append(problems, publishErr.Error())
+	}
 	if len(failed) > 0 {
 		problems = append(problems, fmt.Sprintf(
 			"failed to fetch %d product(s): %s", len(failed), strings.Join(failed, ", "),
@@ -151,39 +194,44 @@ func fetchProducts(ctx context.Context, client *Client, names []string) (map[str
 	return products, failed
 }
 
-// publish renders and delivers the digest. Nothing to report means nothing is
-// posted at all.
-func publish(ctx context.Context, slack *slackClient, report Report, dryRun bool) error {
+// publish delivers the digest, in as many messages as Slack's block limit
+// requires, and returns the parts that landed. A part that fails costs only
+// itself: the parts before it are reported as delivered and the rest stay due.
+// Nothing to report means nothing is posted at all.
+func publish(ctx context.Context, slack *slackClient, report Report, dryRun bool) ([]Report, error) {
 	if report.Empty() {
 		log("nothing to report, no Slack message sent")
-		return nil
+		return nil, nil
 	}
 
-	message, truncated := buildMessage(report)
-
-	payload, err := encodeMessage(message)
-	if err != nil {
-		return err
+	parts := splitReport(report)
+	if len(parts) > 1 {
+		log("digest does not fit one Slack message, posting it in %d parts", len(parts))
 	}
 
-	// The truncated digest tells its readers the full list is in the run log, so
-	// it has to actually be there, dry run or not.
-	if truncated {
-		logWarn("digest did not fit Slack's block limit, posting a cut version. full payload:\n%s", payload)
+	var delivered []Report
+	for _, part := range parts {
+		payload, err := encodeMessage(buildMessage(part))
+		if err != nil {
+			return delivered, err
+		}
+
+		if dryRun {
+			log("dry run, would post to Slack:\n%s", payload)
+			continue
+		}
+
+		if err := slack.Post(ctx, payload); err != nil {
+			return delivered, err
+		}
+		delivered = append(delivered, part)
 	}
 
-	if dryRun {
-		log("dry run, would post to Slack:\n%s", payload)
-		return nil
+	if !dryRun {
+		log("posted digest to Slack in %d message(s)", len(delivered))
 	}
 
-	if err := slack.Post(ctx, payload); err != nil {
-		return err
-	}
-
-	log("posted digest to Slack")
-
-	return nil
+	return delivered, nil
 }
 
 func log(msg string, args ...interface{}) {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,13 +12,18 @@ import (
 	"unicode/utf8"
 )
 
-// captureServer stands in for the Slack webhook and records what was posted.
+// captureServer stands in for the Slack webhook and records what was posted. A
+// digest can take more than one request, so every body is kept.
 type captureServer struct {
 	*httptest.Server
 	requests int
+	bodies   [][]byte
 	body     []byte
 	header   http.Header
 	status   int
+	// failFrom is the 1-based request from which the server starts rejecting,
+	// for the runs where Slack goes away partway through a split digest.
+	failFrom int
 }
 
 func newCaptureServer(t *testing.T, status int) *captureServer {
@@ -28,6 +34,14 @@ func newCaptureServer(t *testing.T, status int) *captureServer {
 		capture.requests++
 		capture.header = r.Header.Clone()
 		capture.body, _ = io.ReadAll(r.Body)
+		capture.bodies = append(capture.bodies, capture.body)
+
+		if capture.failFrom > 0 && capture.requests >= capture.failFrom {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("nope"))
+
+			return
+		}
 
 		w.WriteHeader(capture.status)
 		_, _ = w.Write([]byte("ok"))
@@ -83,12 +97,34 @@ func testReport(t *testing.T) Report {
 	}
 }
 
-// render builds the digest and flattens it, for the assertions that do not care
-// whether it had to be truncated.
+// render builds the digest and flattens it, for the assertions that only care
+// about the text.
 func render(report Report) string {
-	message, _ := buildMessage(report)
+	return blockText(buildMessage(report))
+}
 
-	return blockText(message)
+// bigReport builds a digest of count alerts whose lines are lineLength long. A
+// line long enough to fill a section on its own is how a digest is pushed past
+// the block limit without needing thousands of alerts.
+func bigReport(t *testing.T, count, lineLength int) Report {
+	t.Helper()
+
+	var report Report
+	for i := 0; i < count; i++ {
+		release := fmt.Sprintf("%d", i)
+		report.EOL = append(report.EOL, EOLAlert{
+			Product:      "postgresql",
+			ProductLabel: "PostgreSQL",
+			Release:      release,
+			PhaseLabel:   "Support Status",
+			Date:         mustDate(t, "2026-11-12"),
+			MonthsLeft:   6,
+			Dependencies: []DependencyRef{{Name: strings.Repeat("x", lineLength)}},
+			key:          alertKey(release, phaseEOL, "6", "2026-11-12"),
+		})
+	}
+
+	return report
 }
 
 // blockText flattens the rendered message so assertions can look for content
@@ -109,12 +145,8 @@ func blockText(message slackMessage) string {
 }
 
 func TestBuildMessage(t *testing.T) {
-	message, truncated := buildMessage(testReport(t))
+	message := buildMessage(testReport(t))
 	rendered := blockText(message)
-
-	if truncated {
-		t.Error("a two-entry digest was reported as truncated")
-	}
 
 	wants := []string{
 		"Dependency lifecycle digest",
@@ -169,20 +201,8 @@ func TestBuildMessageExplainsSeedRun(t *testing.T) {
 	}
 }
 
-func TestBuildMessageSplitsLongDigests(t *testing.T) {
-	var report Report
-	for i := 0; i < 120; i++ {
-		report.EOL = append(report.EOL, EOLAlert{
-			ProductLabel: "PostgreSQL",
-			Release:      "14",
-			PhaseLabel:   "Support Status",
-			Date:         mustDate(t, "2026-11-12"),
-			MonthsLeft:   6,
-			Dependencies: []DependencyRef{{Name: strings.Repeat("x", 60)}},
-		})
-	}
-
-	message, _ := buildMessage(report)
+func TestBuildMessagePacksLinesIntoSections(t *testing.T) {
+	message := buildMessage(bigReport(t, 120, 60))
 
 	sections := 0
 	for _, block := range message.Blocks {
@@ -195,39 +215,79 @@ func TestBuildMessageSplitsLongDigests(t *testing.T) {
 	}
 
 	if sections < 2 {
-		t.Errorf("got %d section(s), want the digest split across several", sections)
-	}
-	if len(message.Blocks) > slackMaxBlocks {
-		t.Errorf("message has %d blocks, want at most %d", len(message.Blocks), slackMaxBlocks)
+		t.Errorf("got %d section(s), want the lines split across several", sections)
 	}
 }
 
-// TestBuildMessageReportsTruncation covers the digest that does not fit Slack's
-// block limit. The notice it carries tells readers the full list is in the run
-// log, so buildMessage has to tell the caller to put it there.
-func TestBuildMessageReportsTruncation(t *testing.T) {
-	var report Report
-	for i := 0; i < 60; i++ {
-		report.EOL = append(report.EOL, EOLAlert{
+// TestSplitReportKeepsEveryAlert covers the digest too large for one message.
+// Every part has to be postable on its own, and between them they have to carry
+// the whole report: a part dropped to make the digest fit is an alert nobody
+// ever sees.
+func TestSplitReportKeepsEveryAlert(t *testing.T) {
+	report := bigReport(t, 60, slackMaxSectionChars)
+	report.NewVersions = testReport(t).NewVersions
+
+	parts := splitReport(report)
+
+	if len(parts) < 2 {
+		t.Fatalf("a %d-alert digest was left in %d part(s)", report.alertCount(), len(parts))
+	}
+
+	seen := make(map[string]bool)
+	for _, part := range parts {
+		if blocks := len(buildMessage(part).Blocks); blocks > slackMaxBlocks {
+			t.Errorf("a part has %d blocks, want at most %d", blocks, slackMaxBlocks)
+		}
+		for _, alert := range part.EOL {
+			seen[alert.key] = true
+		}
+		for _, alert := range part.NewVersions {
+			seen[alert.Product+"|"+alert.Release] = true
+		}
+	}
+
+	if len(seen) != report.alertCount() {
+		t.Errorf("the parts carry %d of the report's %d alerts", len(seen), report.alertCount())
+	}
+}
+
+// TestBuildMessageRendersEndedPhases covers the alert for a phase that is over.
+// It is the one alert that cannot be worded as a countdown.
+func TestBuildMessageRendersEndedPhases(t *testing.T) {
+	report := Report{EOL: []EOLAlert{
+		{
+			ProductLabel: "Redis",
+			Release:      "7.2",
+			PhaseLabel:   "Security Support",
+			Date:         mustDate(t, "2026-08-01"),
+			Ended:        true,
+			Dependencies: []DependencyRef{{Name: "Redis"}},
+		},
+		{
 			ProductLabel: "PostgreSQL",
-			Release:      "14",
+			Release:      "15",
 			PhaseLabel:   "Support Status",
-			Date:         mustDate(t, "2026-11-12"),
+			Date:         mustDate(t, "2027-02-11"),
 			MonthsLeft:   6,
-			Dependencies: []DependencyRef{{Name: strings.Repeat("x", slackMaxSectionChars)}},
-		})
+			Dependencies: []DependencyRef{{Name: "PostgreSQL"}},
+		},
+	}}
+
+	rendered := render(report)
+
+	for _, want := range []string{
+		"*Already ended*",
+		"Redis *7.2* — Security Support ended 2026-08-01",
+		"*In 6 months*",
+		"PostgreSQL *15* — Support Status ends 2027-02-11",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("rendered message is missing %q:\n%s", want, rendered)
+		}
 	}
 
-	message, truncated := buildMessage(report)
-
-	if !truncated {
-		t.Fatalf("a digest of %d blocks was not reported as truncated", len(message.Blocks))
-	}
-	if len(message.Blocks) > slackMaxBlocks {
-		t.Errorf("message has %d blocks, want at most %d", len(message.Blocks), slackMaxBlocks)
-	}
-	if !strings.Contains(blockText(message), "the full list is in the workflow run log") {
-		t.Error("the truncated digest does not say where the full list is")
+	if strings.Index(rendered, "Already ended") > strings.Index(rendered, "In 6 months") {
+		t.Errorf("the ended phase is listed after the countdown:\n%s", rendered)
 	}
 }
 
@@ -245,7 +305,7 @@ func TestBuildMessageTruncatesOverlongLine(t *testing.T) {
 		Dependencies: []DependencyRef{{Name: strings.Repeat("ü", 4000)}},
 	}}}
 
-	message, _ := buildMessage(report)
+	message := buildMessage(report)
 
 	truncated := false
 	for _, block := range message.Blocks {
@@ -282,9 +342,7 @@ func TestSlackPost(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			capture := newCaptureServer(t, tt.status)
 
-			message, _ := buildMessage(testReport(t))
-
-			payload, err := encodeMessage(message)
+			payload, err := encodeMessage(buildMessage(testReport(t)))
 			if err != nil {
 				t.Fatalf("encodeMessage() error = %v", err)
 			}
@@ -315,24 +373,78 @@ func TestSlackPost(t *testing.T) {
 func TestPublishSkipsEmptyReports(t *testing.T) {
 	capture := newCaptureServer(t, http.StatusOK)
 
-	if err := publish(context.Background(), capture.client(), Report{}, false); err != nil {
+	delivered, err := publish(context.Background(), capture.client(), Report{}, false)
+	if err != nil {
 		t.Fatalf("publish() error = %v", err)
 	}
 
 	if capture.requests != 0 {
 		t.Errorf("made %d request(s), want none for an empty report", capture.requests)
 	}
+	if len(delivered) != 0 {
+		t.Errorf("reported %d part(s) as delivered, want none", len(delivered))
+	}
 }
 
 func TestPublishHonoursDryRun(t *testing.T) {
 	capture := newCaptureServer(t, http.StatusOK)
 
-	if err := publish(context.Background(), capture.client(), testReport(t), true); err != nil {
+	delivered, err := publish(context.Background(), capture.client(), testReport(t), true)
+	if err != nil {
 		t.Fatalf("publish() error = %v", err)
 	}
 
 	if capture.requests != 0 {
 		t.Errorf("made %d request(s), want none on a dry run", capture.requests)
+	}
+	// Nothing was delivered, so nothing may be recorded as delivered: a dry run
+	// that marked alerts as sent would silence them for good.
+	if len(delivered) != 0 {
+		t.Errorf("reported %d part(s) as delivered on a dry run", len(delivered))
+	}
+}
+
+// TestPublishPostsEveryPart covers a digest too large for one message: every
+// part has to be posted, not just the first.
+func TestPublishPostsEveryPart(t *testing.T) {
+	capture := newCaptureServer(t, http.StatusOK)
+	report := bigReport(t, 60, slackMaxSectionChars)
+
+	delivered, err := publish(context.Background(), capture.client(), report, false)
+	if err != nil {
+		t.Fatalf("publish() error = %v", err)
+	}
+
+	if capture.requests < 2 {
+		t.Fatalf("made %d request(s), want the digest posted in parts", capture.requests)
+	}
+	if len(delivered) != capture.requests {
+		t.Errorf("reported %d part(s) as delivered over %d request(s)", len(delivered), capture.requests)
+	}
+
+	alerts := 0
+	for _, part := range delivered {
+		alerts += part.alertCount()
+	}
+	if alerts != report.alertCount() {
+		t.Errorf("delivered %d of %d alerts", alerts, report.alertCount())
+	}
+}
+
+// TestPublishReportsWhatLandedBeforeFailing covers Slack going away halfway
+// through a split digest. The parts that landed have to be reported as
+// delivered, or they would be posted again on the next run.
+func TestPublishReportsWhatLandedBeforeFailing(t *testing.T) {
+	capture := newCaptureServer(t, http.StatusOK)
+	capture.failFrom = 2
+
+	delivered, err := publish(context.Background(), capture.client(), bigReport(t, 60, slackMaxSectionChars), false)
+	if err == nil {
+		t.Fatal("publish() succeeded despite Slack rejecting a part")
+	}
+
+	if len(delivered) != 1 {
+		t.Errorf("reported %d part(s) as delivered, want only the one that landed", len(delivered))
 	}
 }
 
