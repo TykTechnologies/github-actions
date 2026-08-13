@@ -375,8 +375,8 @@ func TestRecordRunKeepsUndeliveredAlertsDue(t *testing.T) {
 			{Product: "redis", Release: "8.8"},
 		},
 		EOL: []EOLAlert{
-			{Product: "postgresql", key: "15|eol|12|2027-11-11"},
-			{Product: "redis", key: "8.2|eol|1|2026-05-25"},
+			{Product: "postgresql", keys: []string{"15|eol|12|2027-11-11"}},
+			{Product: "redis", keys: []string{"8.2|eol|1|2026-05-25"}},
 		},
 		BaselineKeys: map[string][]string{"mysql": {"8.0|eol|ended|2026-04-30"}},
 	}

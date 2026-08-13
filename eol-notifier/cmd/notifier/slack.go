@@ -90,8 +90,11 @@ func splitReport(report Report) []Report {
 // parts carry roughly the same number of lines. It is only called on a report
 // holding at least two alerts, so both parts are strictly smaller.
 func (r Report) split() (Report, Report) {
-	first := Report{Seed: r.Seed}
-	second := Report{Seed: r.Seed}
+	// BaselineKeys rides along because the footer is built per part and has to
+	// carry the same caveat on each. Only the original report is recorded, so
+	// the copies cost nothing.
+	first := Report{BaselineKeys: r.BaselineKeys, Seed: r.Seed}
+	second := Report{BaselineKeys: r.BaselineKeys, Seed: r.Seed}
 
 	if cut := r.alertCount() / 2; cut <= len(r.NewVersions) {
 		first.NewVersions = r.NewVersions[:cut]
@@ -226,8 +229,14 @@ func footerText(report Report) string {
 		)
 	}
 
-	if report.Seed {
-		parts = append(parts, "First run: there is no previous state to compare against, so new versions are not listed.")
+	// A baseline product withholds two things at once, and a digest that admits
+	// only to the first reads as "nothing here is out of support yet", which is
+	// the opposite of what the withheld half says.
+	if report.Seed || len(report.BaselineKeys) > 0 {
+		parts = append(parts,
+			"First run for one or more products: their existing versions, and the support "+
+				"phases that had already ended before tracking began, are not listed.",
+		)
 	}
 
 	return strings.Join(parts, " ")

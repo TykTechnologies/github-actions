@@ -98,6 +98,11 @@ a week or a year with no run costs nothing: the first run after the gap sends
 everything that came up while the action was down. The state file lists the
 alerts already sent, so each one still goes out once and once only.
 
+If more than one warning for the same version came up during the gap, the action
+sends the closest one only. After a year with no runs, "12 months left" is not
+true any more, so saying it would be worse than saying nothing. The warnings it
+stood in for are marked as sent and do not come back.
+
 ### Alerts after the end of support
 
 When the end date itself passes, the action sends one alert saying the phase has

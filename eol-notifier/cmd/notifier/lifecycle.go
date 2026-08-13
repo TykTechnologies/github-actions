@@ -35,9 +35,10 @@ type EOLAlert struct {
 	MonthsLeft   int
 	Ended        bool
 	Dependencies []DependencyRef
-	// key identifies the alert in the state file, so it is delivered once and
-	// stays due until it has been.
-	key string
+	// keys identify the alert in the state file, so it is delivered once and
+	// stays due until it has been. There is more than one when this alert stands
+	// in for thresholds it superseded, which are spent along with it.
+	keys []string
 }
 
 // NewVersionAlert reports a release cycle that the API now lists but the
@@ -178,29 +179,33 @@ func detectAlerts(config *DependencyConfig, products map[string]*Product, state 
 					continue
 				}
 
-				for _, due := range dueAlerts(release.Name, phase, date, today, config.ThresholdsMonths) {
-					if sent[due.key] {
-						continue
-					}
-					if baseline && due.ended {
-						report.BaselineKeys[name] = append(report.BaselineKeys[name], due.key)
-						continue
-					}
-
-					report.EOL = append(report.EOL, EOLAlert{
-						Product:      name,
-						ProductLabel: product.Label,
-						ProductURL:   product.Links.HTML,
-						Release:      releaseLabel(release),
-						Phase:        phase,
-						PhaseLabel:   product.phaseLabel(phase),
-						Date:         date,
-						MonthsLeft:   due.months,
-						Ended:        due.ended,
-						Dependencies: dependencies,
-						key:          due.key,
-					})
+				owed := unsent(dueAlerts(release.Name, phase, date, today, config.ThresholdsMonths), sent)
+				if len(owed) == 0 {
+					continue
 				}
+
+				// dueAlerts returns the ended alert on its own, so the first entry
+				// answers for the whole phase.
+				if baseline && owed[0].ended {
+					report.BaselineKeys[name] = append(report.BaselineKeys[name], owed[0].key)
+					continue
+				}
+
+				due, superseded := mostUrgent(owed)
+
+				report.EOL = append(report.EOL, EOLAlert{
+					Product:      name,
+					ProductLabel: product.Label,
+					ProductURL:   product.Links.HTML,
+					Release:      releaseLabel(release),
+					Phase:        phase,
+					PhaseLabel:   product.phaseLabel(phase),
+					Date:         date,
+					MonthsLeft:   due.months,
+					Ended:        due.ended,
+					Dependencies: dependencies,
+					keys:         append([]string{due.key}, superseded...),
+				})
 			}
 		}
 	}
@@ -248,6 +253,43 @@ func dueAlerts(cycle, phase string, date, today time.Time, thresholds []int) []d
 	}
 
 	return due
+}
+
+// unsent drops the alerts already delivered.
+func unsent(due []dueAlert, sent map[string]bool) []dueAlert {
+	owed := make([]dueAlert, 0, len(due))
+	for _, candidate := range due {
+		if sent[candidate.key] {
+			continue
+		}
+		owed = append(owed, candidate)
+	}
+
+	return owed
+}
+
+// mostUrgent picks the one alert to send when several thresholds for the same
+// phase are owed at once, which happens on the first run and after a gap in
+// runs. Only the closest one is still true by then - "twelve months" is a lie
+// once the six-month day has passed too - so the rest are returned as
+// superseded. They are spent along with the alert that stands in for them
+// rather than left to come up again.
+func mostUrgent(due []dueAlert) (dueAlert, []string) {
+	pick := 0
+	for index, candidate := range due {
+		if candidate.months < due[pick].months {
+			pick = index
+		}
+	}
+
+	var superseded []string
+	for index, candidate := range due {
+		if index != pick {
+			superseded = append(superseded, candidate.key)
+		}
+	}
+
+	return due[pick], superseded
 }
 
 // alertKey identifies one alert across runs.

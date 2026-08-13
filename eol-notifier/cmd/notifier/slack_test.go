@@ -120,7 +120,7 @@ func bigReport(t *testing.T, count, lineLength int) Report {
 			Date:         mustDate(t, "2026-11-12"),
 			MonthsLeft:   6,
 			Dependencies: []DependencyRef{{Name: strings.Repeat("x", lineLength)}},
-			key:          alertKey(release, phaseEOL, "6", "2026-11-12"),
+			keys:         []string{alertKey(release, phaseEOL, "6", "2026-11-12")},
 		})
 	}
 
@@ -201,6 +201,31 @@ func TestBuildMessageExplainsSeedRun(t *testing.T) {
 	}
 }
 
+// TestBuildMessageExplainsNewlyTrackedProduct covers a dependency added to the
+// config long after the first run. Its already-ended phases are withheld exactly
+// as on a first run, so the digest has to say so - without the caveat, a reader
+// takes the warnings listed for the whole picture.
+func TestBuildMessageExplainsNewlyTrackedProduct(t *testing.T) {
+	report := testReport(t)
+	report.BaselineKeys = map[string][]string{"mysql": {"5.7|eol|ended|2023-10-31"}}
+
+	rendered := render(report)
+	if !strings.Contains(rendered, "First run for one or more products") {
+		t.Errorf("the withheld phases are not explained:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "had already ended") {
+		t.Errorf("the caveat does not mention the withheld end-of-life phases:\n%s", rendered)
+	}
+}
+
+// TestBuildMessageOmitsCaveatWhenNothingWithheld keeps the caveat off the
+// digests that withheld nothing.
+func TestBuildMessageOmitsCaveatWhenNothingWithheld(t *testing.T) {
+	if rendered := render(testReport(t)); strings.Contains(rendered, "First run") {
+		t.Errorf("a routine digest carries the first-run caveat:\n%s", rendered)
+	}
+}
+
 func TestBuildMessagePacksLinesIntoSections(t *testing.T) {
 	message := buildMessage(bigReport(t, 120, 60))
 
@@ -226,6 +251,7 @@ func TestBuildMessagePacksLinesIntoSections(t *testing.T) {
 func TestSplitReportKeepsEveryAlert(t *testing.T) {
 	report := bigReport(t, 60, slackMaxSectionChars)
 	report.NewVersions = testReport(t).NewVersions
+	report.BaselineKeys = map[string][]string{"mysql": {"5.7|eol|ended|2023-10-31"}}
 
 	parts := splitReport(report)
 
@@ -238,8 +264,12 @@ func TestSplitReportKeepsEveryAlert(t *testing.T) {
 		if blocks := len(buildMessage(part).Blocks); blocks > slackMaxBlocks {
 			t.Errorf("a part has %d blocks, want at most %d", blocks, slackMaxBlocks)
 		}
+		// Each part is read on its own, so each has to carry the caveat.
+		if !strings.Contains(blockText(buildMessage(part)), "First run for one or more products") {
+			t.Error("a part of a split digest lost the first-run caveat")
+		}
 		for _, alert := range part.EOL {
-			seen[alert.key] = true
+			seen[alert.keys[0]] = true
 		}
 		for _, alert := range part.NewVersions {
 			seen[alert.Product+"|"+alert.Release] = true

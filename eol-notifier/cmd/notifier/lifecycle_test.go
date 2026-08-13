@@ -118,7 +118,7 @@ func TestEveryAlertFiresExactlyOnce(t *testing.T) {
 						fired[months]++
 					}
 					for _, alert := range report.EOL {
-						state.markSent(alert.Product, []string{alert.key})
+						state.markSent(alert.Product, alert.keys)
 					}
 				}
 
@@ -193,13 +193,13 @@ func TestDetectAlertsEOL(t *testing.T) {
 			want:     nil,
 		},
 		{
-			// The action was down for the days the first two thresholds came up.
-			// Both are still owed, and a missed warning is worth more late than
-			// never.
-			name:     "catches up on every threshold that was missed",
+			// The action was down for the days all three thresholds came up. Only
+			// the closest one is still true, so it is the one sent; saying "twelve
+			// months" a month before the end would be worse than saying nothing.
+			name:     "catches up with the closest threshold only",
 			products: postgres(Release{Name: "15", EOLFrom: strPtr("2027-11-11")}),
 			today:    "2027-10-11",
-			want:     []int{12, 6, 1},
+			want:     []int{1},
 		},
 		{
 			name:     "skips a release with no announced date",
@@ -238,6 +238,48 @@ func TestDetectAlertsEOL(t *testing.T) {
 				t.Errorf("phase label = %q, want the product's own wording", report.EOL[0].PhaseLabel)
 			}
 		})
+	}
+}
+
+// TestDetectAlertsSpendsSupersededThresholds covers the thresholds the closest
+// one stood in for. They were never posted, but they are spent all the same:
+// leaving them owed would make every later run announce a countdown that had
+// already run out.
+func TestDetectAlertsSpendsSupersededThresholds(t *testing.T) {
+	config := testConfig(t, Dependency{Name: "PostgreSQL", Product: "postgresql"})
+	products := map[string]*Product{
+		"postgresql": {
+			Name:     "postgresql",
+			Label:    "PostgreSQL",
+			Releases: []Release{{Name: "15", EOLFrom: strPtr("2027-11-11")}},
+		},
+	}
+	state := tracked("postgresql", "15")
+
+	// All three thresholds came up while nothing was running.
+	report, _ := detectAlerts(config, products, state, mustDate(t, "2027-10-11"), false)
+
+	if got := firedMonths(report); !slices.Equal(got, []int{1}) {
+		t.Fatalf("fired %v, want only the closest threshold", got)
+	}
+
+	want := []string{
+		alertKey("15", phaseEOL, "1", "2027-11-11"),
+		alertKey("15", phaseEOL, "12", "2027-11-11"),
+		alertKey("15", phaseEOL, "6", "2027-11-11"),
+	}
+	if got := report.EOL[0].keys; !slices.Equal(got, want) {
+		t.Fatalf("alert keys = %v, want %v", got, want)
+	}
+
+	// Recording what that one alert answered for leaves nothing behind.
+	for _, alert := range report.EOL {
+		state.markSent(alert.Product, alert.keys)
+	}
+
+	next, _ := detectAlerts(config, products, state, mustDate(t, "2027-10-12"), false)
+	if len(next.EOL) != 0 {
+		t.Errorf("the next run announced %d alert(s), want none", len(next.EOL))
 	}
 }
 

@@ -110,7 +110,7 @@ func recordRun(state State, products map[string]*Product, report Report, deliver
 
 	for _, part := range delivered {
 		for _, alert := range part.EOL {
-			state.markSent(alert.Product, []string{alert.key})
+			state.markSent(alert.Product, alert.keys)
 		}
 	}
 
