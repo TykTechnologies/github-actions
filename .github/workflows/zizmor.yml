@@ -2,8 +2,10 @@
 name: zizmor
 
 # Reusable workflow that audits the calling repository's GitHub Actions
-# with zizmor (https://docs.zizmor.sh). Findings are annotated inline and
-# summarised to Slack; SARIF upload to code scanning is opt-in.
+# with zizmor (https://docs.zizmor.sh). Pull requests get a sticky summary
+# comment on every repo; SARIF upload to code scanning is an opt-in extra
+# that only takes effect on public repos, where it needs no Advanced
+# Security license. Private repos fall back to inline annotations.
 
 on:
   workflow_call:
@@ -22,7 +24,7 @@ on:
         required: false
         type: boolean
         default: false
-        description: "Upload SARIF to GitHub code scanning; off by default to match the Slack-first flow of the other scanners"
+        description: "Upload SARIF to GitHub code scanning; only takes effect on public repos."
       enforce:
         required: false
         type: boolean
@@ -33,14 +35,6 @@ on:
         type: string
         default: medium
         description: "Severity threshold used when enforce is true (low, medium or high)"
-    secrets:
-      SLACK_WEBHOOK_URL:
-        required: false
-        description: "If set, the severity summary is posted here when there are findings"
-    outputs:
-      slack_summary:
-        description: "A pre-formatted severity summary for Slack"
-        value: ${{ jobs.scan.outputs.slack_summary }}
 
 permissions: {}
 
@@ -51,8 +45,7 @@ jobs:
       security-events: write # upload-sarif
       contents: read # actions/checkout on private repos
       actions: read # upload-sarif on private repos
-    outputs:
-      slack_summary: ${{ steps.summary.outputs.summary }}
+      pull-requests: write # sticky PR comment
     env:
       ZIZMOR_VERSION: ${{ inputs.zizmor_version }}
       ZIZMOR_PERSONA: ${{ inputs.persona }}
@@ -111,28 +104,62 @@ jobs:
             echo "| Info     | $INFO |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          SUMMARY=":large_orange_circle: High: $HIGH  :large_yellow_circle: Medium: $MEDIUM  :white_circle: Low: $LOW  ${{ github.repository }} (zizmor)"
           {
-            echo "summary=$SUMMARY"
             echo "high=$HIGH"
             echo "medium=$MEDIUM"
             echo "low=$LOW"
+            echo "info=$INFO"
             echo "total=$TOTAL"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Notify Slack
+      - name: Comment on pull request
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SUMMARY: ${{ steps.summary.outputs.summary }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HIGH: ${{ steps.summary.outputs.high }}
+          MEDIUM: ${{ steps.summary.outputs.medium }}
+          LOW: ${{ steps.summary.outputs.low }}
+          INFO: ${{ steps.summary.outputs.info }}
           TOTAL: ${{ steps.summary.outputs.total }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          if [ -z "$SLACK_WEBHOOK_URL" ] || [ "$TOTAL" = "0" ]; then
-            echo "Slack notification skipped (no webhook or no findings)"
-            exit 0
+          MARKER="<!-- zizmor-report -->"
+          if [ "$TOTAL" = "0" ]; then
+            BODY="$MARKER
+          ## zizmor
+
+          :white_check_mark: No findings in this repository's workflows. ([run]($RUN_URL))"
+          else
+            BODY="$MARKER
+          ## zizmor findings
+
+          | Severity | Count |
+          |----------|-------|
+          | High     | $HIGH |
+          | Medium   | $MEDIUM |
+          | Low      | $LOW |
+          | Info     | $INFO |
+
+          Full details are in the [workflow run]($RUN_URL)."
           fi
-          jq -n --arg text "$SUMMARY — $RUN_URL" '{text: $text}' \
-            | curl -sf -X POST -H 'Content-Type: application/json' -d @- "$SLACK_WEBHOOK_URL"
+
+          COMMENT_ID=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq '[.[] | select(.body | startswith("<!-- zizmor-report -->"))][0].id // empty' \
+            | head -1)
+
+          if [ -n "$COMMENT_ID" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$COMMENT_ID" -f body="$BODY" > /dev/null
+            echo "updated comment $COMMENT_ID"
+          elif [ "$TOTAL" != "0" ]; then
+            gh api -X POST "repos/$REPO/issues/$PR_NUMBER/comments" -f body="$BODY" > /dev/null
+            echo "posted new comment"
+          else
+            echo "no findings and no existing comment, nothing to post"
+          fi
 
       - name: Enforce threshold
         if: ${{ inputs.enforce }}
