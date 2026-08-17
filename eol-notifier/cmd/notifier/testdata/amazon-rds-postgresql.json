@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.2.1",
+  "last_modified": "2026-05-16T00:06:02+00:00",
+  "result": {
+    "name": "amazon-rds-postgresql",
+    "aliases": [],
+    "label": "Amazon RDS for PostgreSQL",
+    "category": "service",
+    "tags": [
+      "amazon",
+      "database",
+      "service"
+    ],
+    "versionCommand": null,
+    "identifiers": [],
+    "labels": {
+      "eoas": null,
+      "discontinued": null,
+      "eol": "Security Support",
+      "eoes": "Extended Support"
+    },
+    "links": {
+      "icon": "https://cdn.jsdelivr.net/npm/simple-icons/icons/amazonrds.svg",
+      "html": "https://endoflife.date/amazon-rds-postgresql",
+      "releasePolicy": "https://docs.aws.amazon.com/AmazonRDS/latest/PostgreSQLReleaseNotes/postgresql-release-calendar.html"
+    },
+    "releases": [
+      {
+        "name": "18",
+        "codename": null,
+        "label": "18",
+        "releaseDate": "2025-11-14",
+        "isLts": false,
+        "ltsFrom": null,
+        "isEol": false,
+        "eolFrom": "2031-02-28",
+        "isEoes": false,
+        "eoesFrom": "2034-02-28",
+        "isMaintained": true,
+        "latest": {
+          "name": "18.4",
+          "date": "2026-05-14",
+          "link": null
+        },
+        "custom": null
+      },
+      {
+        "name": "17",
+        "codename": null,
+        "label": "17",
+        "releaseDate": "2024-11-14",
+        "isLts": false,
+        "ltsFrom": null,
+        "isEol": false,
+        "eolFrom": "2030-02-28",
+        "isEoes": false,
+        "eoesFrom": "2033-02-28",
+        "isMaintained": true,
+        "latest": {
+          "name": "17.10",
+          "date": "2026-05-14",
+          "link": null
+        },
+        "custom": null
+      },
+      {
+        "name": "16",
+        "codename": null,
+        "label": "16",
+        "releaseDate": "2023-11-17",
+        "isLts": false,
+        "ltsFrom": null,
+        "isEol": false,
+        "eolFrom": "2029-02-28",
+        "isEoes": false,
+        "eoesFrom": "2032-02-29",
+        "isMaintained": true,
+        "latest": {
+          "name": "16.14",
+          "date": "2026-05-14",
+          "link": null
+        },
+        "custom": null
+      },
+      {
+        "name": "15",
+        "codename": null,
+        "label": "15",
+        "releaseDate": "2023-02-27",
+        "isLts": false,
+        "ltsFrom": null,
+        "isEol": false,
+        "eolFrom": "2028-02-29",
+        "isEoes": false,
+        "eoesFrom": "2031-02-28",
+        "isMaintained": true,
+        "latest": {
+          "name": "15.18",
+          "date": "2026-05-14",
+          "link": null
+        },
+        "custom": null
+      }
+    ]
+  }
+}

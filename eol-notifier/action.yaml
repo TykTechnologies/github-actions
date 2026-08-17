@@ -1,0 +1,45 @@
+name: 'Dependency EoL Notifier'
+description: 'Polls the endoflife.date API and posts dependency lifecycle alerts to a Slack channel'
+
+inputs:
+  config-path:
+    description: 'Path to the YAML file listing the dependencies to track.'
+    required: true
+  state-path:
+    description: 'Path to the JSON file recording previously seen release cycles and the alerts already delivered. A missing file seeds a baseline without announcing anything.'
+    required: true
+  slack-webhook-url:
+    description: 'Slack incoming webhook URL for the target channel. Required unless dry-run is true.'
+    required: false
+  dry-run:
+    description: 'Render the digest in the job log instead of posting it, and leave the state file untouched.'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
+      with:
+        go-version: '1.26.5'
+
+    - name: Build EoL Notifier
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}
+        go install ./cmd/notifier
+
+    - name: Run EoL Notifier
+      shell: bash
+      run: |
+        ARGS=(--config "$CONFIG_PATH" --state "$STATE_PATH")
+        if [ "$DRY_RUN" = "true" ]; then
+          ARGS+=(--dry-run)
+        fi
+        notifier "${ARGS[@]}"
+      env:
+        CONFIG_PATH: ${{ inputs.config-path }}
+        STATE_PATH: ${{ inputs.state-path }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        EN_SLACK_WEBHOOK_URL: ${{ inputs.slack-webhook-url }}

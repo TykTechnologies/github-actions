@@ -1,0 +1,126 @@
+{
+  "schema_version": "1.2.1",
+  "last_modified": "2026-05-14T00:08:56+00:00",
+  "result": {
+    "name": "postgresql",
+    "aliases": [
+      "postgres",
+      "pg",
+      "psql",
+      "pgsql"
+    ],
+    "label": "PostgreSQL",
+    "category": "database",
+    "tags": [
+      "database"
+    ],
+    "versionCommand": "psql -c \"SELECT version();\"",
+    "identifiers": [
+      {
+        "type": "repology",
+        "id": "postgresql"
+      },
+      {
+        "type": "purl",
+        "id": "pkg:generic/postgresql"
+      },
+      {
+        "type": "purl",
+        "id": "pkg:docker/library/postgres"
+      },
+      {
+        "type": "purl",
+        "id": "pkg:deb/ubuntu/postgresql"
+      },
+      {
+        "type": "cpe",
+        "id": "cpe:2.3:a:postgresql:postgresql"
+      },
+      {
+        "type": "cpe",
+        "id": "cpe:/a:postgresql:postgresql"
+      }
+    ],
+    "labels": {
+      "eoas": null,
+      "discontinued": null,
+      "eol": "Support Status",
+      "eoes": null
+    },
+    "links": {
+      "icon": "https://cdn.jsdelivr.net/npm/simple-icons/icons/postgresql.svg",
+      "html": "https://endoflife.date/postgresql",
+      "releasePolicy": "https://www.postgresql.org/support/versioning/"
+    },
+    "releases": [
+      {
+        "name": "18",
+        "codename": null,
+        "label": "18",
+        "releaseDate": "2025-09-25",
+        "isLts": false,
+        "ltsFrom": null,
+        "isEol": false,
+        "eolFrom": "2030-11-14",
+        "isMaintained": true,
+        "latest": {
+          "name": "18.4",
+          "date": "2026-05-11",
+          "link": "https://www.postgresql.org/docs/release/18.4/"
+        },
+        "custom": null
+      },
+      {
+        "name": "17",
+        "codename": null,
+        "label": "17",
+        "releaseDate": "2024-09-26",
+        "isLts": false,
+        "ltsFrom": null,
+        "isEol": false,
+        "eolFrom": "2029-11-08",
+        "isMaintained": true,
+        "latest": {
+          "name": "17.10",
+          "date": "2026-05-11",
+          "link": "https://www.postgresql.org/docs/release/17.10/"
+        },
+        "custom": null
+      },
+      {
+        "name": "16",
+        "codename": null,
+        "label": "16",
+        "releaseDate": "2023-09-14",
+        "isLts": false,
+        "ltsFrom": null,
+        "isEol": false,
+        "eolFrom": "2028-11-09",
+        "isMaintained": true,
+        "latest": {
+          "name": "16.14",
+          "date": "2026-05-11",
+          "link": "https://www.postgresql.org/docs/release/16.14/"
+        },
+        "custom": null
+      },
+      {
+        "name": "15",
+        "codename": null,
+        "label": "15",
+        "releaseDate": "2022-10-13",
+        "isLts": false,
+        "ltsFrom": null,
+        "isEol": false,
+        "eolFrom": "2027-11-11",
+        "isMaintained": true,
+        "latest": {
+          "name": "15.18",
+          "date": "2026-05-11",
+          "link": "https://www.postgresql.org/docs/release/15.18/"
+        },
+        "custom": null
+      }
+    ]
+  }
+}

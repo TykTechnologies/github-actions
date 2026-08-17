@@ -1,0 +1,67 @@
+# Dependencies tracked by .github/workflows/eol-notifier.yaml.
+#
+# Each entry maps a dependency to an endoflife.date product slug. Several
+# entries may share a slug: services the API does not track ride on the
+# lifecycle of their upstream OSS engine and are marked upstream_proxy.
+---
+thresholds_months: [12, 6, 1]
+
+dependencies:
+  # Upstream OSS engines, tracked directly.
+  - name: Redis
+    product: redis
+    track: [eol]
+  - name: Valkey
+    product: valkey
+    track: [eol, eoas]
+  - name: PostgreSQL
+    product: postgresql
+    track: [eol]
+  - name: MongoDB
+    product: mongodb
+    track: [eol]
+  - name: MySQL
+    product: mysql
+    track: [eol, eoas]
+  - name: MariaDB
+    product: mariadb
+    track: [eol, eoes]
+
+  # HashiCorp tooling. A version gets its end-of-life date on the day a newer
+  # release drops it out of support, so the date is never in the future: expect
+  # the ended alert from these, not the 12/6/1 month countdown.
+  - name: HashiCorp Vault
+    product: hashicorp-vault
+    track: [eol]
+  - name: HashiCorp Consul
+    product: consul
+    track: [eol]
+
+  # Managed services with their own published lifecycle.
+  - name: Amazon ElastiCache (Redis)
+    product: amazon-elasticache-redis
+    track: [eol, eoes]
+  - name: Amazon RDS PostgreSQL
+    product: amazon-rds-postgresql
+    track: [eol, eoes]
+  - name: Amazon DocumentDB
+    product: amazon-documentdb
+    track: [eol, eoes]
+  - name: Azure Database for PostgreSQL
+    product: azure-database-for-postgresql
+    track: [eol]
+
+  # Not tracked by endoflife.date. The upstream engine stands in for them, so
+  # the reported dates are indicative and need confirming with the provider.
+  - name: GCP MemoryStore
+    product: redis
+    track: [eol]
+    upstream_proxy: true
+  - name: GCP Cloud SQL
+    product: postgresql
+    track: [eol]
+    upstream_proxy: true
+  - name: Azure DocumentDB
+    product: mongodb
+    track: [eol]
+    upstream_proxy: true

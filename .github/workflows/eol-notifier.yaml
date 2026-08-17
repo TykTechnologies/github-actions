@@ -1,0 +1,116 @@
+name: Dependency EoL Notifier
+
+on:
+  schedule:
+    - cron: '0 7 * * *'  # Daily at 07:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Render the digest in the job log without posting to Slack'
+        type: boolean
+        default: false
+
+# The recorded state lives on its own branch, so nothing is pushed to main.
+env:
+  STATE_BRANCH: eol-notifier-state
+  STATE_REF: refs/eol-notifier/previous
+  STATE_FILE: state.json
+
+# Two runs would build their commits on the same parent, and the second push
+# would be rejected, so a manual run waits for the scheduled one to finish.
+concurrency:
+  group: eol-notifier-state
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Restore recorded release cycles
+        run: |
+          # A missing branch and an unreachable origin must not look the same:
+          # treating a network failure as "no state yet" would suppress every
+          # new-version alert and then try to push a parentless commit.
+          set +e
+          git ls-remote --exit-code --heads origin "$STATE_BRANCH" > /dev/null
+          status=$?
+          set -e
+
+          case "$status" in
+            0)
+              git fetch origin "+refs/heads/$STATE_BRANCH:$STATE_REF"
+              if git cat-file -p "$STATE_REF:$STATE_FILE" > "$RUNNER_TEMP/$STATE_FILE"; then
+                echo "--> restored state from $STATE_BRANCH"
+              else
+                rm -f "$RUNNER_TEMP/$STATE_FILE"
+                echo "::warning::$STATE_BRANCH has no $STATE_FILE, recording a baseline"
+              fi
+              ;;
+            2)
+              echo "--> no $STATE_BRANCH branch yet, this run records a baseline"
+              ;;
+            *)
+              echo "::error::could not reach origin to look up $STATE_BRANCH"
+              exit 1
+              ;;
+          esac
+
+      - name: Check dependency lifecycles
+        id: notifier
+        uses: ./eol-notifier
+        with:
+          config-path: .github/eol-notifier/dependencies.yaml
+          state-path: ${{ runner.temp }}/state.json
+          slack-webhook-url: ${{ secrets.EOL_SLACK_WEBHOOK_URL }}
+          dry-run: ${{ inputs.dry_run || false }}
+
+      # Runs even when the step above failed. A failed product fetch still posts
+      # the rest of the digest and still writes state, so skipping this would
+      # re-announce the same versions tomorrow. When nothing was written the file
+      # is unchanged and no commit is made.
+      - name: Record observed release cycles
+        if: ${{ !inputs.dry_run && !cancelled() }}
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          if [ ! -f "$RUNNER_TEMP/$STATE_FILE" ]; then
+            echo "--> no state was written, nothing to record"
+            exit 0
+          fi
+
+          # main requires a reviewed PR, so the state cannot be committed there.
+          # The commit is assembled with plumbing and pushed straight to the state
+          # branch, which leaves the checked-out working tree alone and needs no
+          # second worktree.
+          blob=$(git hash-object -w "$RUNNER_TEMP/$STATE_FILE")
+
+          parent=""
+          if git rev-parse --verify --quiet "$STATE_REF" > /dev/null; then
+            parent=$(git rev-parse "$STATE_REF")
+            previous=$(git rev-parse "$STATE_REF:$STATE_FILE" 2> /dev/null || true)
+            if [ "$previous" = "$blob" ]; then
+              echo "--> state unchanged, nothing to commit"
+              exit 0
+            fi
+          fi
+
+          tree=$(printf '100644 blob %s\t%s\n' "$blob" "$STATE_FILE" | git mktree)
+
+          message="chore(eol-notifier): record observed release cycles"
+          if [ -n "$parent" ]; then
+            commit=$(git commit-tree "$tree" -p "$parent" -m "$message")
+          else
+            commit=$(git commit-tree "$tree" -m "$message")
+          fi
+
+          git push origin "$commit:refs/heads/$STATE_BRANCH"
+          echo "--> recorded state as $commit on $STATE_BRANCH"
