@@ -15,5 +15,4 @@ jobs:
       security-events: write
       contents: read
       actions: read
-    secrets:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      pull-requests: write
