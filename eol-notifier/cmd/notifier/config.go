@@ -39,6 +39,9 @@ type Dependency struct {
 	Product string `yaml:"product"`
 	// Track lists the lifecycle phases to alert on. Defaults to [eol].
 	Track []string `yaml:"track"`
+	// Cycles restricts tracking to the named release cycles, e.g. ["7", "8", "9"]
+	// for RHEL. Empty means every cycle the product publishes.
+	Cycles []string `yaml:"cycles"`
 	// UpstreamProxy marks a dependency whose lifecycle is not published by its
 	// vendor, so the upstream OSS engine is used as a stand-in. Its dates are
 	// indicative only and are labelled as such in the alert.
@@ -142,6 +145,19 @@ func (c *DependencyConfig) validate() error {
 			}
 			seenPhase[phase] = true
 		}
+
+		seenCycle := make(map[string]bool, len(dep.Cycles))
+		for i := range dep.Cycles {
+			dep.Cycles[i] = strings.TrimSpace(dep.Cycles[i])
+			cycle := dep.Cycles[i]
+			if cycle == "" {
+				return fmt.Errorf("dependency %q has an empty cycle", dep.Name)
+			}
+			if seenCycle[cycle] {
+				return fmt.Errorf("dependency %q lists cycle %q more than once", dep.Name, cycle)
+			}
+			seenCycle[cycle] = true
+		}
 	}
 
 	return nil
@@ -151,6 +167,22 @@ func (c *DependencyConfig) validate() error {
 func (d Dependency) tracks(phase string) bool {
 	for _, tracked := range d.Track {
 		if tracked == phase {
+			return true
+		}
+	}
+
+	return false
+}
+
+// tracksCycle reports whether the dependency covers the given release cycle.
+// An empty Cycles list means every cycle the product publishes.
+func (d Dependency) tracksCycle(cycle string) bool {
+	if len(d.Cycles) == 0 {
+		return true
+	}
+
+	for _, tracked := range d.Cycles {
+		if tracked == cycle {
 			return true
 		}
 	}

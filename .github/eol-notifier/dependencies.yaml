@@ -27,6 +27,32 @@ dependencies:
     product: mariadb
     track: [eol, eoes]
 
+  # RPM: RHEL 7, 8, and 9.
+  - name: RPM (RHEL 7, 8, 9)
+    product: rhel
+    track: [eol]
+    cycles: ["7", "8", "9"]
+  # DEB: Ubuntu 22.04 LTS, 24.04 LTS, 26.04 LTS, and Debian 12 (Bookworm),
+  # 13 (Trixie).
+  - name: DEB (Ubuntu 22.04 LTS, 24.04 LTS, 26.04 LTS)
+    product: ubuntu
+    track: [eol]
+    cycles: ["22.04", "24.04", "26.04"]
+  - name: DEB (Debian 12 Bookworm, 13 Trixie)
+    product: debian
+    track: [eol]
+    cycles: ["12", "13"]
+
+  # EE-FIPS validated set: RHEL 7, 8, and 9, and Ubuntu 24.04 only.
+  - name: EE-FIPS (RHEL 7, 8, 9)
+    product: rhel
+    track: [eol]
+    cycles: ["7", "8", "9"]
+  - name: EE-FIPS (Ubuntu 24.04)
+    product: ubuntu
+    track: [eol]
+    cycles: ["24.04"]
+
   # HashiCorp tooling. A version gets its end-of-life date on the day a newer
   # release drops it out of support, so the date is never in the future: expect
   # the ended alert from these, not the 12/6/1 month countdown.

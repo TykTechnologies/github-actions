@@ -120,6 +120,35 @@ dependencies:
 `,
 			wantErr: true,
 		},
+		{
+			name: "cycles restricts tracking to named release cycles",
+			contents: `
+dependencies:
+  - name: RPM (RHEL 7, 8, 9)
+    product: rhel
+    cycles: ["7", "8", "9"]
+`,
+		},
+		{
+			name: "empty cycle is rejected",
+			contents: `
+dependencies:
+  - name: Redis
+    product: redis
+    cycles: ["7", ""]
+`,
+			wantErr: true,
+		},
+		{
+			name: "duplicate cycle is rejected",
+			contents: `
+dependencies:
+  - name: Redis
+    product: redis
+    cycles: ["7", "7"]
+`,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

@@ -150,19 +150,21 @@ func detectAlerts(config *DependencyConfig, products map[string]*Product, state 
 
 		for _, release := range product.Releases {
 			if !baseline && !seen[release.Name] && !release.IsEOL {
-				report.NewVersions = append(report.NewVersions, NewVersionAlert{
-					Product:      name,
-					ProductLabel: product.Label,
-					ProductURL:   product.Links.HTML,
-					Release:      releaseLabel(release),
-					ReleaseDate:  release.ReleaseDate,
-					IsLTS:        release.IsLTS,
-					Dependencies: dependenciesFor(config, name, ""),
-				})
+				if dependencies := dependenciesFor(config, name, "", release.Name); len(dependencies) > 0 {
+					report.NewVersions = append(report.NewVersions, NewVersionAlert{
+						Product:      name,
+						ProductLabel: product.Label,
+						ProductURL:   product.Links.HTML,
+						Release:      releaseLabel(release),
+						ReleaseDate:  release.ReleaseDate,
+						IsLTS:        release.IsLTS,
+						Dependencies: dependencies,
+					})
+				}
 			}
 
 			for _, phase := range phaseOrder {
-				dependencies := dependenciesFor(config, name, phase)
+				dependencies := dependenciesFor(config, name, phase, release.Name)
 				if len(dependencies) == 0 {
 					continue
 				}
@@ -342,10 +344,11 @@ func productOrder(config *DependencyConfig) []string {
 	return order
 }
 
-// dependenciesFor returns the dependencies backed by a product. An empty phase
-// matches every dependency, which is what new-version alerts want; otherwise
-// only the dependencies configured to track that phase are returned.
-func dependenciesFor(config *DependencyConfig, product, phase string) []DependencyRef {
+// dependenciesFor returns the dependencies backed by a product and covering the
+// given release cycle. An empty phase matches every dependency regardless of
+// tracked phase, which is what new-version alerts want; otherwise only the
+// dependencies configured to track that phase are returned.
+func dependenciesFor(config *DependencyConfig, product, phase, cycle string) []DependencyRef {
 	var refs []DependencyRef
 
 	for _, dependency := range config.Dependencies {
@@ -353,6 +356,9 @@ func dependenciesFor(config *DependencyConfig, product, phase string) []Dependen
 			continue
 		}
 		if phase != "" && !dependency.tracks(phase) {
+			continue
+		}
+		if !dependency.tracksCycle(cycle) {
 			continue
 		}
 

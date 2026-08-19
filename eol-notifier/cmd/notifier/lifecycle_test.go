@@ -447,6 +447,37 @@ func TestDetectAlertsTracksConfiguredPhasesOnly(t *testing.T) {
 	}
 }
 
+// TestDetectAlertsTracksConfiguredCyclesOnly covers restricting a dependency to
+// specific release cycles, e.g. RHEL 7/8/9 out of every cycle rhel publishes.
+func TestDetectAlertsTracksConfiguredCyclesOnly(t *testing.T) {
+	products := map[string]*Product{
+		"rhel": {
+			Name:  "rhel",
+			Label: "Red Hat Enterprise Linux",
+			Releases: []Release{
+				{Name: "6", EOLFrom: strPtr("2027-02-28")},
+				{Name: "9", EOLFrom: strPtr("2027-02-28")},
+			},
+		},
+	}
+
+	config := testConfig(t, Dependency{
+		Name:    "RPM (RHEL 7, 8, 9)",
+		Product: "rhel",
+		Cycles:  []string{"7", "8", "9"},
+	})
+	state := tracked("rhel", "6", "9")
+
+	report, _ := detectAlerts(config, products, state, mustDate(t, "2027-02-28"), false)
+
+	if len(report.EOL) != 1 {
+		t.Fatalf("got %d alert(s), want 1 for cycle 9 only", len(report.EOL))
+	}
+	if report.EOL[0].Release != "9" {
+		t.Errorf("release = %q, want 9", report.EOL[0].Release)
+	}
+}
+
 // TestDetectAlertsGroupsSharedProduct covers the upstream-fallback mapping: a
 // managed service the API does not track rides on the upstream engine, and both
 // dependencies must appear on one alert rather than producing two.
