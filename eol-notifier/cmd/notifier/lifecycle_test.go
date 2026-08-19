@@ -478,6 +478,50 @@ func TestDetectAlertsTracksConfiguredCyclesOnly(t *testing.T) {
 	}
 }
 
+// TestDetectAlertsDistroTracksEveryPhase guards against a distro looking dead
+// years early: RHEL and Debian both publish eoas/eol well before eoes, and a
+// config tracking eol alone would report the eol date as if it were the end,
+// silently missing the eoas warning and skipping the eoes date entirely.
+func TestDetectAlertsDistroTracksEveryPhase(t *testing.T) {
+	products := map[string]*Product{
+		"rhel": {
+			Name:  "rhel",
+			Label: "Red Hat Enterprise Linux",
+			Releases: []Release{{
+				Name:     "9",
+				EOASFrom: strPtr("2027-05-31"), // Full Support
+				EOLFrom:  strPtr("2032-05-31"), // Maintenance Support
+				EOESFrom: strPtr("2036-05-31"), // Extended Life Cycle Support
+			}},
+		},
+	}
+
+	config := testConfig(t, Dependency{
+		Name:    "RPM (RHEL 7, 8, 9)",
+		Product: "rhel",
+		Track:   []string{phaseEOAS, phaseEOL, phaseEOES},
+		Cycles:  []string{"9"},
+	})
+	state := tracked("rhel", "9")
+
+	report, _ := detectAlerts(config, products, state, mustDate(t, "2026-05-31"), false)
+
+	got := map[string]int{}
+	for _, alert := range report.EOL {
+		got[alert.Phase] = alert.MonthsLeft
+	}
+
+	want := map[string]int{phaseEOAS: 12}
+	for phase, months := range want {
+		if got[phase] != months {
+			t.Errorf("phase %q months left = %d, want %d (got alerts: %+v)", phase, got[phase], months, got)
+		}
+	}
+	if _, ok := got[phaseEOL]; ok {
+		t.Errorf("eol fired 6 years early at %v, want no alert yet", got)
+	}
+}
+
 // TestDetectAlertsGroupsSharedProduct covers the upstream-fallback mapping: a
 // managed service the API does not track rides on the upstream engine, and both
 // dependencies must appear on one alert rather than producing two.
