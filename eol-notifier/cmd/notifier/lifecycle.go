@@ -150,7 +150,7 @@ func detectAlerts(config *DependencyConfig, products map[string]*Product, state 
 
 		for _, release := range product.Releases {
 			if !baseline && !seen[release.Name] && !release.IsEOL {
-				if dependencies := dependenciesFor(config, name, "", release.Name); len(dependencies) > 0 {
+				if dependencies := dependenciesFor(config, name, "", ""); len(dependencies) > 0 {
 					report.NewVersions = append(report.NewVersions, NewVersionAlert{
 						Product:      name,
 						ProductLabel: product.Label,
@@ -344,10 +344,13 @@ func productOrder(config *DependencyConfig) []string {
 	return order
 }
 
-// dependenciesFor returns the dependencies backed by a product and covering the
-// given release cycle. An empty phase matches every dependency regardless of
-// tracked phase, which is what new-version alerts want; otherwise only the
-// dependencies configured to track that phase are returned.
+// dependenciesFor returns the dependencies backed by a product. An empty phase
+// matches every dependency regardless of tracked phase, and an empty cycle
+// matches every dependency regardless of tracked cycles; both are empty for
+// new-version alerts, which must fire for a cycle a dependency's `cycles`
+// filter excludes, so the vendor shipping something the config doesn't know
+// about yet is never silently absorbed into "seen" without ever being
+// announced.
 func dependenciesFor(config *DependencyConfig, product, phase, cycle string) []DependencyRef {
 	var refs []DependencyRef
 
@@ -358,7 +361,7 @@ func dependenciesFor(config *DependencyConfig, product, phase, cycle string) []D
 		if phase != "" && !dependency.tracks(phase) {
 			continue
 		}
-		if !dependency.tracksCycle(cycle) {
+		if cycle != "" && !dependency.tracksCycle(cycle) {
 			continue
 		}
 

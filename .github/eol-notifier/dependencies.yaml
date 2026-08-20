@@ -27,14 +27,16 @@ dependencies:
     product: mariadb
     track: [eol, eoes]
 
-  # RPM: RHEL 7, 8, and 9. eoas (Full Support) ends years before eol
-  # (Maintenance Support), and eoes (Extended Life Cycle Support) years after;
-  # tracking eol alone would miss the Full Support cliff and call a version
-  # dead long before ELS actually ends it.
-  - name: RPM (RHEL 7, 8, 9)
+  # RPM: RHEL 7, 8, 9, and 10. Per policy, a new major LTS is added to the
+  # validated matrix once the vendor releases it, without waiting for a Tyk
+  # LTS. eoas (Full Support) ends years before eol (Maintenance Support), and
+  # eoes (Extended Life Cycle Support) years after; tracking eol alone would
+  # miss the Full Support cliff and call a version dead long before ELS
+  # actually ends it.
+  - name: RPM (RHEL 7, 8, 9, 10)
     product: rhel
     track: [eoas, eol, eoes]
-    cycles: ["7", "8", "9"]
+    cycles: ["7", "8", "9", "10"]
   # DEB: Ubuntu 22.04 LTS, 24.04 LTS, 26.04 LTS, and Debian 12 (Bookworm),
   # 13 (Trixie). Debian's eoes (Debian LTS) runs well past its eol (Debian
   # Security Support), so eol alone would call a release dead years early.
