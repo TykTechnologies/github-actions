@@ -447,6 +447,109 @@ func TestDetectAlertsTracksConfiguredPhasesOnly(t *testing.T) {
 	}
 }
 
+// TestDetectAlertsTracksConfiguredCyclesOnly covers restricting a dependency to
+// specific release cycles, e.g. RHEL 7/8/9 out of every cycle rhel publishes.
+func TestDetectAlertsTracksConfiguredCyclesOnly(t *testing.T) {
+	products := map[string]*Product{
+		"rhel": {
+			Name:  "rhel",
+			Label: "Red Hat Enterprise Linux",
+			Releases: []Release{
+				{Name: "6", EOLFrom: strPtr("2027-02-28")},
+				{Name: "9", EOLFrom: strPtr("2027-02-28")},
+			},
+		},
+	}
+
+	config := testConfig(t, Dependency{
+		Name:    "RPM (RHEL 7, 8, 9)",
+		Product: "rhel",
+		Cycles:  []string{"7", "8", "9"},
+	})
+	state := tracked("rhel", "6", "9")
+
+	report, _ := detectAlerts(config, products, state, mustDate(t, "2027-02-28"), false)
+
+	if len(report.EOL) != 1 {
+		t.Fatalf("got %d alert(s), want 1 for cycle 9 only", len(report.EOL))
+	}
+	if report.EOL[0].Release != "9" {
+		t.Errorf("release = %q, want 9", report.EOL[0].Release)
+	}
+}
+
+// TestDetectAlertsDistroTracksEveryPhase guards against a distro looking dead
+// years early: RHEL publishes eoas well before eol, and eol well before eoes,
+// and a config tracking eol alone would report the eol date as if it were the
+// end, silently missing the eoas warning and skipping the eoes date entirely.
+// Each phase is checked at its own 12-month mark, so a leak from one phase's
+// window into another's would show up as an unexpected second alert.
+func TestDetectAlertsDistroTracksEveryPhase(t *testing.T) {
+	release := Release{
+		Name:     "9",
+		EOASFrom: strPtr("2027-05-31"), // Full Support
+		EOLFrom:  strPtr("2032-05-31"), // Maintenance Support
+		EOESFrom: strPtr("2036-05-31"), // Extended Life Cycle Support
+	}
+
+	config := testConfig(t, Dependency{
+		Name:    "RPM (RHEL 7, 8, 9)",
+		Product: "rhel",
+		Track:   []string{phaseEOAS, phaseEOL, phaseEOES},
+		Cycles:  []string{"9"},
+	})
+
+	tests := []struct {
+		name       string
+		today      string
+		wantPhase  string
+		wantMonths int
+	}{
+		{"eoas 12 months out", "2026-05-31", phaseEOAS, 12},
+		{"eol 12 months out", "2031-05-31", phaseEOL, 12},
+		{"eoes 12 months out", "2035-05-31", phaseEOES, 12},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			products := map[string]*Product{
+				"rhel": {Name: "rhel", Label: "Red Hat Enterprise Linux", Releases: []Release{release}},
+			}
+			state := tracked("rhel", "9")
+
+			report, _ := detectAlerts(config, products, state, mustDate(t, tt.today), false)
+
+			var got *EOLAlert
+			for i := range report.EOL {
+				if report.EOL[i].Phase == tt.wantPhase {
+					got = &report.EOL[i]
+				}
+			}
+			if got == nil {
+				t.Fatalf("no alert for phase %q, got: %+v", tt.wantPhase, report.EOL)
+			}
+			if got.Ended {
+				t.Errorf("phase %q already ended by %s, want a 12-month countdown", tt.wantPhase, tt.today)
+			}
+			if got.MonthsLeft != tt.wantMonths {
+				t.Errorf("months left = %d, want %d", got.MonthsLeft, tt.wantMonths)
+			}
+
+			// Every phase whose date has already passed by today correctly
+			// reports as ended - only the phase under test must still be
+			// counting down, so no other alert may fire at the same date.
+			for _, alert := range report.EOL {
+				if alert.Phase == tt.wantPhase {
+					continue
+				}
+				if !alert.Ended {
+					t.Errorf("unexpected live countdown for phase %q at %s: %+v", alert.Phase, tt.today, alert)
+				}
+			}
+		})
+	}
+}
+
 // TestDetectAlertsGroupsSharedProduct covers the upstream-fallback mapping: a
 // managed service the API does not track rides on the upstream engine, and both
 // dependencies must appear on one alert rather than producing two.
@@ -556,6 +659,41 @@ func TestDetectAlertsNewVersions(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestDetectAlertsNewVersionsIgnoreCycleFilter guards against a new-version
+// alert going silent forever: a dependency's `cycles` scopes which cycles it
+// tracks for EOL, but the vendor shipping a cycle outside that scope is still
+// news the first time it is seen. If the new-version check were filtered by
+// cycles too, recordRun would mark the release seen the same run and it could
+// never be announced later, even after cycles was updated to include it.
+func TestDetectAlertsNewVersionsIgnoreCycleFilter(t *testing.T) {
+	products := map[string]*Product{
+		"rhel": {
+			Name:  "rhel",
+			Label: "Red Hat Enterprise Linux",
+			Releases: []Release{
+				{Name: "9", ReleaseDate: "2022-05-17", EOLFrom: strPtr("2032-05-31")},
+				{Name: "10", ReleaseDate: "2025-05-20", EOLFrom: strPtr("2035-05-31")},
+			},
+		},
+	}
+
+	config := testConfig(t, Dependency{
+		Name:    "RPM (RHEL 7, 8, 9)",
+		Product: "rhel",
+		Cycles:  []string{"7", "8", "9"},
+	})
+	state := tracked("rhel", "9")
+
+	report, _ := detectAlerts(config, products, state, mustDate(t, "2026-01-01"), false)
+
+	if len(report.NewVersions) != 1 || report.NewVersions[0].Release != "10" {
+		t.Fatalf("new versions = %+v, want a single alert for cycle 10", report.NewVersions)
+	}
+	if len(report.NewVersions[0].Dependencies) != 1 || report.NewVersions[0].Dependencies[0].Name != "RPM (RHEL 7, 8, 9)" {
+		t.Errorf("dependencies = %+v, want RPM (RHEL 7, 8, 9) named even though cycle 10 is outside its cycles", report.NewVersions[0].Dependencies)
 	}
 }
 

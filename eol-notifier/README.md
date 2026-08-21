@@ -69,6 +69,10 @@ Each entry under `dependencies` takes these keys:
     this phase, but a version keeps no date until the vendor announces one.
   - `eoas` is the end of active support. For example `redis` and `valkey`.
   - `eoes` is the end of extended support. For example `amazon-rds-postgresql`.
+- `cycles` restricts tracking to the named release cycles, using the same names
+  endoflife.date does, e.g. `["7", "8", "9"]` for RHEL or `["22.04", "24.04"]`
+  for Ubuntu. Omit it to track every cycle the product publishes, including
+  ones added after this config was written.
 - `upstream_proxy` is for a service that `endoflife.date` does not track. The
   action then uses the dates of the open source engine under it. GCP MemoryStore
   uses `redis`, GCP Cloud SQL uses `postgresql`, and Azure DocumentDB uses

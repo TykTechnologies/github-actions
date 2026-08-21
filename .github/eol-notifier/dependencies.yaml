@@ -27,6 +27,38 @@ dependencies:
     product: mariadb
     track: [eol, eoes]
 
+  # RPM: RHEL 7, 8, 9, and 10. Per policy, a new major LTS is added to the
+  # validated matrix once the vendor releases it, without waiting for a Tyk
+  # LTS. eoas (Full Support) ends years before eol (Maintenance Support), and
+  # eoes (Extended Life Cycle Support) years after; tracking eol alone would
+  # miss the Full Support cliff and call a version dead long before ELS
+  # actually ends it.
+  - name: RPM (RHEL 7, 8, 9, 10)
+    product: rhel
+    track: [eoas, eol, eoes]
+    cycles: ["7", "8", "9", "10"]
+  # DEB: Ubuntu 22.04 LTS, 24.04 LTS, 26.04 LTS, and Debian 12 (Bookworm),
+  # 13 (Trixie). Debian's eoes (Debian LTS) runs well past its eol (Debian
+  # Security Support), so eol alone would call a release dead years early.
+  - name: DEB (Ubuntu 22.04 LTS, 24.04 LTS, 26.04 LTS)
+    product: ubuntu
+    track: [eol, eoes]
+    cycles: ["22.04", "24.04", "26.04"]
+  - name: DEB (Debian 12 Bookworm, 13 Trixie)
+    product: debian
+    track: [eol, eoes]
+    cycles: ["12", "13"]
+
+  # EE-FIPS validated set: RHEL 7, 8, and 9, and Ubuntu 24.04 only.
+  - name: EE-FIPS (RHEL 7, 8, 9)
+    product: rhel
+    track: [eoas, eol, eoes]
+    cycles: ["7", "8", "9"]
+  - name: EE-FIPS (Ubuntu 24.04)
+    product: ubuntu
+    track: [eol, eoes]
+    cycles: ["24.04"]
+
   # HashiCorp tooling. A version gets its end-of-life date on the day a newer
   # release drops it out of support, so the date is never in the future: expect
   # the ended alert from these, not the 12/6/1 month countdown.
