@@ -10,7 +10,7 @@ published image instead of building from source.
 
 The linter is built with `CGO_ENABLED=0` in a `golang:1.24.7-alpine`
 builder stage, then copied into an `alpine:3.22` runner stage. The image
-publishes for `linux/amd64` and `linux/arm64`.
+is built for `linux/amd64`.
 
 The images built are:
 
@@ -19,9 +19,9 @@ The images built are:
 The image is rebuilt on changes to `jira-linter/`, on merges to `main`,
 and weekly to pick up base image patches.
 
-Pull requests build the image and run a smoke test against it without
-pushing, so a change to the `Dockerfile` or the entrypoint is verified
-before it merges. Registry credentials are skipped on pull requests.
+Pull requests build the image and smoke test it without pushing, so a
+change to the `Dockerfile` or the entrypoint is verified before it
+merges. Registry credentials are skipped on pull requests.
 
 To roll the image back, run the workflow through `workflow_dispatch`
 against the last known good ref. The run rebuilds and overwrites
