@@ -36,6 +36,16 @@ jobs:
     permissions:
       id-token: write   # AWS OIDC
       contents: read    # actions/checkout
+    env:
+      # Constant for tyk-analytics on every branch. Verified against all 26
+      # generated release.yml files: rpmvers, debvers and the goreleaser config
+      # path are byte-identical across every repo and branch, and cgo splits by
+      # product (1 for tyk/tyk-analytics/portal/ai-studio, 0 for the rest) - never
+      # within one. Only golang_cross is genuinely per-branch, so only it is an input.
+      GORELEASER_CONFIG: ci/goreleaser/goreleaser.yml
+      CGO: '1'
+      RPMVERS: 'el/7 el/8 el/9 amazon/2 amazon/2023'
+      DEBVERS: 'ubuntu/xenial ubuntu/bionic ubuntu/focal ubuntu/jammy ubuntu/noble debian/jessie debian/buster debian/bullseye debian/bookworm debian/trixie'
     outputs:
       std_tags: ${{ steps.tags.outputs.std_tags }}
       fips_tags: ${{ steps.tags.outputs.fips_tags }}
@@ -68,6 +78,10 @@ jobs:
             echo "### Context"
             echo '```'
             echo "golang_cross (input)= ${{ inputs.golang_cross }}"
+            echo "goreleaser config   = ${GORELEASER_CONFIG}"
+            echo "cgo                 = ${CGO}"
+            echo "rpmvers             = ${RPMVERS}"
+            echo "debvers             = ${DEBVERS}"
             echo "github.repository   = ${{ github.repository }}"
             echo "github.ref          = ${{ github.ref }}"
             echo "github.sha          = ${{ github.sha }}"
