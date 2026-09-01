@@ -39,6 +39,10 @@ jobs:
           jira-read-auth: ${{ secrets.JIRA_READ_AUTH }}
 ```
 
+> **Note:** This is a Docker container action, so it only runs on Linux runners
+> (e.g. `runs-on: ubuntu-latest`). The image is built from the `Dockerfile` in this
+> directory; no Go toolchain is set up on the runner.
+
 **Inputs:**
 
 - `jira-base-url` (required): Jira API base URL (e.g., `https://api.atlassian.com/ex/jira/<cloudId>`)

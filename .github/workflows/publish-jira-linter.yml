@@ -1,0 +1,135 @@
+# yamllint disable rule:line-length
+---
+name: Publish jira-linter image
+
+# Builds jira-linter/Dockerfile and pushes tykio/jira-linter:latest, so the
+# action references a prebuilt image instead of compiling Go on every PR run.
+#
+# Pull requests build and smoke test the image without pushing it. Merges to
+# main, the weekly schedule, and manual runs push :latest.
+
+on:  # yamllint disable-line rule:truthy
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'jira-linter/**'
+      - '.github/workflows/publish-jira-linter.yml'
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'jira-linter/**'
+      - '.github/workflows/publish-jira-linter.yml'
+  schedule:
+    - cron: '0 3 * * 1'  # Weekly, to pick up alpine and golang base image patches
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}-publish-jira-linter
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: 'Build and push tykio/jira-linter:latest'
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE: tykio/jira-linter:latest
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130  # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+
+      # Single-arch build first, so the image loads into the local daemon and
+      # the smoke test can run it. The push build below reuses these layers.
+      - name: Build for smoke test
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: jira-linter
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha,scope=jira-linter
+          cache-to: type=gha,mode=max,scope=jira-linter
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+
+          # The linter exits non-zero in every case below, because no Jira
+          # credentials are configured. Capture the output instead of piping
+          # from docker run, which pipefail would treat as a step failure.
+          run_image() {
+            docker run --rm "$@" 2>&1 || true
+          }
+
+          expect() {
+            description=$1
+            pattern=$2
+            output=$3
+
+            printf '%s\n' "$output" | sed 's/^/    /'
+            if ! printf '%s\n' "$output" | grep -q "$pattern"; then
+              echo "FAIL: ${description}: no match for '${pattern}'" >&2
+              exit 1
+            fi
+            echo "ok: ${description}"
+          }
+
+          expect 'branch name from the argument' \
+            'running the linter against feat/TT-16030-smoke branch' \
+            "$(run_image "$IMAGE" feat/TT-16030-smoke)"
+
+          expect 'GITHUB_HEAD_REF fallback when no argument is given' \
+            'running the linter against feature/ABC-123 branch' \
+            "$(run_image -e GITHUB_HEAD_REF=feature/ABC-123 "$IMAGE")"
+
+          expect 'GITHUB_REF_NAME fallback when GITHUB_HEAD_REF is empty' \
+            'running the linter against main branch' \
+            "$(run_image -e GITHUB_HEAD_REF= -e GITHUB_REF_NAME=main "$IMAGE")"
+
+          expect 'unresolvable branch reports the failure' \
+            'unable to resolve a branch name' \
+            "$(run_image "$IMAGE")"
+
+          echo '--> unresolvable branch exits non-zero'
+          if docker run --rm "$IMAGE" >/dev/null 2>&1; then
+            echo 'FAIL: expected a non-zero exit when no branch can be resolved' >&2
+            exit 1
+          fi
+          echo 'ok: exit status'
+
+          echo '--> entrypoint dependencies are present'
+          docker run --rm --entrypoint sh "$IMAGE" -c \
+            'test -x /usr/local/bin/linter && command -v curl >/dev/null && command -v jq >/dev/null'
+          echo 'ok: linter, curl and jq present'
+
+          echo 'smoke test passed'
+
+      # Skipped on pull requests. They never push, so they need no credentials,
+      # and this keeps the registry token out of a job that builds and runs
+      # code from the pull request.
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc  # v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: jira-linter
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha,scope=jira-linter
+          cache-to: type=gha,mode=max,scope=jira-linter
+          # Keep the manifest list to plain platform images. The Actions runner
+          # pulls this image itself and does not consume attestations.
+          provenance: false
