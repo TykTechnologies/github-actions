@@ -1,0 +1,96 @@
+name: Run Open Api specifications contract tests with a live dashboard
+on:
+  workflow_call:
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  run-test-with-live-dashboard:
+    runs-on: ${{ vars.DEFAULT_RUNNER }}
+    name: Run Open Api specifications contract tests
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        with:
+          app-id: ${{ secrets.PROBE_APP_ID }}
+          private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
+          owner: TykTechnologies
+
+      # AWS Configuration
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4
+        with:
+          role-to-assume: arn:aws:iam::754489498669:role/ecr_rw_tyk
+          role-session-name: cipush
+          aws-region: eu-central-1
+
+      # Amazon ECR login
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@183a1442edf41672e66566b7fc560e297a290896  # v2
+        with:
+          mask-password: 'true'
+
+      # Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: '3.10'
+
+      # Checkout current repository
+      - name: Checkout current repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      # Checkout tyk-pro repository
+      - name: Checkout tyk-pro repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          repository: tyklabs/tyk-pro
+          path: tyk-pro
+
+      - name: Append env variables
+        run: |
+          cd tyk-pro
+          echo >> local-mongo44.env
+          echo "TYK_DB_SECURITY_OPENPOLICY_ENABLEAPI=true" >> local-mongo44.env
+          echo "TYK_DB_ENABLEHASHEDKEYSLISTING=true" >> local-mongo44.env
+      # Install go-stask
+      - name: Install go-stask
+        uses: arduino/setup-task@e26d8975574116b0097a1161e0fe16ba75d84c1c  # v1
+        with:
+          version: '3.39.0'
+
+      # Run dashboard containers
+      - name: Run Dashboard containers
+        env:
+          pull_policy: 'always'
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TYK_DB_LICENSEKEY: ${{ secrets.DASH_LICENSE }}
+          TYK_MDCB_LICENSE: ${{ secrets.MDCB_LICENSE }}
+          tyk_analytics_image: ${{ steps.ecr.outputs.registry }}/tyk-analytics:sha-${{ github.sha }}
+        run: |
+          cd tyk-pro
+          aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 754489498669.dkr.ecr.eu-central-1.amazonaws.com
+          task --version
+          task login
+          output=$(task local FLAVOUR=pro-ha DB=mongo44 VARIATION=murmur128)
+          user_api_secret=$(echo "$output" | grep 'USER_API_SECRET' | awk -F '=' '{print $2}')
+          echo "USER_API_SECRET=${user_api_secret}"
+          echo "USER_API_SECRET=${user_api_secret}" >> $GITHUB_ENV
+      - name: Create .env file with tokens
+        run: |
+          cd ci/tests/schema/specs
+          echo "PORTMAN_BEARER_TOKEN=${USER_API_SECRET}" > .env
+          cat .env
+      - name: Install venom
+        run: |
+          # TODO(security): verify checksum of downloaded binary
+          curl https://github.com/ovh/venom/releases/download/v1.1.0/venom.linux-amd64 -L -o /usr/local/bin/venom && chmod +x /usr/local/bin/venom
+      - name: Run the Portman tests
+        run: |     
+          task portman_tests
+
+      - name: Clean up
+        run: |
+          cd tyk-pro
+          task clean FLAVOUR=pro-ha DB=mongo44 VARIATION=murmur128
