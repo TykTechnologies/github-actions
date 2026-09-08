@@ -98,8 +98,37 @@ func run() error {
 	return nil
 }
 
+// isBranchWithoutTicketID checks if a branch name is a known pattern that doesn't contain a Jira ticket ID
+func isBranchWithoutTicketID(branchName string) bool {
+	// Gromit creates branches like: releng/master, releng/release-X.Y, etc.
+	// Skip ticket extraction for these patterns
+	ignoredPatterns := []string{
+		"releng/",           // Releng branches (release management)
+		"dependabot/",       // Dependabot-created branches
+		"renovate/",         // Renovate-created branches
+		"snyk-",             // Snyk-created branches
+	}
+
+	for _, pattern := range ignoredPatterns {
+		if strings.HasPrefix(strings.ToLower(branchName), pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 func validateBranchAndTitle(config *Config, branchName string) (string, error) {
-	issueIDInBranch, branchErr := findIssueID(branchName)
+	// Check if branch name is a known pattern that shouldn't be searched for ticket IDs
+	branchHasNoTicket := isBranchWithoutTicketID(branchName)
+
+	var issueIDInBranch string
+	var branchErr error
+	if !branchHasNoTicket {
+		issueIDInBranch, branchErr = findIssueID(branchName)
+	} else {
+		branchErr = fmt.Errorf("branch name is a known pattern without ticket ID")
+	}
+
 	issueIDInTitle, titleErr := findIssueID(config.PR.Title)
 
 	switch {

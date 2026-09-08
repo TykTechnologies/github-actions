@@ -39,6 +39,38 @@ func TestFindIssueID(t *testing.T) {
 	}
 }
 
+func TestIsBranchWithoutTicketID(t *testing.T) {
+	tests := []struct {
+		name       string
+		branchName string
+		want       bool
+	}{
+		// Gromit branches - should skip
+		{"releng/master", "releng/master", true},
+		{"releng/release-5.13", "releng/release-5.13", true},
+		{"releng/release-5.13-go126", "releng/release-5.13-go126", true},
+		// Automation branches - should skip
+		{"dependabot", "dependabot/npm/lodash", true},
+		{"renovate", "renovate/docker-digest", true},
+		{"snyk", "snyk-something", true},
+		// Regular branches with tickets - should NOT skip
+		{"feat with ticket", "feat/TT-12345/new-feature", false},
+		{"bugfix with ticket", "bugfix/ABC-999", false},
+		// Regular branches without tickets - should NOT skip
+		{"feature branch", "feature/my-branch", false},
+		{"main", "main", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isBranchWithoutTicketID(tt.branchName)
+			if got != tt.want {
+				t.Errorf("isBranchWithoutTicketID(%q) = %v, want %v", tt.branchName, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestValidateBranchAndTitle(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -67,6 +99,20 @@ func TestValidateBranchAndTitle(t *testing.T) {
 			"Add new feature",
 			"",
 			true,
+		},
+		{
+			"releng branch with ticket in title",
+			"releng/release-5.13-go126",
+			"TT-17868: Fix jira linter false positives",
+			"TT-17868",
+			false,
+		},
+		{
+			"dependabot branch with ticket in title",
+			"dependabot/npm/lodash",
+			"ABC-123: Update dependency",
+			"ABC-123",
+			false,
 		},
 	}
 
