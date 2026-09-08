@@ -1,4 +1,4 @@
-module github.com/TykTechnologies/jira-linter
+module github.com/TykTechnologies/github-actions/jira-linter
 
 go 1.24.7
 
