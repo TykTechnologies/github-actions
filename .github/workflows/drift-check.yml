@@ -37,6 +37,8 @@ jobs:
 
       - name: Build gromit from master
         if: ${{ !contains(github.event.pull_request.labels.*.name, inputs.label_name) }}
+        env:
+          GOPROXY: direct
         run: go install github.com/TykTechnologies/gromit@master
 
       - name: Check for drift from gromit
