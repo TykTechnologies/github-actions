@@ -21,6 +21,10 @@ on:
         description: 'Repository name; also the ECR repo and BUILD_PACKAGE_NAME'
         type: string
         required: true
+      upgrade_repo:
+        description: 'Packagecloud repo the upgrade test installs the OLD version from. Usually the same as repo_name, but tyk-sink publishes as tyk-mdcb-stable.'
+        type: string
+        required: true
       golang_cross:
         description: 'golang-cross image tag, e.g. 1.26-bookworm'
         type: string
@@ -738,6 +742,6 @@ jobs:
       rpm: ${{ needs.test-controller-distros.outputs.rpm }}
       rpm_amd64: ${{ needs.test-controller-distros.outputs.rpm_amd64 }}
       package_name: ${{ inputs.repo_name }}
-      upgrade_repo: ${{ inputs.repo_name }}
+      upgrade_repo: ${{ inputs.upgrade_repo }}
       runs_on: ${{ vars.DEFAULT_RUNNER }}
       run_gateway_tests: false
