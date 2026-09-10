@@ -2,6 +2,22 @@
 
 Collection of shared github actions and workflows which are used in our org.
 
+# Release process
+
+We use a floating tag `@production` to release and distribute GitHub Actions from this repository.
+
+All product repositories (such as `tyk`, `tyk-analytics`, etc.) must pin their GitHub Actions usage to the `@production` tag.
+
+The `@production` tag is moved to the latest version of the `main` branch when changes need to be promoted.
+
+The process:
+
+1. Contributors (editing this repository is limited to the internal Tyk team) will create a Pull Request (PR) to `main`.
+2. The `main` branch is protected and requires a Pull Request and review before merging.
+3. When the PR is merged, changes are not yet used across all repositories; moving the tag is needed.
+4. The contributor needs to ask on the Slack channel `#team-ext-non-functional` to move the `@production` tag.
+5. Editing/moving this tag is limited to repository owners.
+
 # Composite actions
 
 ## PR Checkout
@@ -30,11 +46,11 @@ Adoption: gateway, dashboard, reuse in shared CI workflows.
 
 Source: [/.github/actions/checkout-pr/action.yml](/.github/actions/checkout-pr/action.yml)
 
-## Github to slack
+## Upload Failed Job Logs
 
-Maps github email with slack user, based on a key value map. Maps needs to be mantained manually.
+On workflow job failure, fetch and send relevant logs with branch information to an external API
 
-Source: [/.github/actions/github-to-slack/action.yaml](/.github/actions/github-to-slack/action.yaml)
+Source: [/.github/actions/gh-logs-analyser/action.yaml](/.github/actions/gh-logs-analyser/action.yaml)
 
 ## Calculate tests tags
 
@@ -43,6 +59,12 @@ Calculates corresponding CI image tags based on github events for a group of tyk
 Source: [/.github/actions/latest-versions/action.yaml](/.github/actions/latest-versions/action.yaml)
 
 # Reusable workflows
+
+## Branch Suggestion for PRs
+
+Undocumented action.
+
+Source: [/.github/workflows/branch-suggestion.yml](/.github/workflows/branch-suggestion.yml)
 
 ## CI tooling
 
@@ -107,11 +129,29 @@ Adoption: Internal use for PR workflows on the repository.
 
 Source: [/.github/workflows/ci-lint.yml](/.github/workflows/ci-lint.yml)
 
+## CI Tests
+
+Undocumented action.
+
+Source: [/.github/workflows/ci-test.yml](/.github/workflows/ci-test.yml)
+
 ## Create or update a GitHub comment
 
 Undocumented action.
 
 Source: [/.github/workflows/create-update-comment.yaml](/.github/workflows/create-update-comment.yaml)
+
+## Dependency Change Guard
+
+Undocumented action.
+
+Source: [/.github/workflows/dependency-guard.yml](/.github/workflows/dependency-guard.yml)
+
+## Force Merge PR (Reusable)
+
+Undocumented action.
+
+Source: [/.github/workflows/force-merge.yaml](/.github/workflows/force-merge.yaml)
 
 ## Print Go API Changes
 
@@ -204,6 +244,12 @@ jobs:
 
 Source: [/.github/workflows/nancy.yaml](/.github/workflows/nancy.yaml)
 
+## Path-Based OSV Scan
+
+Undocumented action.
+
+Source: [/.github/workflows/osv-path-scan.yml](/.github/workflows/osv-path-scan.yml)
+
 ## OWASP scanner
 
 Example usage:
@@ -218,25 +264,17 @@ jobs:
 
 Source: [/.github/workflows/owasp.yaml](/.github/workflows/owasp.yaml)
 
-## Release bot
-
-```
-name: Release bot
-
-on:
-  issue_comment:
-    types: [created]
-
-jobs:
-  release_bot:
-    uses: TykTechnologies/github-actions/.github/workflows/release-bot.yaml@main
-```
-
-## PR Agent
+## Cherry-pick to Release Branch (light checkout + GitHub App, resilient)
 
 Undocumented action.
 
-Source: [/.github/workflows/pr-agent.yaml](/.github/workflows/pr-agent.yaml)
+Source: [/.github/workflows/release-bot.yaml](/.github/workflows/release-bot.yaml)
+
+## SentinelOne CNS Scan
+
+Undocumented action.
+
+Source: [/.github/workflows/s1-cns-scan.yml](/.github/workflows/s1-cns-scan.yml)
 
 ## SBOM - source bill of materials (dev)
 
@@ -308,40 +346,9 @@ jobs:
 
 Source: [/.github/workflows/sonarcloud.yaml](/.github/workflows/sonarcloud.yaml)
 
-## Sentinel One CNS Scans
+## Visor
 
-This runs the S1 scans and publishes the results to the S1 console.
-It has three available scanners.
-- Secret scanner
-- IaC scanner
-- Vulnerability scanner
+Undocumented action.
 
-By default, all three are enabled, but it could be controlled by setting the flags appropriately
-while calling the workflow.
-Also, keep in mind that the secret scanner runs only on pull request events, as the scanner only supports
-publishing results on pull requsts.
+Source: [/.github/workflows/visor.yaml](/.github/workflows/visor.yaml)
 
-Example usage:
-
-```yaml
-name: SentinelOne CNS Scan
-
-on:
-  pull_request:
-    types: [ opened, reopened, synchronize ]
-    branches: [ master ]
-
-jobs:
-  s1_scanner:
-    uses: TykTechnologies/github-actions/.github/workflows/s1-cns-scan.yml@main
-    with:
-      iac_enabled: false
-      tag: service:vulnscan
-      scope_type: ACCOUNT
-    secrets:
-      S1_API_TOKEN: ${{ secrets.S1_API_TOKEN }}
-      CONSOLE_URL: ${{ secrets.S1_CONSOLE_URL }}
-      SCOPE_ID: ${{ secrets.S1_SCOPE_ID }}
-```
-
-Source: [/.github/workflows/s1-cns-scan.yml](/.github/workflows/s1-cns-scan.yml)
