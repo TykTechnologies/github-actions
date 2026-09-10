@@ -49,7 +49,13 @@ runs:
         pull_policy: 'if_not_present'
         ECR: ${{ steps.ecr.outputs.registry }}
       run: |
-        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile all logs | sort > ${{ github.workspace }}/docker-compose.log
+        # Cap log collection: `docker compose logs` can hang if a container is
+        # unresponsive, which otherwise runs the job to its full timeout. `timeout`
+        # kills it after 5m; a miss just means slightly truncated diagnostic logs.
+        # (Composite-action steps can't take timeout-minutes, so we bound the cmd.)
+        timeout 300 docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile all logs > ${{ github.workspace }}/docker-compose.raw.log 2>&1 \
+          || echo "::warning::docker compose logs did not complete within 300s; logs may be truncated"
+        sort ${{ github.workspace }}/docker-compose.raw.log > ${{ github.workspace }}/docker-compose.log
         echo "::group::DockerLogs"
         cat ${{ github.workspace }}/docker-compose.log
         echo "::endgroup::"
