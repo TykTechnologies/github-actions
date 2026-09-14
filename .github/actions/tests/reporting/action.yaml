@@ -49,9 +49,9 @@ runs:
         pull_policy: 'if_not_present'
         ECR: ${{ steps.ecr.outputs.registry }}
       run: |
-        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile all logs | sort > ${{ github.workspace }}/docker-compose.log
-        echo "::group::DockerLogs"
-        cat ${{ github.workspace }}/docker-compose.log
+        docker compose -p auto -f pro-ha.yml -f deps_pro-ha.yml -f ${{ matrix.envfiles.db }}.yml -f ${{ matrix.envfiles.cache }}.yml --env-file versions.env --profile all logs > ${{ github.workspace }}/docker-compose.log
+        echo "::group::DockerLogs (last 2000 lines, full log in artifact)"
+        tail -n 2000 ${{ github.workspace }}/docker-compose.log
         echo "::endgroup::"
     - name: Upload compose logs
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
