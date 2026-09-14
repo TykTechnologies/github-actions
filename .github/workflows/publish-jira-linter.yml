@@ -34,28 +34,39 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  id-token: write   # This is required for requesting the JWT
+  contents: read    # This is required for actions/checkout
 
 jobs:
   jira-linter:
-    name: 'Build tykio/jira-linter:latest'
+    name: 'Build jira-linter image'
 
     runs-on: ubuntu-latest
+
+    env:
+      IMAGE: 754489498669.dkr.ecr.eu-central-1.amazonaws.com/jira-linter:latest
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
 
       # Pull requests never push, so they need no credentials. Skipping the
-      # login also keeps the registry token out of a job that builds and
-      # runs code from the pull request.
-      - uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc  # v2
+      # login also keeps the ECR token out of a job that builds and runs
+      # code from the pull request.
+      - name: Configure AWS credentials for use
         if: github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838  # v1
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          role-to-assume: arn:aws:iam::754489498669:role/ecr_rw_tyk
+          role-session-name: cipush
+          aws-region: eu-central-1
 
-      - name: 'Build tykio/jira-linter:latest'
+      - name: Login to Amazon ECR
+        id: login-ecr
+        if: github.event_name != 'pull_request'
+        uses: aws-actions/amazon-ecr-login@5a88a04c91d5c6f97aae0d9be790e64d9b1d47b7  # v1
+
+      - name: 'Build jira-linter image'
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
         with:
           push: ${{ github.ref_name == 'main' || github.event_name == 'workflow_dispatch' }}
@@ -63,7 +74,7 @@ jobs:
           load: ${{ github.ref_name != 'main' && github.event_name != 'workflow_dispatch' }}
           no-cache: true
           context: jira-linter
-          tags: tykio/jira-linter:latest
+          tags: ${{ env.IMAGE }}
           # The Actions runner pulls this image itself and does not consume
           # attestations, so keep the manifest to a plain platform image.
           provenance: false
@@ -73,7 +84,7 @@ jobs:
       # The linter exits non-zero here, because no Jira credentials are
       # configured. This checks that the container starts and that the
       # branch argument reaches the linter.
-      - name: 'Smoke test tykio/jira-linter:latest'
+      - name: 'Smoke test jira-linter image'
         run: |
-          docker run --rm tykio/jira-linter:latest feat/TT-16030-smoke 2>&1 | tee smoke.txt || true
+          docker run --rm "$IMAGE" feat/TT-16030-smoke 2>&1 | tee smoke.txt || true
           grep -q 'running the linter against feat/TT-16030-smoke branch' smoke.txt
