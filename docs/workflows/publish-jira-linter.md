@@ -11,6 +11,10 @@ The linter is built with `CGO_ENABLED=0` in a `golang:1.24.7-alpine`
 builder stage, then copied into an `alpine:3.22` runner stage. The image
 is built for `linux/amd64`.
 
+The image holds the compiled linter and nothing else. Its entrypoint is
+the binary, so the `jira-linter` action runs it with `docker run` and
+keeps the pull request comment handling in its own composite steps.
+
 The images built are:
 
 - `754489498669.dkr.ecr.eu-central-1.amazonaws.com/jira-linter:latest`.
@@ -24,8 +28,8 @@ same role and region used by the SBOM workflows, so the job requires
 `id-token: write`.
 
 Pull requests build the image and smoke test it without pushing, so a
-change to the `Dockerfile` or the entrypoint is verified before it
-merges. AWS credentials are skipped on pull requests.
+change to the `Dockerfile` is verified before it merges. AWS credentials
+are skipped on pull requests.
 
 To roll the image back, run the workflow through `workflow_dispatch`
 against the last known good ref. The run rebuilds and overwrites the

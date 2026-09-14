@@ -75,16 +75,21 @@ jobs:
           no-cache: true
           context: jira-linter
           tags: ${{ env.IMAGE }}
-          # The Actions runner pulls this image itself and does not consume
-          # attestations, so keep the manifest to a plain platform image.
+          # Nothing consumes attestations here, so keep the manifest to a
+          # plain platform image.
           provenance: false
 
       - run: docker image ls
 
       # The linter exits non-zero here, because no Jira credentials are
-      # configured. This checks that the container starts and that the
-      # branch argument reaches the linter.
+      # configured. This checks that the binary in the image starts and
+      # parses its flags.
       - name: 'Smoke test jira-linter image'
         run: |
-          docker run --rm "$IMAGE" feat/TT-16030-smoke 2>&1 | tee smoke.txt || true
-          grep -q 'running the linter against feat/TT-16030-smoke branch' smoke.txt
+          docker run --rm "$IMAGE" --branch=feat/TT-16030-smoke 2>&1 | tee smoke.txt || true
+          grep -q 'Starting Jira to PR validation' smoke.txt
+
+          if docker run --rm "$IMAGE" --branch=feat/TT-16030-smoke >/dev/null 2>&1; then
+            echo 'expected a non-zero exit without Jira credentials' >&2
+            exit 1
+          fi

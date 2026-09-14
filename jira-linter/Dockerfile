@@ -1,6 +1,6 @@
 # ---- Builder ----------------------------------------------------------------
 # Pinned to the same Go version as go.mod and .github/workflows/ci-test.yml.
-FROM golang:1.24.7-alpine AS builder
+FROM golang:1.26 AS builder
 
 WORKDIR /src
 
@@ -18,11 +18,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags='-s -w' -o /out/linter 
 FROM alpine:3.22
 
 # ca-certificates: HTTPS calls to the Jira and GitHub APIs.
-# curl, jq:        sticky pull request comment handling in the entrypoint.
-RUN apk add --no-cache ca-certificates curl jq
+RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /out/linter /usr/local/bin/linter
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
 
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+# The image holds the compiled linter and nothing else. The jira-linter action
+# runs it with `docker run`, and keeps the comment handling in its own steps.
+ENTRYPOINT ["/usr/local/bin/linter"]
