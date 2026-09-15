@@ -11,6 +11,7 @@ on:
 permissions:
   pull-requests: write
   contents: read
+  id-token: write   # Required to assume the ECR role that pulls the linter image
 
 jobs:
   jira-lint:
