@@ -1,0 +1,8 @@
+# Keep the build context small; only go.mod, go.sum, cmd/ and entrypoint.sh
+# are needed to build the image.
+linter
+README.md
+action.yaml
+Dockerfile
+.dockerignore
+.gitignore

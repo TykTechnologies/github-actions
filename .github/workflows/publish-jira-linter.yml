@@ -1,0 +1,95 @@
+# yamllint disable rule:line-length
+---
+name: Publish jira-linter image
+
+# This workflow builds the jira-linter image from jira-linter/ within
+# this repository. It runs whenever a file inside is modified, and on a
+# weekly schedule to pick up base image patches.
+#
+# Providing the image avoids compiling the linter with actions/setup-go
+# and `go install` on every pull request run, in every repository that
+# uses the jira-linter action.
+
+on:  # yamllint disable-line rule:truthy
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'jira-linter/**'
+      - '.github/workflows/publish-jira-linter.yml'
+  push:
+    paths:
+      - 'jira-linter/**'
+      - '.github/workflows/publish-jira-linter.yml'
+    branches:
+      - 'main'
+  schedule:
+    - cron: '0 3 * * 1'  # Run every Monday at 3:00 AM UTC
+
+# Make sure to cancel previous job runs in case a PR
+# gets new commits. Changes being merged to the main
+# branch will continue to run.
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}-publish-jira-linter
+  cancel-in-progress: true
+
+permissions:
+  id-token: write   # This is required for requesting the JWT
+  contents: read    # This is required for actions/checkout
+
+jobs:
+  jira-linter:
+    name: 'Build jira-linter image'
+
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE: 754489498669.dkr.ecr.eu-central-1.amazonaws.com/jira-linter:latest
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+
+      # Pull requests never push, so they need no credentials. Skipping the
+      # login also keeps the ECR token out of a job that builds and runs
+      # code from the pull request.
+      - name: Configure AWS credentials for use
+        if: github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838  # v1
+        with:
+          role-to-assume: arn:aws:iam::754489498669:role/ecr_rw_tyk
+          role-session-name: cipush
+          aws-region: eu-central-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        if: github.event_name != 'pull_request'
+        uses: aws-actions/amazon-ecr-login@5a88a04c91d5c6f97aae0d9be790e64d9b1d47b7  # v1
+
+      - name: 'Build jira-linter image'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          push: ${{ github.ref_name == 'main' || github.event_name == 'workflow_dispatch' }}
+          pull: true
+          load: ${{ github.ref_name != 'main' && github.event_name != 'workflow_dispatch' }}
+          no-cache: true
+          context: jira-linter
+          tags: ${{ env.IMAGE }}
+          # Nothing consumes attestations here, so keep the manifest to a
+          # plain platform image.
+          provenance: false
+
+      - run: docker image ls
+
+      # The linter exits non-zero here, because no Jira credentials are
+      # configured. This checks that the binary in the image starts and
+      # parses its flags.
+      - name: 'Smoke test jira-linter image'
+        run: |
+          docker run --rm "$IMAGE" --branch=feat/TT-16030-smoke 2>&1 | tee smoke.txt || true
+          grep -q 'Starting Jira to PR validation' smoke.txt
+
+          if docker run --rm "$IMAGE" --branch=feat/TT-16030-smoke >/dev/null 2>&1; then
+            echo 'expected a non-zero exit without Jira credentials' >&2
+            exit 1
+          fi
