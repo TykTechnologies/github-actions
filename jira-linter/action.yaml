@@ -12,18 +12,16 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    # The linter image lives in a private ECR registry, so the action assumes
-    # the push role and logs in before running the container.
-    - name: Configure AWS credentials for use
-      uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838  # v1
+    - name: Set up Go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
       with:
-        role-to-assume: arn:aws:iam::754489498669:role/ecr_rw_tyk
-        role-session-name: cipush
-        aws-region: eu-central-1
+        go-version: '1.26'
 
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@5a88a04c91d5c6f97aae0d9be790e64d9b1d47b7  # v1
+    - name: Build Jira Linter
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}
+        go install ./cmd/linter
 
     - name: Run Jira Linter
       id: linter_step
@@ -32,17 +30,7 @@ runs:
       run: |
         BRANCH_NAME="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
         echo "--> running the linter against $BRANCH_NAME branch"
-        # Each -e passes the variable by name, so no secret reaches the
-        # command line or the workflow log.
-        docker run --rm \
-          -e JL_JIRA_BASEURL \
-          -e JL_JIRA_READAUTH \
-          -e GITHUB_TOKEN \
-          -e GITHUB_REPOSITORY \
-          -e JL_PR_NUMBER \
-          -e JL_PR_TITLE \
-          754489498669.dkr.ecr.eu-central-1.amazonaws.com/jira-linter:latest \
-          --branch="$BRANCH_NAME" 2> ${{ github.action_path }}/stderr.txt
+        linter --branch="$BRANCH_NAME" 2> ${{ github.action_path }}/stderr.txt
       env:
         JL_JIRA_BASEURL: ${{ inputs.jira-base-url }}
         JL_JIRA_READAUTH: ${{ inputs.jira-read-auth }}
