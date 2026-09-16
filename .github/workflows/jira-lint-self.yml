@@ -13,7 +13,7 @@ permissions: {}
 
 jobs:
   validate:
-    name: lint without container
+    name: lint with container
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     permissions:
