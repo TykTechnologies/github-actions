@@ -48,3 +48,23 @@ jobs:
 | `JIRA_TOKEN`      | Jira API token for authentication        |
 
 Adoption: Gateway, Dashboard.
+
+## Permissions
+
+The linter runs from a container image held in a private ECR registry, so the
+job assumes `arn:aws:iam::754489498669:role/ecr_rw_tyk` through OIDC to pull it.
+Callers must grant `id-token: write` on the job that calls this workflow:
+
+```yaml
+jobs:
+  jira-lint:
+    permissions:
+      id-token: write
+      pull-requests: write
+      contents: read
+    uses: TykTechnologies/github-actions/.github/workflows/jira-lint.yaml@production
+    secrets: inherit
+```
+
+A called workflow cannot hold permissions its caller did not grant, so omitting
+`id-token: write` makes the image pull fail.
