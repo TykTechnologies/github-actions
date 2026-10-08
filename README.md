@@ -218,7 +218,8 @@ Prerequisites:
   independent Go builds; the caller's `WARP_RUNNER_8X_X64` or `DEFAULT_RUNNER`
   variable selects it.
 - GitHub App credentials with read access to `tyk`, private `tyk-analytics`,
-  `tyk-pump`, `tyk-mock-mcp-server` and private `tyk-sync-internal`.
+  `tyk-pump`, `tyk-mock-mcp-server`, private `tyk-sync-internal` and private
+  `api-definition`.
 - Dashboard license in `DASH_LICENSE`.
 - A selected Dashboard revision containing `run_mcp_v2_stack.py`, its helper
   regressions and `fixtures/mcp_v2/compose.yml`.
