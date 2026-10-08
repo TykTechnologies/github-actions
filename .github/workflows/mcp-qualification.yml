@@ -53,6 +53,7 @@ jobs:
             tyk-pump
             tyk-mock-mcp-server
             tyk-sync-internal
+            api-definition
       - name: Resolve coordinated source revisions
         id: revisions
         env:
@@ -126,7 +127,7 @@ jobs:
         env:
           ORG_GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          for repository in tyk-analytics tyk-sync-internal; do
+          for repository in tyk-analytics tyk-sync-internal api-definition; do
             git config --global url."https://x-access-token:${ORG_GH_TOKEN}@github.com/TykTechnologies/$repository".insteadOf "https://github.com/TykTechnologies/$repository"
           done
       - name: Setup Python
