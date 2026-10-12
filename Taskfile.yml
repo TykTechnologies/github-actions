@@ -21,4 +21,6 @@ tasks:
       - echo >> README.md
       - echo "Collection of shared github actions and workflows which are used in our org." >> README.md
       - echo >> README.md
+      - cat docs/release-process.md >> README.md
+      - echo >> README.md
       - cd docs && task markdown >> ../README.md
