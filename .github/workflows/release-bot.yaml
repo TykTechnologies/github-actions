@@ -314,7 +314,12 @@ jobs:
                 --body "${BODY}")"
             fi
           fi
-
+          
+          # Enable auto-merge for clean cherry-picks; skip for draft conflict PRs                                                                                                                          
+          if [ "${MERGE_FAILED}" -eq 0 ]; then
+            gh pr merge --auto --merge "${PR_URL}" --repo "${GITHUB_REPO}" || true
+          fi
+      
           # Optionally label the PR if conflicts
           if [ "${MERGE_FAILED}" -ne 0 ]; then
             gh label create "needs-manual-cherry-pick" --color FF8700 --description "Cherry-pick has conflicts" --repo "${GITHUB_REPO}" 2>/dev/null || true
