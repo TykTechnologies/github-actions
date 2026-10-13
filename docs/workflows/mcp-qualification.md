@@ -55,3 +55,24 @@ release templates and enable their `mcp-qualification` feature only on branches
 whose selected Dashboard revision contains the required runner. Then regenerate
 the consumer release workflows and remove their duplicated local qualification
 workflow. Do not merge consumer references to a commit that is not yet published.
+
+For sink master qualification, set `with: {topology: mdcb}` and forward
+`MDCB_LICENSE: ${{ secrets.MDCB_LICENSE }}` alongside `DASH_LICENSE`.
+The topology defaults to `direct`; MDCB requires its licence and additionally
+resolves and builds `tyk-sink`. Give the App read access to that repository.
+A sink caller uses its exact PR head. Dashboard and the other components use
+the coordinated branch with the same existing base-branch fallback.
+
+The four MDCB jobs cover MongoDB/PostgreSQL × MessagePack/Protobuf. Each job
+starts a primary Gateway, MDCB, and a data-plane Gateway with task-owned Redis.
+The runner boots one hybrid organisation and RPC identity, proves API, key and
+policy propagation, and sends test traffic to the data plane. MDCB persists
+analytics directly (`forward_analytics_to_pump=false`); forwarded analytics
+is outside this matrix. Missing prerequisites fail qualification.
+
+Artifacts include sanitized JUnit status, source commits, binary hashes and
+routing/persistence evidence. Protected logs, runtime identity and licences
+are excluded. The runner deletes only its organisation and data-plane Redis;
+the workflow removes its dedicated Compose project and module authentication.
+Publish the shared commit before its generated callers. Roll back the caller,
+MCP exclusion and aggregate dependency together.
