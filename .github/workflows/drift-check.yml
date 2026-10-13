@@ -38,7 +38,18 @@ jobs:
       - name: Build gromit from master
         if: ${{ !contains(github.event.pull_request.labels.*.name, inputs.label_name) }}
         env:
-          GOPROXY: direct
+          # gromit is fetched direct so a fresh @master is picked up without
+          # waiting out proxy.golang.org's ~30min TTL (TT-18073). Scoped to
+          # gromit via GONOPROXY rather than set globally: a bare
+          # GOPROXY=direct also forces every transitive dependency direct, so
+          # the build then depends on go.googlesource.com being reachable from
+          # the runner. It intermittently is not, and the resulting
+          # "git ls-remote ... exit status 128" on golang.org/x/* failed this
+          # job - and therefore drift-check - across every repo using it.
+          GOPROXY: https://proxy.golang.org,direct
+          GONOPROXY: github.com/TykTechnologies/gromit
+          GONOSUMDB: github.com/TykTechnologies/gromit
+          GOPRIVATE: github.com/TykTechnologies/gromit
         run: go install github.com/TykTechnologies/gromit@master
 
       - name: Check for drift from gromit
