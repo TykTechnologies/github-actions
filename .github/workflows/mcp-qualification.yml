@@ -216,7 +216,7 @@ jobs:
         run: |
           docker compose -p mcp-qualification -f mcp/dashboard/tests/api/fixtures/mcp_v2/compose.yml down --volumes
           for repository in tyk-analytics tyk-sync-internal api-definition; do
-            git config --global --remove-section "url.https://x-access-token:${ORG_GH_TOKEN}@github.com/TykTechnologies/$repository" || true
+            git config --global --remove-section "url.https://x-access-token:${ORG_GH_TOKEN}@github.com/TykTechnologies/$repository" 2>/dev/null || true
           done
         env:
           ORG_GH_TOKEN: ${{ steps.app-token.outputs.token }}
