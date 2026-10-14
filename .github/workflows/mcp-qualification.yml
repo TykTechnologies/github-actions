@@ -3,6 +3,12 @@ name: Serial MCP stack qualification
 
 on:  # yamllint disable-line rule:truthy
   workflow_call:
+    inputs:
+      topology:
+        description: Direct Gateway/Pump or MDCB data-plane qualification
+        type: string
+        default: direct
+        required: false
     secrets:
       PROBE_APP_ID:
         required: true
@@ -10,13 +16,15 @@ on:  # yamllint disable-line rule:truthy
         required: true
       DASH_LICENSE:
         required: true
+      MDCB_LICENSE:
+        required: false
 
 permissions:
   contents: read
 
 jobs:
   qualify:
-    name: MCP ${{ matrix.serializer }} / ${{ matrix.storage }}
+    name: MCP ${{ inputs.topology }} / ${{ matrix.serializer }} / ${{ matrix.storage }}
     runs-on: ${{ vars.WARP_RUNNER_8X_X64 || vars.DEFAULT_RUNNER }}
     timeout-minutes: 90
     strategy:
@@ -37,6 +45,16 @@ jobs:
       TYK_TEST_UPSTREAM_URL: http://127.0.0.1:9879/
       MCP_REDIS_IMAGE: ${{ matrix.storage == 'postgres' && 'valkey/valkey:9' || 'redis:7' }}
     steps:
+      - name: Validate topology prerequisites
+        env:
+          TOPOLOGY: ${{ inputs.topology }}
+          MDCB_LICENSE: ${{ secrets.MDCB_LICENSE }}
+        run: |
+          case "$TOPOLOGY" in
+            direct) ;;
+            mdcb) test -n "$MDCB_LICENSE" || { echo 'MDCB_LICENSE is required for MDCB qualification'; exit 1; } ;;
+            *) echo 'Unsupported qualification topology'; exit 1 ;;
+          esac
       - name: Report available build disk capacity
         run: df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP"
       - name: Generate GitHub App token
@@ -51,6 +69,7 @@ jobs:
             tyk
             tyk-analytics
             tyk-pump
+            tyk-sink
             tyk-mock-mcp-server
             tyk-sync-internal
             api-definition
@@ -62,14 +81,18 @@ jobs:
           CALLER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           SOURCE_BRANCH: ${{ github.head_ref || github.ref_name }}
           BASE_BRANCH: ${{ github.base_ref || github.ref_name }}
+          TOPOLOGY: ${{ inputs.topology }}
         shell: bash
         run: |
           set -euo pipefail
-          for component in gateway dashboard pump; do
+          components=(gateway dashboard pump)
+          if [ "$TOPOLOGY" = mdcb ]; then components+=(sink); fi
+          for component in "${components[@]}"; do
             case "$component" in
               gateway) repository=TykTechnologies/tyk ;;
               dashboard) repository=TykTechnologies/tyk-analytics ;;
               pump) repository=TykTechnologies/tyk-pump ;;
+              sink) repository=TykTechnologies/tyk-sink ;;
             esac
             if [ "$repository" = "$CALLER_REPOSITORY" ]; then
               revision=$CALLER_SHA
@@ -106,6 +129,15 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
           path: mcp/pump
+      - name: Checkout MDCB
+        if: inputs.topology == 'mdcb'
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          repository: TykTechnologies/tyk-sink
+          ref: ${{ steps.revisions.outputs.sink }}
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+          path: mcp/sink
       - name: Checkout immutable mock fixtures
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
         with:
@@ -122,6 +154,7 @@ jobs:
             mcp/dashboard/go.sum
             mcp/gateway/go.sum
             mcp/pump/go.sum
+            mcp/sink/go.sum
             mcp/mock/go.sum
       - name: Configure private module fetch
         env:
@@ -154,8 +187,12 @@ jobs:
       - name: Build current sources and run complete MCP coverage serially
         env:
           TYK_DB_LICENSEKEY: ${{ secrets.DASH_LICENSE }}
+          MDCB_LICENSE: ${{ secrets.MDCB_LICENSE }}
+          TOPOLOGY: ${{ inputs.topology }}
         run: |
-          python mcp/dashboard/tests/api/scripts/run_mcp_v2_stack.py \
+          topology_args=(--topology "$TOPOLOGY")
+          if [ "$TOPOLOGY" = mdcb ]; then topology_args+=(--sink-root mcp/sink); fi
+          python mcp/dashboard/tests/api/scripts/run_mcp_v2_stack.py "${topology_args[@]}" \
             --gateway-root mcp/gateway --pump-root mcp/pump --mock-root mcp/mock \
             --artifacts mcp-evidence --serializer '${{ matrix.serializer }}' \
             --dashboard-storage '${{ matrix.storage }}' --allow-declared-skips \
@@ -166,13 +203,20 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: mcp-qualification-${{ matrix.serializer }}-${{ matrix.storage }}
+          name: mcp-qualification-${{ inputs.topology }}-${{ matrix.serializer }}-${{ matrix.storage }}
           path: |
             mcp-evidence/qualification.json
             mcp-evidence/tested-shas.json
+            mcp-evidence/mcp-summary.xml
             mcp-evidence/*-binary-version.txt
             mcp-evidence/*-candidate.diff
           if-no-files-found: warn
       - name: Stop task-owned backing services
         if: always()
-        run: docker compose -p mcp-qualification -f mcp/dashboard/tests/api/fixtures/mcp_v2/compose.yml down --volumes
+        run: |
+          docker compose -p mcp-qualification -f mcp/dashboard/tests/api/fixtures/mcp_v2/compose.yml down --volumes
+          for repository in tyk-analytics tyk-sync-internal api-definition; do
+            git config --global --remove-section "url.https://x-access-token:${ORG_GH_TOKEN}@github.com/TykTechnologies/$repository" 2>/dev/null || true
+          done
+        env:
+          ORG_GH_TOKEN: ${{ steps.app-token.outputs.token }}
