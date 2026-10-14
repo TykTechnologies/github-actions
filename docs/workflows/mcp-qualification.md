@@ -2,8 +2,8 @@
 
 Builds Gateway, Dashboard, Pump and the mock MCP server from source, then runs
 Dashboard-owned MCP tests serially across MessagePack/protobuf and
-MongoDB/PostgreSQL. Gateway, Dashboard and Pump each call this public workflow
-so that a producer change is tested at its own pull request head.
+MongoDB/PostgreSQL. Gateway, Dashboard, Pump and MDCB callers use this public
+workflow to test each component at its own pull request head.
 
 The caller component uses `github.event.pull_request.head.sha`, rather than the
 synthetic merge revision. Other components use the same source branch when it
@@ -45,18 +45,15 @@ Prerequisites:
 - A selected Dashboard revision containing `run_mcp_v2_stack.py`, its helper
   regressions and `fixtures/mcp_v2/compose.yml`.
 
-Only the three named secrets are forwarded. Checkouts do not persist
-credentials. The workflow creates a read-only App token, uses isolated local
-backing services and stops its own compose project on completion. Evidence
-uploads exclude service logs and credentials.
+Checkouts do not persist credentials. The workflow creates a read-only App
+token, uses isolated local backing services and stops its own compose project
+on completion. Evidence uploads exclude service logs and credentials.
 
-Roll out the shared workflow before pinning callers to its SHA. Update gromit
-release templates and enable their `mcp-qualification` feature only on branches
-whose selected Dashboard revision contains the required runner. Then regenerate
-the consumer release workflows and remove their duplicated local qualification
-workflow. Do not merge consumer references to a commit that is not yet published.
+Caller workflow pins are defined in the Gromit release templates. Enable
+`mcp-qualification` only on branches whose selected Dashboard revision contains
+the required runner and fixtures.
 
-For sink master qualification, set `with: {topology: mdcb}` and forward
+For MDCB qualification, set `with: {topology: mdcb}` and forward
 `MDCB_LICENSE: ${{ secrets.MDCB_LICENSE }}` alongside `DASH_LICENSE`.
 The topology defaults to `direct`; MDCB requires its licence and additionally
 resolves and builds `tyk-sink`. Give the App read access to that repository.
@@ -74,5 +71,3 @@ Artifacts include sanitized JUnit status, source commits, binary hashes and
 routing/persistence evidence. Protected logs, runtime identity and licences
 are excluded. The runner deletes only its organisation and data-plane Redis;
 the workflow removes its dedicated Compose project and module authentication.
-Publish the shared commit before its generated callers. Roll back the caller,
-MCP exclusion and aggregate dependency together.
