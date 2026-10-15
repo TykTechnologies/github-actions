@@ -11,7 +11,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = yaml.safe_load((ROOT / '.github/workflows/mcp-qualification.yml').read_text())
 STEPS = WORKFLOW['jobs']['qualify']['steps']
-RESOLVER = next(step['run'] for step in STEPS if step['name'] == 'Resolve coordinated source revisions')
+RESOLVE_STEPS = WORKFLOW['jobs']['resolve']['steps']
+RESOLVER = next(step['run'] for step in RESOLVE_STEPS if step['name'] == 'Resolve coordinated source revisions')
 
 
 class RevisionResolutionTest(unittest.TestCase):
@@ -60,13 +61,41 @@ print(value)
         result, _ = self.resolve('TykTechnologies/tyk-sink', {})
         self.assertNotEqual(result.returncode, 0)
 
-    def test_matrix_has_exactly_four_serializer_storage_profiles(self):
+    def test_mutable_or_malformed_source_revision_is_rejected(self):
+        refs = self.refs()
+        refs['repos/TykTechnologies/tyk-analytics/git/ref/heads/master'] = 'master'
+        result, _ = self.resolve('TykTechnologies/tyk-sink', refs)
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_matrix_has_four_isolated_shards_per_serializer_storage_profile(self):
         matrix = WORKFLOW['jobs']['qualify']['strategy']['matrix']
-        self.assertEqual(matrix, {'serializer': ['msgpack', 'protobuf'], 'storage': ['mongo', 'postgres']})
-        run = next(step['run'] for step in STEPS if step['name'] == 'Build current sources and run complete MCP coverage serially')
+        self.assertEqual(matrix, {'serializer': ['msgpack', 'protobuf'], 'storage': ['mongo', 'postgres'], 'shard': [0, 1, 2, 3]})
+        run = next(step['run'] for step in STEPS if step['name'] == 'Build current sources and run MCP shard serially')
         self.assertIn('--sink-root mcp/sink', run)
         self.assertIn('--topology "$TOPOLOGY"', run)
         self.assertNotIn('forward_analytics_to_pump=true', run)
+        self.assertIn("--shard-count 4 --shard-index '${{ matrix.shard }}'", run)
+        self.assertIn('tests/', run)
+        self.assertIn('--pytest-marker', run)
+
+    def test_sources_are_resolved_once_before_matrix_and_reused_for_aggregation(self):
+        self.assertEqual(WORKFLOW['jobs']['qualify']['needs'], 'resolve')
+        self.assertFalse(any(step.get('id') == 'revisions' for step in STEPS))
+        for step in STEPS:
+            if step.get('uses', '').startswith('actions/checkout@'):
+                self.assertTrue(step['with']['ref'].startswith('${{ needs.resolve.outputs.'))
+        aggregate = WORKFLOW['jobs']['aggregate']
+        self.assertEqual(aggregate['needs'], ['resolve', 'qualify'])
+        self.assertIn('always()', aggregate['if'])
+        validate = next(step for step in aggregate['steps'] if step['name'] == 'Require complete non-overlapping qualification')
+        self.assertEqual(validate['env']['EXPECTED_SHAS'], '${{ toJSON(needs.resolve.outputs) }}')
+        self.assertIn('--shard-count 4', validate['run'])
+
+    def test_every_shard_retains_its_inventory_and_has_a_unique_artifact_name(self):
+        upload = next(step for step in STEPS if step['name'] == 'Retain sanitized qualification evidence')
+        self.assertIn('-shard-${{ matrix.shard }}', upload['with']['name'])
+        self.assertIn('mcp-evidence/test-inventory.json', upload['with']['path'])
+        self.assertEqual(upload['if'], 'always()')
 
 
 if __name__ == '__main__':
