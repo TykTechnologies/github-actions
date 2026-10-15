@@ -48,7 +48,13 @@ runs:
         else
           status=$?
           if [ "$status" != 10 ]; then exit "$status"; fi
-          docker build --label "org.opencontainers.image.revision=$revision" -t "$image" mcp-mock
+          # The pinned fixture source requires Go 1.25+, but its Dockerfile
+          # still selects 1.23 with GOTOOLCHAIN=local. Keep the source and
+          # runtime recipe intact and use the component CI build toolchain.
+          sed 's/^FROM golang:1.23-alpine AS builder$/FROM golang:1.26-alpine AS builder/' \
+            mcp-mock/Dockerfile > "$RUNNER_TEMP/mcp-mock.Dockerfile"
+          docker build -f "$RUNNER_TEMP/mcp-mock.Dockerfile" \
+            --label "org.opencontainers.image.revision=$revision" -t "$image" mcp-mock
           docker push "$image"
         fi
     - name: Wait for coordinated component builds and freeze image digests
