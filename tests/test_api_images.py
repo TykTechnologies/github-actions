@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -64,11 +65,21 @@ class APIImagesTest(unittest.TestCase):
             images.resolve("TykTechnologies/portal", "a" * 40, "branch", "main", "direct")
 
     def test_registry_permission_errors_are_not_treated_as_missing_images(self):
-        missing = subprocess.CompletedProcess([], 1, "", "ImageNotFoundException")
-        denied = subprocess.CompletedProcess([], 1, "", "AccessDeniedException")
+        missing = subprocess.CompletedProcess([], 0, json.dumps({"images": [], "failures": [{"failureCode": "ImageNotFound"}]}), "")
+        denied = subprocess.CompletedProcess([], 1, "", "An error occurred (AccessDeniedException) when calling BatchGetImage")
         with patch.object(images.subprocess, "run", return_value=missing):
             self.assertIsNone(images.image_digest("tyk-pump", "a" * 40))
         with patch.object(images.subprocess, "run", return_value=denied):
+            with self.assertRaisesRegex(RuntimeError, "AccessDeniedException"):
+                images.image_digest("tyk-pump", "a" * 40)
+
+    def test_image_resolution_uses_existing_registry_pull_permission(self):
+        found = subprocess.CompletedProcess([], 0, json.dumps({"images": [{"imageId": {"imageDigest": "sha256:" + "d" * 64}}], "failures": []}), "")
+        with patch.object(images.subprocess, "run", return_value=found) as run:
+            self.assertEqual(images.image_digest("tyk-pump", "a" * 40), "sha256:" + "d" * 64)
+        self.assertEqual(run.call_args.args[0][:3], ["aws", "ecr", "batch-get-image"])
+        invalid = subprocess.CompletedProcess([], 0, json.dumps({"images": [], "failures": [{"failureCode": "ImageTagDoesNotMatchDigest"}]}), "")
+        with patch.object(images.subprocess, "run", return_value=invalid):
             with self.assertRaises(RuntimeError):
                 images.image_digest("tyk-pump", "a" * 40)
 

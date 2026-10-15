@@ -47,15 +47,25 @@ def resolve(caller, caller_sha, branch, base, topology, lookup=github_commit):
 
 
 def image_digest(repository, revision):
-    result = subprocess.run(["aws", "ecr", "describe-images", "--repository-name", repository,
+    # BatchGetImage is part of the existing CI pull/push role. DescribeImages
+    # requires additional registry permissions that ordinary API jobs do not use.
+    result = subprocess.run(["aws", "ecr", "batch-get-image", "--repository-name", repository,
                              "--image-ids", "imageTag=sha-" + revision,
-                             "--query", "imageDetails[0].imageDigest", "--output", "text"],
+                             "--output", "json"],
                             text=True, capture_output=True)
     if result.returncode:
-        if "ImageNotFoundException" in result.stderr:
-            return None
-        raise RuntimeError(f"Cannot read immutable CI image for {repository}")
-    digest = result.stdout.strip()
+        # Report only AWS's error code, never raw CLI output or credentials.
+        error = re.search(r"\(([A-Za-z0-9]+)\)", result.stderr)
+        code = error.group(1) if error else "RegistryRequestFailed"
+        raise RuntimeError(f"Cannot read immutable CI image for {repository}: {code}")
+    response = json.loads(result.stdout)
+    failures = response.get("failures", [])
+    found = response.get("images", [])
+    if not found and len(failures) == 1 and failures[0].get("failureCode") == "ImageNotFound":
+        return None
+    if failures or len(found) != 1:
+        raise RuntimeError(f"Registry did not return one immutable CI image for {repository}")
+    digest = found[0]["imageId"]["imageDigest"]
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
         raise ValueError(f"Invalid CI image digest for {repository}")
     return digest
