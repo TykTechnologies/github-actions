@@ -9,6 +9,21 @@ inputs:
     description: 'Markers to filter tests'
     required: false
     default: ${{ matrix.envfiles.apimarkers }}
+  suite:
+    description: 'API matrix suite: api or mcp'
+    default: api
+  mcp_storage:
+    description: 'MCP Dashboard storage'
+    default: mongo
+  mcp_serializer:
+    description: 'MCP Redis serializer'
+    default: msgpack
+  shard_count:
+    description: 'MCP isolated stack shard count'
+    default: '1'
+  shard_index:
+    description: 'MCP zero-based stack shard index'
+    default: '0'
 runs:
   using: "composite"
   steps:
@@ -16,8 +31,9 @@ runs:
       uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
       with:
         cache: 'pip'
-        python-version: '3.10'
+        python-version: ${{ inputs.suite == 'mcp' && '3.12' || '3.10' }}
     - name: Execute API tests
+      if: inputs.suite != 'mcp'
       id: test_execution
       shell: bash
       working-directory: tyk-analytics/tests/api
@@ -45,3 +61,19 @@ runs:
           TYK_TEST_KEYCLOAK_INTERNAL_URL=http://keycloak:8080
           EOF
           env $(cat pytest.env | xargs) pytest -c pytest_ci.ini --ci --junitxml=${XUNIT_REPORT_PATH} -m "${{ inputs.api_markers }}"
+    - name: Execute MCP API shard and qualify its results
+      if: inputs.suite == 'mcp'
+      shell: bash
+      working-directory: tyk-analytics/tests/api
+      env:
+        API_MARKERS: ${{ inputs.api_markers }}
+        MCP_STORAGE: ${{ inputs.mcp_storage }}
+        MCP_SERIALIZER: ${{ inputs.mcp_serializer }}
+        SHARD_COUNT: ${{ inputs.shard_count }}
+        SHARD_INDEX: ${{ inputs.shard_index }}
+        PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION: python
+      run: |
+        python scripts/mcp_api_stack.py execute \
+          --manifest "$GITHUB_WORKSPACE/auto/.mcp-source-manifest.json" \
+          --artifacts "$GITHUB_WORKSPACE/mcp-evidence" --storage "$MCP_STORAGE" --serializer "$MCP_SERIALIZER" \
+          --shard-count "$SHARD_COUNT" --shard-index "$SHARD_INDEX" --markers "$API_MARKERS" --report "$XUNIT_REPORT_PATH"

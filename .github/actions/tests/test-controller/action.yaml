@@ -15,6 +15,18 @@ inputs:
     description: 'Branch to fall back to when base_ref has no config in the API'
     required: false
     default: 'default'
+  include_mcp:
+    description: 'Add isolated MCP qualification rows to the API test matrix'
+    required: false
+    default: 'false'
+  expand_api_matrix:
+    description: 'Return an include matrix for the integrated API job'
+    required: false
+    default: 'false'
+  mcp_topology:
+    description: 'MCP topology for integrated API rows: direct or mdcb'
+    required: false
+    default: direct
 outputs:
   envfiles:
     description: 'Environment files for the test'
@@ -25,6 +37,9 @@ outputs:
   sink:
     description: 'Sink image for the test'
     value: ${{ steps.params.outputs.sink }}
+  matrix:
+    description: 'Expanded API compatibility and MCP shard rows'
+    value: ${{ steps.params.outputs.matrix }}
 runs:
   using: "composite"
   steps:
@@ -38,6 +53,9 @@ runs:
         TEST_TYPE: ${{ inputs.test_type }}
         TRIGGER: ${{ github.event_name }}
         FALLBACK_REF: ${{ inputs.fallback_ref }}
+        INCLUDE_MCP: ${{ inputs.include_mcp }}
+        EXPAND_API_MATRIX: ${{ inputs.expand_api_matrix }}
+        MCP_TOPOLOGY: ${{ inputs.mcp_topology }}
       run: |
         set -eo pipefail
         BASE_URL="http://tui.internal.dev.tyk.technology/v2/$VARIATION/$REPO_NAME"
@@ -62,4 +80,9 @@ runs:
         if ! [[ $VARIATION =~ prod ]] ;then
           echo "::warning file=.github/workflows/release.yml,line=24,col=1,endColumn=8::Using non-prod variation"
           echo "### :warning: You are using VARIATION=${VARIATION} in test-controller-{{ .test }}" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ "$EXPAND_API_MATRIX" = true ]; then
+          python3 "$GITHUB_ACTION_PATH/api_matrix.py" --output "$GITHUB_OUTPUT" \
+            --repository "$REPO_NAME" --topology "$MCP_TOPOLOGY" --shard-count 4 --include-mcp "$INCLUDE_MCP"
         fi
