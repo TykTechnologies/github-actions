@@ -12,15 +12,31 @@ inputs:
   matrix:
     description: 'Matrix for the test'
     required: false
+  suite:
+    description: 'API matrix suite: api or mcp'
+    default: api
+  mcp_storage:
+    description: 'MCP Dashboard storage'
+    default: mongo
+  mcp_serializer:
+    description: 'MCP Redis serializer'
+    default: msgpack
+  mcp_cache:
+    description: 'MCP cache overlay'
+    default: redis7
+  shard_index:
+    description: 'MCP shard artifact identity'
+    default: '0'
 runs:
   using: "composite"
   steps:
     - name: Generate metadata and upload test reports
+      continue-on-error: ${{ inputs.suite == 'mcp' }}
       shell: bash
       id: metadata_report
       if: always()
       env:
-        REPORT_NAME: ${{ github.repository }}_${{ github.run_id }}_${{ github.run_attempt }}-${{steps.env_up.outputs.ts}}
+        REPORT_NAME: ${{ github.repository }}_${{ github.run_id }}_${{ github.run_attempt }}-${{ inputs.suite == 'mcp' && format('mcp-{0}-{1}-{2}-{3}', env.MCP_TOPOLOGY, inputs.mcp_serializer, inputs.mcp_storage, inputs.shard_index) || steps.env_up.outputs.ts }}
         METADATA_REPORT_PATH: metadata.toml
         MATRIX: ${{ toJson(env.matrix) }}
       run: |
@@ -42,7 +58,7 @@ runs:
         aws s3 cp ${XUNIT_REPORT_PATH}  s3://assets.dev.tyk.technology/testreports/${REPORT_NAME#*/}.xml
         aws s3 cp ${METADATA_REPORT_PATH} s3://assets.dev.tyk.technology/testreports/${REPORT_NAME#*/}.metadata.toml
     - name: Docker logs for all components
-      if: always() && inputs.execution_status != 'success' 
+      if: always() && inputs.suite != 'mcp' && inputs.execution_status != 'success'
       working-directory: auto
       shell: bash
       env:
@@ -55,9 +71,41 @@ runs:
         echo "::endgroup::"
     - name: Upload compose logs
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
-      if: inputs.execution_status != 'success'
+      if: inputs.suite != 'mcp' && inputs.execution_status != 'success'
       with:
         name: docker-compose-logs-${{ github.job }}-${{ matrix.envfiles.db }}-${{ matrix.envfiles.config }}-${{ github.run_id }}
         path: ${{ github.workspace }}/docker-compose.log
         retention-days: 10
         overwrite: true
+    - name: Retain sanitized MCP API qualification evidence
+      if: always() && inputs.suite == 'mcp'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+      with:
+        name: mcp-qualification-${{ env.MCP_TOPOLOGY }}-${{ inputs.mcp_serializer }}-${{ inputs.mcp_storage }}-shard-${{ inputs.shard_index }}
+        path: |
+          mcp-evidence/qualification.json
+          mcp-evidence/tested-shas.json
+          mcp-evidence/test-inventory.json
+          mcp-evidence/mcp-summary.xml
+          mcp-evidence/api-manifest.json
+        if-no-files-found: warn
+    - name: Remove task-owned MCP identity and API environment
+      if: always() && inputs.suite == 'mcp'
+      shell: bash
+      working-directory: auto
+      env:
+        MCP_CACHE: ${{ inputs.mcp_cache }}
+      run: |
+        set -euo pipefail
+        umask 077
+        case "$MCP_CACHE" in redis7|valkey9) ;; *) exit 1 ;; esac
+        if [ -f versions.env ] && [ -f .mcp-source-manifest.json ]; then
+          compose=(docker compose -p auto -f mcp.yml -f mongo7.yml -f postgres15.yml -f "$MCP_CACHE.yml" --env-file versions.env)
+          trap '"${compose[@]}" down --volumes' EXIT
+          python "$GITHUB_WORKSPACE/tyk-analytics/tests/api/scripts/mcp_api_stack.py" cleanup \
+            --manifest "$PWD/.mcp-source-manifest.json" --artifacts "$GITHUB_WORKSPACE/mcp-evidence" \
+            >> "$GITHUB_WORKSPACE/mcp-evidence/cleanup-runtime.log" 2>&1 || {
+              echo 'MCP identity cleanup failed; protected diagnostics retained'
+              exit 1
+            }
+        fi

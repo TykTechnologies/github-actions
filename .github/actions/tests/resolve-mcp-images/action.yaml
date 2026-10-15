@@ -1,0 +1,59 @@
+name: Resolve coordinated MCP API images
+description: Freeze component PR images and the API environment at immutable revisions
+inputs:
+  github_token:
+    description: Read-only token for coordinated sources
+    required: true
+  registry:
+    description: Authenticated ECR registry
+    required: true
+  topology:
+    description: direct or mdcb
+    default: direct
+outputs:
+  manifest:
+    description: Immutable component sources, image digests and environment revision
+    value: ${{ steps.freeze.outputs.manifest }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve coordinated MCP sources
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        CALLER_REPOSITORY: ${{ github.repository }}
+        CALLER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        SOURCE_BRANCH: ${{ github.head_ref || github.ref_name }}
+        BASE_BRANCH: ${{ github.base_ref || github.ref_name }}
+        MCP_TOPOLOGY: ${{ inputs.topology }}
+      run: python3 "$GITHUB_ACTION_PATH/resolve_images.py" resolve --manifest "$RUNNER_TEMP/mcp-sources.json"
+    - name: Checkout immutable MCP mock source
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      with:
+        repository: TykTechnologies/tyk-mock-mcp-server
+        ref: 29fefa17ad1a8ce168a66ccc7680030d46cfbb13
+        token: ${{ inputs.github_token }}
+        persist-credentials: false
+        path: mcp-mock
+    - name: Publish immutable mock fixture image if absent
+      shell: bash
+      env:
+        ECR: ${{ inputs.registry }}
+      run: |
+        set -euo pipefail
+        revision=29fefa17ad1a8ce168a66ccc7680030d46cfbb13
+        image="$ECR/tyk-mock-mcp-server:sha-$revision"
+        if python3 "$GITHUB_ACTION_PATH/resolve_images.py" mock --manifest "$RUNNER_TEMP/mcp-sources.json"; then
+          :
+        else
+          status=$?
+          if [ "$status" != 10 ]; then exit "$status"; fi
+          docker build --label "org.opencontainers.image.revision=$revision" -t "$image" mcp-mock
+          docker push "$image"
+        fi
+    - name: Wait for coordinated component builds and freeze image digests
+      id: freeze
+      shell: bash
+      env:
+        ECR: ${{ inputs.registry }}
+      run: python3 "$GITHUB_ACTION_PATH/resolve_images.py" freeze --manifest "$RUNNER_TEMP/mcp-sources.json"

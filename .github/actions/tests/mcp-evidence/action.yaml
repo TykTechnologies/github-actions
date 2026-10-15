@@ -1,0 +1,63 @@
+name: Verify integrated MCP API evidence
+description: Require all API-test MCP shard reports to qualify at the resolved image and source revisions
+inputs:
+  manifest:
+    description: 'Resolved MCP API source and image manifest'
+    required: true
+  github_token:
+    description: 'Read-only token for the Dashboard-owned validator'
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Read expected MCP API revisions
+      id: sources
+      shell: bash
+      env:
+        MCP_MANIFEST: ${{ inputs.manifest }}
+      run: |
+        python3 - <<'PY'
+        import json, os, re
+        from pathlib import Path
+        manifest = json.loads(os.environ['MCP_MANIFEST'])
+        revision = manifest['tested_shas']['dashboard']
+        assert re.fullmatch(r'[0-9a-f]{40}', revision), 'Invalid Dashboard source revision'
+        assert manifest['topology'] in ('direct', 'mdcb'), 'Invalid MCP topology'
+        Path(os.environ['RUNNER_TEMP'], 'mcp-api-manifest.json').write_text(json.dumps(manifest))
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('dashboard='+revision+'\ntopology='+manifest['topology']+'\n')
+        PY
+    - name: Checkout Dashboard-owned API evidence validator
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      with:
+        repository: TykTechnologies/tyk-analytics
+        ref: ${{ steps.sources.outputs.dashboard }}
+        token: ${{ inputs.github_token }}
+        persist-credentials: false
+        sparse-checkout: tests/api/scripts
+        path: mcp-validator
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+      with:
+        python-version: '3.12'
+    - name: Install evidence validator dependency
+      shell: bash
+      run: python -m pip install pytest==9.0.3
+    - name: Download every integrated MCP API shard
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+      with:
+        pattern: mcp-qualification-${{ steps.sources.outputs.topology }}-*-shard-*
+        path: mcp-shards
+    - name: Require complete MCP API qualification
+      shell: bash
+      env:
+        MCP_TOPOLOGY: ${{ steps.sources.outputs.topology }}
+      run: |
+        python mcp-validator/tests/api/scripts/aggregate_mcp_v2.py \
+          --artifacts mcp-shards --topology "$MCP_TOPOLOGY" --shard-count 4 \
+          --api-manifest "$RUNNER_TEMP/mcp-api-manifest.json" > mcp-api-aggregate.json
+    - name: Retain integrated API qualification summary
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+      with:
+        name: mcp-api-qualification-${{ steps.sources.outputs.topology }}-aggregate
+        path: mcp-api-aggregate.json
+        if-no-files-found: error

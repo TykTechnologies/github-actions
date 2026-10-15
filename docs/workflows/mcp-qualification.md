@@ -71,3 +71,31 @@ Artifacts include sanitized JUnit status, source commits, binary hashes and
 routing/persistence evidence. Protected logs, runtime identity and licences
 are excluded. The runner deletes only its organisation and data-plane Redis;
 the workflow removes its dedicated Compose project and module authentication.
+
+### Integrated API-test execution
+
+The `mcp-api-tests` policy uses the standard test controller and `api-tests` job
+for MCP qualification. The controller expands existing API compatibility rows
+and adds 16 MCP rows. It resolves component branch heads once, waits for PR-head
+images, and freezes image digests and the `tyk-pro` environment revision before
+fan-out. Exact caller heads, immutable mock fixtures and source labels are
+verified. Missing peer images fail rather than selecting mutable tags.
+
+The existing environment checkout, test checkout, `env-up`, API test and
+reporting actions accept optional MCP inputs. Other users retain their defaults.
+MCP rows use `tyk-pro/mcp.yml` with the existing datastore/cache overlays,
+Dashboard-owned runtime fixtures and serial module partitioning. No applications
+are compiled in test jobs. Each row uses its own Linux runner and owned stores,
+mock and RPC identity. Host networking preserves pytest's localhost fixtures.
+
+Reporting retains sanitized inventory/JUnit with shard-specific artifact and S3
+names. It removes the owned RPC identity, redacts configuration and stops the
+Compose project even on setup or test failure. Gateway log assertions use a
+protected Docker log stream; raw MCP logs are excluded from uploads.
+
+The required `aggregator-ci-test` consumes MCP evidence before its existing
+status aggregation. It rejects missing or overlapping coverage, incomplete
+results, unexpected skips, failed qualification checks, inconsistent source
+revisions, image digests or environment revision. This path generates no
+separate MCP qualification job. Publish these optional action interfaces before
+regenerating callers at one immutable shared-action commit.

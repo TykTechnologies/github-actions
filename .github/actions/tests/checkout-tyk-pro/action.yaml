@@ -5,6 +5,9 @@ inputs:
   org_gh_token:
     description: 'GitHub token for API access'
     required: true
+  ref:
+    description: 'Immutable environment revision; defaults to the existing latest release archive'
+    default: ''
 runs:
   using: "composite"
   steps:
@@ -12,6 +15,13 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.org_gh_token }}
+        ENVIRONMENT_REF: ${{ inputs.ref }}
       run: |
-        gh release download --repo github.com/TykTechnologies/tyk-pro --archive tar.gz -O env.tgz
+        set -euo pipefail
+        if [ -n "$ENVIRONMENT_REF" ]; then
+          [[ "$ENVIRONMENT_REF" =~ ^[0-9a-f]{40}$ ]] || { echo 'Environment ref must be immutable'; exit 1; }
+          gh api "repos/TykTechnologies/tyk-pro/tarball/$ENVIRONMENT_REF" > env.tgz
+        else
+          gh release download --repo github.com/TykTechnologies/tyk-pro --archive tar.gz -O env.tgz
+        fi
         mkdir auto && tar --strip-components=1 -C auto -xzvf env.tgz
