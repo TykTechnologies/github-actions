@@ -89,6 +89,7 @@ runs:
           mcp-evidence/mcp-summary.xml
           mcp-evidence/api-manifest.json
         if-no-files-found: warn
+        overwrite: true
     - name: Remove task-owned MCP identity and API environment
       if: always() && inputs.suite == 'mcp'
       shell: bash

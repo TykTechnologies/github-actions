@@ -89,7 +89,7 @@ are compiled in test jobs. Each row uses its own Linux runner and owned stores,
 mock and RPC identity. Host networking preserves pytest's localhost fixtures.
 
 Reporting retains sanitized inventory/JUnit with shard-specific artifact and S3
-names. It removes the owned RPC identity, redacts configuration and stops the
+names. Reruns replace prior shard evidence so aggregation cannot select stale setup artifacts. It removes the owned RPC identity, redacts configuration and stops the
 Compose project even on setup or test failure. Gateway log assertions use a
 protected Docker log stream; raw MCP logs are excluded from uploads.
 
