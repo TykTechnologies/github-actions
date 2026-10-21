@@ -14,13 +14,25 @@ jobs:
   golangci:
     runs-on: ubuntu-latest
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547  # v1
+        with:
+          app-id: ${{ secrets.PROBE_APP_ID }}
+          private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
+          owner: TykTechnologies
       - name: Git - checkout master
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744  # v3
         with:
           ref: ${{ inputs.main_branch }}
           fetch-depth: 1
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
       - name: Git - checkout current ref
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744  # v3
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
       - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c  # v3
         with:
           # In order:
@@ -54,6 +66,8 @@ jobs:
             skip_dirs: []
             go_version: ${{ inputs.go }}
       - name: Apply template
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           cp .golangci.yaml /tmp/.golangci.yaml
           if [[ `git status --porcelain` ]]; then
@@ -64,6 +78,7 @@ jobs:
             git config --global user.email 'bender@users.noreply.github.com'
             git add -A
             git commit -a -m 'Update Golangci config'
+            git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}"
             git push origin ${{ inputs.main_branch }}
             git checkout $ref
           fi
