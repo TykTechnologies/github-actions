@@ -1,0 +1,93 @@
+name: Prune PR caches
+
+# Scheduled cleanup of GitHub Actions caches that belong to pull-request refs, for all the
+# repositories listed below. master, release branches and tags are never touched (see
+# .github/scripts/prune-pr-caches.sh for the rules).
+#
+# Safe by default: scheduled runs only report what they would delete. Set the repository
+# variable PR_CACHE_PRUNE_DELETE to "true" to make scheduled runs delete; manual runs use
+# the dry_run input.
+
+on:  # yamllint disable-line rule:truthy
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      repos:
+        description: 'Space separated repository names (empty: the default list)'
+        type: string
+        required: false
+        default: ''
+      budget_mb:
+        description: 'Cache budget kept per open PR, in MB'
+        type: string
+        required: false
+        default: '1024'
+      guard_min:
+        description: 'Never delete entries younger than this many minutes'
+        type: string
+        required: false
+        default: '30'
+      dry_run:
+        description: 'Only report what would be deleted'
+        type: boolean
+        required: false
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: prune-pr-caches
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    name: Prune PR caches
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          persist-credentials: false
+
+      # The App needs "Actions: read and write" and "Pull requests: read" on these
+      # repositories. Keep the list in sync with the default of REPOS below.
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2.2.2
+        with:
+          app-id: ${{ secrets.PROBE_APP_ID }}
+          private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
+          owner: TykTechnologies
+          permission-actions: write
+          permission-pull-requests: read
+          repositories: |
+            tyk
+            tyk-analytics
+            tyk-pump
+            tyk-sink
+            tyk-identity-broker
+            portal
+
+      - name: Prune caches of PR refs
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          DELETE_ENABLED: ${{ vars.PR_CACHE_PRUNE_DELETE }}
+          REPOS: ${{ inputs.repos || 'tyk tyk-analytics tyk-pump tyk-sink tyk-identity-broker portal' }}
+          BUDGET_MB: ${{ inputs.budget_mb || '1024' }}
+          GUARD_MIN: ${{ inputs.guard_min || '30' }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            DRY_RUN="$INPUT_DRY_RUN"
+          elif [ "$DELETE_ENABLED" = "true" ]; then
+            DRY_RUN=false
+          else
+            DRY_RUN=true
+          fi
+          export DRY_RUN
+          bash .github/scripts/prune-pr-caches.sh
