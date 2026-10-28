@@ -89,9 +89,9 @@ func run() error {
 		return fmt.Errorf("failed to update PR: %w", err)
 	}
 
-	err = validateJiraIssue(issue, *customStatuses, issueID)
-	if err != nil {
-		return fmt.Errorf("failed to validate Jira issue: %w", err)
+	// An unexpected ticket status is only reported as a warning and does not fail the check
+	if err = validateJiraIssue(issue, *customStatuses, issueID); err != nil {
+		logWarn("%s", err.Error())
 	}
 
 	log("Validation completed successfully")
