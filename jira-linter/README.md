@@ -9,7 +9,7 @@ fetches issue details, validates ticket status, and updates PR descriptions with
 - Validates that PR title contains matching Jira ticket ID
 - Fetches Jira issue details (title, status) via Jira API
 - Updates PR description with ticket information
-- Validates issue status against accepted statuses
+- Warns when the issue status is not one of the accepted statuses (does not fail the check)
 - Provides clear error messages for validation failures
 
 ## Usage
@@ -47,7 +47,7 @@ jobs:
 **Behavior:**
 
 - Automatically extracts branch name from PR context
-- Validates PR title and Jira ticket status
+- Validates PR title and Jira ticket ID, and warns about an unexpected ticket status
 - Updates PR description with ticket details
 - Posts comment on failure with error details
 - Auto-deletes failure comment when validation passes
@@ -76,7 +76,7 @@ linter -branch "feature/ABC-123-your-feature" [-statuses "In Dev,In Code Review"
 **Parameters:**
 
 - `-branch` (required): Branch name containing Jira ticket ID
-- `-statuses` (optional): Comma-separated list of accepted Jira statuses. Defaults to: "In Dev", "In Code Review", "Ready For Dev"
+- `-statuses` (optional): Comma-separated list of accepted Jira statuses. A ticket in any other status only triggers a warning. Defaults to: "In Dev", "In Code Review", "Ready For Dev", "DoD Check", "Merge", "In Design Review"
 
 **Examples:**
 
@@ -110,7 +110,7 @@ The `GITHUB_TOKEN` is automatically provided by GitHub Actions with necessary pe
 1. **Branch name** must contain a valid Jira ticket ID (format: `LETTERS-NUMBERS`)
 2. **PR title** must contain the same Jira ticket ID as the branch
 3. **Jira issue** must exist and be accessible
-4. **Issue status** must match one of the accepted statuses (unless validation is skipped)
+4. **Issue status** should match one of the accepted statuses. A mismatch only produces a warning and does not fail the check
 
 ## Error Messages
 
@@ -118,9 +118,12 @@ The `GITHUB_TOKEN` is automatically provided by GitHub Actions with necessary pe
 - `PR title must contain the Jira ticket ID`: PR title missing ticket ID
 - `PR title contains 'X' but branch has 'Y'`: Mismatched ticket IDs
 - `failed to fetch Jira issue`: Cannot access Jira (check credentials/network)
-- `has status 'X' but must be one of: Y`: Issue status not acceptable
+
+## Warnings
+
+- `has status 'X' but must be one of: Y`: Issue status not acceptable. Logged as `[WARN]`, the check still passes
 
 ## Exit Codes
 
-- `0`: Validation successful
+- `0`: Validation successful (including when only warnings were reported)
 - `1`: Validation failed or error occurred
