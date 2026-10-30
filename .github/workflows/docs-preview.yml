@@ -200,11 +200,17 @@ jobs:
       - name: Generate config docs (base and head)
         if: contains(fromJSON('["gateway","dashboard","pump","mdcb"]'), inputs.component)
         working-directory: ./tyk-config-info-generator/src
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          # The generator writes under a fixed /node/home path (its Docker mount).
+          # Link that path to the checkout so only this setup needs root, not node.
+          sudo mkdir -p /node/home
+          sudo ln -sfn "$GITHUB_WORKSPACE/tyk-config-info-generator" /node/home/tyk-config-info-generator
           repo="${{ inputs.component }}"
           for side in base head; do
             if [ "$side" = "base" ]; then branch="$BASE_REF"; else branch="$HEAD_REF"; fi
-            sudo TOKEN=${{ steps.app-token.outputs.token }} node app.js "$repo:$branch"
+            node app.js "$repo:$branch"
             cp "/node/home/tyk-config-info-generator/info/$branch/$repo.md" "$GITHUB_WORKSPACE/out-$side/$repo-config.mdx"
           done
 
