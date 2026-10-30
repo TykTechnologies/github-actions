@@ -114,8 +114,8 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Checkout exp (schema-gen + cleanup script)
-        if: inputs.component == 'gateway'
+      - name: Checkout exp (schema-gen and docs scripts)
+        if: contains(fromJSON('["gateway","dashboard"]'), inputs.component)
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
         with:
           repository: TykTechnologies/exp
@@ -147,46 +147,29 @@ jobs:
             )
           done
 
-      - name: Generate gateway swagger (base and head)
-        if: inputs.component == 'gateway'
+      - name: Generate gateway and dashboard swagger (base and head)
+        id: swagger
+        if: contains(fromJSON('["gateway","dashboard"]'), inputs.component)
+        env:
+          SWAGGER: ${{ inputs.component }}-swagger.yml
         run: |
-          massage() {
-            cp "$1" ./swagger-modified.yml
-            sed -i "s|'https://raw.githubusercontent.com/TykTechnologies/tyk/refs/heads/master/apidef/oas/schema/3.0.json'|'#/components/schemas/OpenAPI3Schema'|g" ./swagger-modified.yml
-            sed -i "s|https://raw.githubusercontent.com/TykTechnologies/tyk/refs/heads/master/apidef/oas/schema/3.0.json|'#/components/schemas/OpenAPI3Schema'|g" ./swagger-modified.yml
-            awk '
-              {print}
-              /schemas:/ && !done {
-                print "    OpenAPI3Schema:"
-                print "      type: object"
-                print "      additionalProperties: true"
-                done=1
-              }
-            ' ./swagger-modified.yml > "$2"
-          }
+          # Mintlify cannot resolve external $refs and codegen cannot resolve them offline,
+          # so inline the OAS 3.0 schema the swagger references.
+          python3 -m pip install --quiet -r exp/scripts/inline-oas-schema/requirements.txt
           for side in base head; do
-            massage "$side/swagger.yml" "out-$side/gateway-swagger.yml"
+            cp "$side/swagger.yml" "out-$side/$SWAGGER"
+            python3 exp/scripts/inline-oas-schema/index.py --input-file "out-$side/$SWAGGER"
           done
+          if cmp -s "out-base/$SWAGGER" "out-head/$SWAGGER"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Generate dashboard docs (base and head)
+      - name: Generate dashboard admin swagger and OPA rules (base and head)
         if: inputs.component == 'dashboard'
         run: |
-          massage() {
-            cp "$1" ./swagger-modified.yml
-            sed -i "s|'https://raw.githubusercontent.com/TykTechnologies/tyk/refs/heads/master/apidef/oas/schema/3.0.json'|'#/components/schemas/OpenAPI3Schema'|g" ./swagger-modified.yml
-            sed -i "s|https://raw.githubusercontent.com/TykTechnologies/tyk/refs/heads/master/apidef/oas/schema/3.0.json|'#/components/schemas/OpenAPI3Schema'|g" ./swagger-modified.yml
-            awk '
-              {print}
-              /schemas:/ && !done {
-                print "    OpenAPI3Schema:"
-                print "      type: object"
-                print "      additionalProperties: true"
-                done=1
-              }
-            ' ./swagger-modified.yml > "$2"
-          }
           for side in base head; do
-            massage "$side/swagger.yml" "out-$side/dashboard-swagger.yml"
             cp "$side/swagger-admin.yml" "out-$side/dashboard-admin-swagger.yml"
             cp "$side/docs/opa/opa-rules.md" "out-$side/opa-rules.mdx"
           done
@@ -323,3 +306,21 @@ jobs:
           jq -n --arg team "$PM_TEAM" '{team_reviewers: [$team]}' \
             | gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers" --input - \
             || echo "::warning::Could not request review from team '$PM_TEAM' — check the slug and that the PROBE App can write PRs in this repo"
+
+      # The sync rejects a swagger that fails these checks, so catch it here.
+      # They run after the comment so a failure turns the run red without
+      # hiding the diff, and only when the PR changed the swagger output.
+      - name: Validate swagger (head)
+        if: steps.swagger.outputs.changed == 'true'
+        env:
+          SWAGGER: ${{ inputs.component }}-swagger.yml
+        run: |
+          # Offline, so any external $ref fails; check.py catches schemas that lost their OpenAPI fields.
+          python3 exp/scripts/inline-oas-schema/check.py --input-file "out-head/$SWAGGER"
+          docker run --rm --network none -v "$PWD/out-head:/specs" openapitools/openapi-generator-cli:v7.10.0 \
+            validate -i "/specs/$SWAGGER"
+
+      - name: Codegen check (head)
+        if: steps.swagger.outputs.changed == 'true'
+        # Python/TypeScript clients must build and keep openapi/info/paths; Java/Go must not fail in OAS3* models.
+        run: exp/scripts/inline-oas-schema/codegen_check.sh "out-head/${{ inputs.component }}-swagger.yml"

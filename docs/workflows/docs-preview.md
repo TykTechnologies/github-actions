@@ -15,6 +15,9 @@ Behavior:
 - Generated output changed → sticky comment with the rendered docs diff
   (truncated at 60k chars; full diff as the `docs-preview-diff` artifact) and a
   one-time advisory review request to `pm_team`.
+- Gateway or Dashboard swagger output changed → after the comment, the head
+  swagger runs the same validation and codegen checks as the sync, so a swagger
+  the sync would reject turns the run red before merge.
 - Fork PRs are skipped (secrets unavailable to forks).
 - Never make this a required check — it is advisory by design.
 
