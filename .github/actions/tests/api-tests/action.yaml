@@ -9,6 +9,10 @@ inputs:
     description: 'Markers to filter tests'
     required: false
     default: ${{ matrix.envfiles.apimarkers }}
+  db:
+    description: 'Database of the test environment, e.g. postgres15 or mongo7'
+    required: false
+    default: ${{ matrix.envfiles.db }}
 runs:
   using: "composite"
   steps:
@@ -24,6 +28,7 @@ runs:
       env:
         USER_API_SECRET: ${{ inputs.user_api_secret }}
         API_MARKERS: ${{ inputs.api_markers }}
+        DB: ${{ inputs.db }}
       run: |
           pip install --no-deps -r requirements.txt
           cat >pytest.env <<-EOF
@@ -44,4 +49,9 @@ runs:
           TYK_TEST_KEYCLOAK_URL=http://localhost:8180
           TYK_TEST_KEYCLOAK_INTERNAL_URL=http://keycloak:8080
           EOF
+          # MCP analytics tests read raw records from Postgres when given a DSN, otherwise from Mongo.
+          # URL form: the line below splits pytest.env on whitespace.
+          if [[ "$DB" == postgres* ]]; then
+            echo "TYK_TEST_MCP_POSTGRES_DSN=postgresql://postgres@localhost:5432/tyk_analytics?sslmode=disable" >> pytest.env
+          fi
           env $(cat pytest.env | xargs) pytest -c pytest_ci.ini --ci --junitxml=${XUNIT_REPORT_PATH} -m "${{ inputs.api_markers }}"
