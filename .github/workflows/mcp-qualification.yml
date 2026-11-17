@@ -142,7 +142,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
         with:
           repository: TykTechnologies/tyk-mock-mcp-server
-          ref: 29fefa17ad1a8ce168a66ccc7680030d46cfbb13
+          ref: 7f84d0256cbabb60a15ae8563af8e406e65f9e8d
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
           path: mcp/mock
