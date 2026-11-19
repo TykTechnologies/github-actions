@@ -69,11 +69,11 @@ Example usage, in a release job after the image is pushed to a private registry 
 
 False positives:
 
-- Build folder: a `.gitleaks.toml` that starts with `[extend]` and `useDefault = true`, then adds `[[allowlists]]` paths. gitleaks also honours a `.gitleaksignore` file in the scanned folder.
+- Build folder: pass `gitleaks-config`, a `.gitleaks.toml` that starts with `[extend]` and `useDefault = true`, then adds `[[allowlists]]` paths. Nothing inside the scanned folder or the working directory changes the rules: the action always passes its own config, ignores `gitleaks:allow` comments and does not read `.gitleaksignore` from the working directory. gitleaks always applies a `.gitleaksignore` at the root of the scanned folder, so the action reports that file as a finding (`unreviewed-gitleaksignore`).
 - Archives in the image: by default all gitleaks rules except `generic-api-key`, which matches identifiers in minified JavaScript bundles. A `gitleaks-config` replaces this.
-- Image layers: a JSON list of `{"detector": "...", "path": "<regex>", "reason": "..."}`. A default entry for dpkg checksum files in base images is built in.
+- Image layers: a JSON list of `{"detector": "...", "path": "<regex>", "reason": "..."}`; a malformed list or regex fails the scan. A default entry for dpkg checksum files in base images is built in.
 
-Allowlists, `.gitleaks.toml` and `.gitleaksignore` changes should be reviewed by AppSec (CODEOWNERS).
+The `gitleaks-config` and `allowlist` files should be reviewed by AppSec (CODEOWNERS).
 
 Reports are written to `$RUNNER_TEMP/secret-scan-results`. trufflehog's raw output there contains the secret values: never upload that folder as an artifact.
 

@@ -20,6 +20,7 @@ check() {
     printf 'FAIL  %-34s exit %s, want %s\n' "$name" "$got" "$want"
     sed 's/^/        /' "$W/out/$name.log"
     fail=1
+    return 1
   fi
 }
 
@@ -47,6 +48,46 @@ done
 for id in s04 s08 s14 s15 s16; do
   check "$id-folder" 0 SCAN_PATH="$CTX/$id"
 done
+
+# Only the action's inputs decide the rules and suppressions: files in the
+# scanned folder or the working directory cannot switch the scan off.
+TOKEN_FILE="$CTX/s01/.pat"
+mkdir -p "$W/f-config" "$W/f-allow" "$W/f-ignore" "$W/f-cwd/build"
+cp "$TOKEN_FILE" "$W/f-config/.pat"
+printf '[[rules]]\nid = "nothing"\nregex = "zzzz-never-matches"\n' > "$W/f-config/.gitleaks.toml"
+check folder-own-gitleaks-toml 1 SCAN_PATH="$W/f-config"
+printf 'token = "%s"  # gitleaks:allow\n' "$(cat "$TOKEN_FILE")" > "$W/f-allow/app.py"
+check folder-gitleaks-allow-comment 1 SCAN_PATH="$W/f-allow"
+cp "$TOKEN_FILE" "$W/f-ignore/.pat"
+gitleaks dir "$W/f-ignore" --no-banner --report-format json --report-path "$W/fp.json" > /dev/null 2>&1 || true
+jq -r '.[].Fingerprint' "$W/fp.json" > "$W/f-ignore/.gitleaksignore"
+check folder-own-gitleaksignore 1 SCAN_PATH="$W/f-ignore"
+if grep -q unreviewed-gitleaksignore "$W/out/folder-own-gitleaksignore.log"; then
+  echo "ok    folder-own-gitleaksignore reported"
+else
+  echo "FAIL  folder-own-gitleaksignore not reported"; fail=1
+fi
+cp "$TOKEN_FILE" "$W/f-cwd/build/.pat"
+gitleaks dir "$W/f-cwd/build" --no-banner --report-format json --report-path "$W/fp2.json" > /dev/null 2>&1 || true
+jq -r '.[].Fingerprint | sub("^[^:]*/build/"; "build/")' "$W/fp2.json" > "$W/f-cwd/.gitleaksignore"
+jq -r '.[].Fingerprint' "$W/fp2.json" >> "$W/f-cwd/.gitleaksignore"
+(cd "$W/f-cwd" && check cwd-gitleaksignore 1 SCAN_PATH=build) || fail=1
+
+# Allowlist must be well formed.
+echo '[{"detector":"Box"}]' > "$W/bad-allowlist-1.json"
+echo '[{"detector":"Box","path":"(unclosed"}]' > "$W/bad-allowlist-2.json"
+check allowlist-without-path 2 SCAN_IMAGE="docker://secret-scan-test/c01" ALLOWLIST="$W/bad-allowlist-1.json"
+check allowlist-bad-regex 2 SCAN_IMAGE="docker://secret-scan-test/c01" ALLOWLIST="$W/bad-allowlist-2.json"
+
+# A file name with a newline cannot start a workflow command of its own.
+mkdir -p "$W/f-newline"
+cp "$TOKEN_FILE" "$W/f-newline/$(printf 'a\n::warning::injected.pat')"
+check folder-newline-name 1 SCAN_PATH="$W/f-newline"
+if grep -q '^::warning::injected' "$W/out/folder-newline-name.log"; then
+  echo "FAIL  a file name started a workflow command"; fail=1
+else
+  echo "ok    file names are escaped in annotations"
+fi
 
 # Both together, as used in release jobs.
 for id in s01 s04 s09 s11; do

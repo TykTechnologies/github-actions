@@ -34,8 +34,15 @@ ENFORCE=${ENFORCE:-true}
 OUT_DIR=${OUT_DIR:-secret-scan-results}
 MAX_ARCHIVE_MB=${MAX_ARCHIVE_MB:-1024}
 
+# Escapes text for a workflow command, so a file name or message from an
+# image cannot end the annotation and start a command of its own.
+escape_cmd() {
+  local s=$*
+  s=${s//'%'/%25}; s=${s//$'\r'/%0D}; s=${s//$'\n'/%0A}
+  printf '%s' "$s"
+}
 errors=0
-error() { echo "::error title=secret-scan::$*" >&2; errors=$((errors + 1)); }
+error() { echo "::error title=secret-scan::$(escape_cmd "$*")" >&2; errors=$((errors + 1)); }
 
 if [ -z "$SCAN_PATH" ] && [ -z "$SCAN_IMAGE" ]; then
   echo "::error title=secret-scan::set at least one of path or image" >&2
@@ -61,22 +68,34 @@ if [ -n "$ALLOWLIST" ] && [ ! -f "$ALLOWLIST" ]; then
   exit 2
 fi
 
+if [ -n "$ALLOWLIST" ] && ! jq -e 'type == "array" and all(.[];
+      type == "object" and (.detector | type) == "string" and (.path | type) == "string"
+      and ((.path as $re | "" | test($re)) or true))' "$ALLOWLIST" > /dev/null 2>&1; then
+  echo "::error title=secret-scan::allowlist must be a JSON list of {detector, path, reason} with path a valid regex: $ALLOWLIST" >&2
+  exit 2
+fi
+
 mkdir -p "$OUT_DIR"
 OUT_DIR=$(cd "$OUT_DIR" && pwd)
 FINDINGS="$OUT_DIR/findings.jsonl"
 : > "$FINDINGS"
+NO_IGNORE="$OUT_DIR/no-gitleaksignore"
+mkdir -p "$NO_IGNORE"
 scanned=()
 
 # Runs gitleaks on a directory and appends findings. $1 dir, $2 report name,
 # $3 tool label, $4 path prefix to strip from reported files, $5 replacement,
-# $6 config file (optional), $7 platform (optional).
+# $6 config file, $7 platform (optional).
+#
+# Only the action's inputs decide what is reported: the config is always
+# passed (a .gitleaks.toml in the scanned folder would otherwise replace the
+# rules), gitleaks:allow comments are ignored, and .gitleaksignore is read
+# from an empty folder instead of the working directory.
 run_gitleaks() {
-  local dir=$1 name=$2 tool=$3 strip=$4 prefix=$5 config=${6:-} platform=${7:-} rc=0
+  local dir=$1 name=$2 tool=$3 strip=$4 prefix=$5 config=$6 platform=${7:-} rc=0
   local args=(dir "$dir" --no-banner --redact --max-archive-depth 3 --exit-code 3
+    --config "$config" --ignore-gitleaks-allow --gitleaks-ignore-path "$NO_IGNORE"
     --report-format json --report-path "$OUT_DIR/$name.json")
-  if [ -n "$config" ]; then
-    args+=(--config "$config")
-  fi
   gitleaks "${args[@]}" > "$OUT_DIR/$name.log" 2>&1 || rc=$?
   case "$rc" in
     0|3)
@@ -98,7 +117,14 @@ scan_folder() {
     error "build folder not found: $SCAN_PATH"
     return
   fi
-  run_gitleaks "$SCAN_PATH" gitleaks-folder gitleaks "" "" "$GITLEAKS_CONFIG"
+  run_gitleaks "$SCAN_PATH" gitleaks-folder gitleaks "" "" "${GITLEAKS_CONFIG:-$HERE/gitleaks-default.toml}"
+
+  # gitleaks always applies a .gitleaksignore at the root of the scanned
+  # folder and there is no option to stop it, so report the file itself:
+  # suppressions belong in the reviewed gitleaks-config input.
+  if [ -f "$SCAN_PATH/.gitleaksignore" ]; then
+    jq -nc --arg f "$SCAN_PATH/.gitleaksignore" '{tool: "secret-scan", rule: "unreviewed-gitleaksignore", file: $f, platform: "", layer: ""}' >> "$FINDINGS"
+  fi
 
   # gitleaks skips .git folders, but a copied .git/config can carry the
   # checkout token (http extraheader) or credentials in a remote URL.
@@ -224,6 +250,11 @@ scan_archives() {
       "${GITLEAKS_CONFIG:-$HERE/gitleaks-archives.toml}" "$platform"
   fi
   rm -rf "$archives"
+  # Free the disk before the next platform; only images this step pulled.
+  case "$ref" in
+    docker://*|file://*) ;;
+    *) docker rmi "$ref" > /dev/null 2>&1 || true ;;
+  esac
 }
 
 scan_image() {
@@ -256,7 +287,10 @@ scan_image() {
 
 count=$(wc -l < "$FINDINGS" | tr -d ' ')
 
-jq -r '"::error title=secret-scan (\(.tool) \(.rule))::\(.file)\(if .platform != "" then " [\(.platform)]" else "" end)\(if .layer != "" then " in layer \(.layer)" else "" end)"' "$FINDINGS"
+# File names come from the scanned folder or image: escape them.
+jq -r 'def cmd: gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A");
+  def prop: cmd | gsub(":"; "%3A") | gsub(","; "%2C");
+  "::error title=\("secret-scan (\(.tool) \(.rule))" | prop)::\("\(.file)\(if .platform != "" then " [\(.platform)]" else "" end)\(if .layer != "" then " in layer \(.layer)" else "" end)" | cmd)"' "$FINDINGS"
 
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   {
@@ -276,7 +310,8 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     else
       echo "| Tool | Rule | File | Platform | Layer |"
       echo "|------|------|------|----------|-------|"
-      jq -r '"| \(.tool) | \(.rule) | `\(.file)` | \(.platform) | \(.layer[0:19]) |"' "$FINDINGS"
+      jq -r 'def cell: gsub("[\r\n]"; " ") | gsub("\\|"; "\\|") | gsub("`"; "'"'"'");
+        "| \(.tool) | \(.rule) | `\(.file | cell)` | \(.platform) | \(.layer[0:19]) |"' "$FINDINGS"
       echo
       echo "Rotate any real credential first, then remove it from the build. False positives go in the allowlist, reviewed by AppSec."
     fi
