@@ -72,6 +72,41 @@ check bad-enforce 2 SCAN_PATH="$CTX/c01" ENFORCE=yes
 check bad-scan-archives 2 SCAN_PATH="$CTX/c01" SCAN_ARCHIVES=yes
 check missing-registry-image 2 SCAN_IMAGE="tykio/secret-scan-test-does-not-exist:none"
 
+check dash-path 2 SCAN_PATH="-v"
+check dash-image 2 SCAN_IMAGE="--help"
+check dash-local-image 2 SCAN_IMAGE="docker://--help"
+
+# The archive extractor only writes regular archive files inside its
+# destination, whatever an image contains.
+python3 -I - "$W/hostile.tar" <<'PY'
+import io, sys, tarfile
+with tarfile.open(sys.argv[1], "w") as t:
+    def add(name, data=b"x", **kw):
+        i = tarfile.TarInfo(name); i.size = len(data)
+        for k, v in kw.items(): setattr(i, k, v)
+        t.addfile(i, io.BytesIO(data) if i.isreg() else None)
+    add("ok/good.tar.gz")
+    add("../escape.tgz")
+    add("/absolute.zip")
+    add("a/../../escape2.zip")
+    add("link.tgz", b"", type=tarfile.SYMTYPE, linkname="/etc/passwd")
+    add("dir", b"", type=tarfile.SYMTYPE, linkname="/tmp")
+    add("dir/through-link.zip")
+    add("hard.zip", b"", type=tarfile.LNKTYPE, linkname="ok/good.tar.gz")
+PY
+rm -rf "$W/extract" && mkdir -p "$W/extract/dest"
+written=$(python3 -I "$HERE/../../.github/actions/secret-scan/extract-archives.py" "$W/hostile.tar" "$W/extract/dest")
+found=$(cd "$W/extract" && find . -mindepth 1 | sort | tr '\n' ' ')
+# dir/through-link.zip is a regular file; because the "dir" symlink is never
+# created, it lands in a real directory inside dest.
+if [ "$written" = "2" ] && [ "$found" = "./dest ./dest/dir ./dest/dir/through-link.zip ./dest/ok ./dest/ok/good.tar.gz " ] &&
+   [ -z "$(find "$W/extract" -type l)" ] && [ ! -e /tmp/through-link.zip ]; then
+  echo "ok    extractor writes only safe archive files"
+else
+  echo "FAIL  extractor wrote $written file(s): $found"
+  fail=1
+fi
+
 # A real multi-platform release image from Docker Hub: clean on every platform.
 check portal-release 0 SCAN_IMAGE="tykio/portal:v1.20.1"
 for p in linux/amd64 linux/arm64 linux/s390x; do

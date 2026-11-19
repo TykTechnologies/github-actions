@@ -21,7 +21,7 @@ inputs:
   scan-archives:
     description: >-
       Also export each platform's final filesystem and scan the archives in it
-      (tar, zip, jar, whl, ...), which the layer scan does not unpack. Needs docker.
+      (tar, zip, jar, whl, ...), which the layer scan does not unpack. Needs docker and python3.
     required: false
     default: "true"
   gitleaks-config:

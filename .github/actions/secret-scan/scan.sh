@@ -42,6 +42,11 @@ fi
 for flag in "ENFORCE=$ENFORCE" "SCAN_ARCHIVES=$SCAN_ARCHIVES"; do
   case "${flag#*=}" in true|false) ;; *) echo "::error title=secret-scan::${flag%%=*} must be true or false" >&2; exit 2 ;; esac
 done
+for value in "$SCAN_PATH" "$SCAN_IMAGE" "${SCAN_IMAGE#docker://}" "${SCAN_IMAGE#file://}"; do
+  case "$value" in
+    -*) echo "::error title=secret-scan::path and image must not start with '-'" >&2; exit 2 ;;
+  esac
+done
 if [ -n "$GITLEAKS_CONFIG" ] && [ ! -f "$GITLEAKS_CONFIG" ]; then
   echo "::error title=secret-scan::gitleaks config not found: $GITLEAKS_CONFIG" >&2
   exit 2
@@ -178,36 +183,39 @@ scan_archives() {
     error "cannot create a container from $img for the archive scan"
     return
   fi
-  local fs="$OUT_DIR/fs-$n" archives="$OUT_DIR/archives-$n"
-  mkdir -p "$fs" "$archives"
-  if ! docker export -o "$OUT_DIR/fs-$n.tar" "$cid"; then
+  local export="$OUT_DIR/fs-$n.tar" archives="$OUT_DIR/archives-$n"
+  mkdir -p "$archives"
+  if ! docker export -o "$export" "$cid"; then
     docker rm "$cid" > /dev/null
     error "cannot export the filesystem of $img"
     return
   fi
   docker rm "$cid" > /dev/null
-  # Device nodes and ownership cannot be restored without root; that is fine
-  # for reading files.
-  tar -xf "$OUT_DIR/fs-$n.tar" -C "$fs" 2> /dev/null || true
-  rm -f "$OUT_DIR/fs-$n.tar"
 
-  (cd "$fs" && find . -type f \( -iname '*.tar' -o -iname '*.tgz' -o -iname '*.gz' -o -iname '*.zip' -o -iname '*.tbz' -o -iname '*.tbz2' -o -iname '*.txz' \
-      -o -iname '*.jar' -o -iname '*.war' -o -iname '*.ear' -o -iname '*.whl' -o -iname '*.egg' \
-      -o -iname '*.bz2' -o -iname '*.xz' -o -iname '*.zst' -o -iname '*.7z' -o -iname '*.rar' \) -print0) |
+  # Copy out only the regular archive files: never links, devices, absolute
+  # names or ".." paths, and never the rest of the image.
+  if ! python3 -I "$HERE/extract-archives.py" "$export" "$archives" > "$OUT_DIR/archive-count-$n.txt" 2> "$OUT_DIR/extract-$n.log"; then
+    error "cannot extract the archives from $img: $(head -3 "$OUT_DIR/extract-$n.log" | tr '\n' ' ')"
+    rm -f "$export"
+    return
+  fi
+  rm -f "$export"
+
+  # gitleaks picks the archive format from the file extension and skips short
+  # or zip-based ones, so rename those to an extension it recognises.
+  (cd "$archives" && find . -type f -print0) |
     while IFS= read -r -d '' f; do
-      # gitleaks picks the archive format from the file extension and skips
-      # short or zip-based ones, so stage those under a name it recognises.
-      local staged=$f
+      local staged=""
       case "$(tr '[:upper:]' '[:lower:]' <<< "$f")" in
         *.tgz) staged="$f.secret-scan.tar.gz" ;;
         *.tbz|*.tbz2) staged="$f.secret-scan.tar.bz2" ;;
         *.txz) staged="$f.secret-scan.tar.xz" ;;
         *.jar|*.war|*.ear|*.whl|*.egg) staged="$f.secret-scan.zip" ;;
       esac
-      mkdir -p "$archives/$(dirname "$f")"
-      mv "$fs/$f" "$archives/$staged"
+      if [ -n "$staged" ]; then
+        mv "$archives/$f" "$archives/$staged"
+      fi
     done
-  rm -rf "$fs"
 
   if [ -n "$(find "$archives" -type f -print -quit)" ]; then
     run_gitleaks "$archives" "gitleaks-archives-$n" gitleaks-archive "$archives/" "/" "${GITLEAKS_CONFIG:-$HERE/gitleaks-archives.toml}"

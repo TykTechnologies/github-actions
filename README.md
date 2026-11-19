@@ -49,9 +49,9 @@ Scans for secrets before an image is published, and fails the job on a finding.
 - **Build folder** (`path`): gitleaks with its default rules, including inside archives, plus a check for credentials in any copied `.git/config` (gitleaks skips `.git`).
 - **Image** (`image`): for every platform of a multi-platform image,
   - trufflehog on every layer, the image config and the build history. This catches secrets deleted in a later layer, passed as build args, set in `ENV` or `LABEL`, or compiled into a binary;
-  - gitleaks on the archives in the final filesystem (`.tar.gz`, `.tgz`, `.zip`, `.jar`, `.whl`, ...), which trufflehog does not fully unpack. Needs docker; turn off with `scan-archives: false`.
+  - gitleaks on the archives in the final filesystem (`.tar.gz`, `.tgz`, `.zip`, `.jar`, `.whl`, ...), which trufflehog does not fully unpack. Only regular archive files are copied out of the image (never links, absolute or `..` paths), so image contents cannot write outside the scan folder. Needs docker and python3; turn off with `scan-archives: false`.
 
-Scanner errors always fail the job, even with `enforce: false`: trufflehog exits 0 when it cannot read an image, so the action checks its log and fails if nothing was scanned. Secret values are never printed; findings show the tool, rule, file, platform and layer.
+`path` and `image` must not start with `-`. Scanner errors always fail the job, even with `enforce: false`: trufflehog exits 0 when it cannot read an image, so the action checks its log and fails if nothing was scanned. Secret values are never printed; findings show the tool, rule, file, platform and layer.
 
 Example usage, in a release job after the image is pushed to a private registry and before it is pushed anywhere public:
 
