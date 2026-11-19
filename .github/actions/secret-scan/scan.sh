@@ -16,6 +16,7 @@
 #   SCAN_ARCHIVES    "true" exports the image and scans its archives; needs docker (default true)
 #   GITLEAKS_CONFIG  .gitleaks.toml for gitleaks (optional)
 #   ALLOWLIST        JSON allowlist for trufflehog findings (optional)
+#   MAX_ARCHIVE_MB   largest archive the archive scan copies out; a larger one fails the scan (default 1024)
 #   ENFORCE          "true" fails on findings; "false" reports only (default true)
 #   OUT_DIR          where reports are written (default ./secret-scan-results).
 #                    trufflehog's raw output there contains secret values: never upload it.
@@ -31,6 +32,7 @@ GITLEAKS_CONFIG=${GITLEAKS_CONFIG:-}
 ALLOWLIST=${ALLOWLIST:-}
 ENFORCE=${ENFORCE:-true}
 OUT_DIR=${OUT_DIR:-secret-scan-results}
+MAX_ARCHIVE_MB=${MAX_ARCHIVE_MB:-1024}
 
 errors=0
 error() { echo "::error title=secret-scan::$*" >&2; errors=$((errors + 1)); }
@@ -47,6 +49,9 @@ for value in "$SCAN_PATH" "$SCAN_IMAGE" "${SCAN_IMAGE#docker://}" "${SCAN_IMAGE#
     -*) echo "::error title=secret-scan::path and image must not start with '-'" >&2; exit 2 ;;
   esac
 done
+case "$MAX_ARCHIVE_MB" in
+  ''|*[!0-9]*) echo "::error title=secret-scan::MAX_ARCHIVE_MB must be a whole number" >&2; exit 2 ;;
+esac
 if [ -n "$GITLEAKS_CONFIG" ] && [ ! -f "$GITLEAKS_CONFIG" ]; then
   echo "::error title=secret-scan::gitleaks config not found: $GITLEAKS_CONFIG" >&2
   exit 2
@@ -64,9 +69,9 @@ scanned=()
 
 # Runs gitleaks on a directory and appends findings. $1 dir, $2 report name,
 # $3 tool label, $4 path prefix to strip from reported files, $5 replacement,
-# $6 config file (optional).
+# $6 config file (optional), $7 platform (optional).
 run_gitleaks() {
-  local dir=$1 name=$2 tool=$3 strip=$4 prefix=$5 config=${6:-} rc=0
+  local dir=$1 name=$2 tool=$3 strip=$4 prefix=$5 config=${6:-} platform=${7:-} rc=0
   local args=(dir "$dir" --no-banner --redact --max-archive-depth 3 --exit-code 3
     --report-format json --report-path "$OUT_DIR/$name.json")
   if [ -n "$config" ]; then
@@ -75,8 +80,8 @@ run_gitleaks() {
   gitleaks "${args[@]}" > "$OUT_DIR/$name.log" 2>&1 || rc=$?
   case "$rc" in
     0|3)
-      jq -c --arg tool "$tool" --arg strip "$strip" --arg prefix "$prefix" '.[] | {
-        tool: $tool, rule: .RuleID, platform: "", layer: "",
+      jq -c --arg tool "$tool" --arg strip "$strip" --arg prefix "$prefix" --arg platform "$platform" '.[] | {
+        tool: $tool, rule: .RuleID, platform: $platform, layer: "",
         file: ((if $strip != "" and (.File | startswith($strip)) then $prefix + (.File | ltrimstr($strip)) else .File end)
                | gsub("\\.secret-scan\\.(tar\\.gz|tar\\.bz2|tar\\.xz|zip)"; ""))
       }' "$OUT_DIR/$name.json" >> "$FINDINGS"
@@ -183,23 +188,20 @@ scan_archives() {
     error "cannot create a container from $img for the archive scan"
     return
   fi
-  local export="$OUT_DIR/fs-$n.tar" archives="$OUT_DIR/archives-$n"
+  local archives="$OUT_DIR/archives-$n" rc=0
   mkdir -p "$archives"
-  if ! docker export -o "$export" "$cid"; then
-    docker rm "$cid" > /dev/null
-    error "cannot export the filesystem of $img"
-    return
-  fi
-  docker rm "$cid" > /dev/null
 
-  # Copy out only the regular archive files: never links, devices, absolute
-  # names or ".." paths, and never the rest of the image.
-  if ! python3 -I "$HERE/extract-archives.py" "$export" "$archives" > "$OUT_DIR/archive-count-$n.txt" 2> "$OUT_DIR/extract-$n.log"; then
-    error "cannot extract the archives from $img: $(head -3 "$OUT_DIR/extract-$n.log" | tr '\n' ' ')"
-    rm -f "$export"
+  # Stream the filesystem and copy out only the regular archive files: never
+  # links, devices, absolute names or ".." paths, and never the rest of the
+  # image. An archive over MAX_ARCHIVE_MB fails the scan rather than being skipped.
+  docker export "$cid" 2> "$OUT_DIR/export-$n.log" |
+    python3 -I "$HERE/extract-archives.py" - "$archives" "$((MAX_ARCHIVE_MB * 1024 * 1024))" \
+      > "$OUT_DIR/archive-count-$n.txt" 2> "$OUT_DIR/extract-$n.log" || rc=$?
+  docker rm "$cid" > /dev/null
+  if [ "$rc" -ne 0 ]; then
+    error "cannot extract the archives from $img: $(cat "$OUT_DIR/export-$n.log" "$OUT_DIR/extract-$n.log" | head -3 | tr '\n' ' ')"
     return
   fi
-  rm -f "$export"
 
   # gitleaks picks the archive format from the file extension and skips short
   # or zip-based ones, so rename those to an extension it recognises.
@@ -218,12 +220,8 @@ scan_archives() {
     done
 
   if [ -n "$(find "$archives" -type f -print -quit)" ]; then
-    run_gitleaks "$archives" "gitleaks-archives-$n" gitleaks-archive "$archives/" "/" "${GITLEAKS_CONFIG:-$HERE/gitleaks-archives.toml}"
-    if [ -n "$platform" ]; then
-      local tmp="$FINDINGS.tmp"
-      jq -c --arg p "$platform" 'if .tool == "gitleaks-archive" and .platform == "" then .platform = $p else . end' "$FINDINGS" > "$tmp"
-      mv "$tmp" "$FINDINGS"
-    fi
+    run_gitleaks "$archives" "gitleaks-archives-$n" gitleaks-archive "$archives/" "/" \
+      "${GITLEAKS_CONFIG:-$HERE/gitleaks-archives.toml}" "$platform"
   fi
   rm -rf "$archives"
 }
@@ -258,9 +256,7 @@ scan_image() {
 
 count=$(wc -l < "$FINDINGS" | tr -d ' ')
 
-while IFS= read -r f; do
-  jq -r '"::error title=secret-scan (\(.tool) \(.rule))::\(.file)\(if .platform != "" then " [\(.platform)]" else "" end)\(if .layer != "" then " in layer \(.layer)" else "" end)"' <<< "$f"
-done < "$FINDINGS"
+jq -r '"::error title=secret-scan (\(.tool) \(.rule))::\(.file)\(if .platform != "" then " [\(.platform)]" else "" end)\(if .layer != "" then " in layer \(.layer)" else "" end)"' "$FINDINGS"
 
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   {

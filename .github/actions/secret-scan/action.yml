@@ -24,6 +24,10 @@ inputs:
       (tar, zip, jar, whl, ...), which the layer scan does not unpack. Needs docker and python3.
     required: false
     default: "true"
+  max-archive-mb:
+    description: "Largest archive (MB) the archive scan copies out of the image; a larger one fails the scan."
+    required: false
+    default: "1024"
   gitleaks-config:
     description: "Path to a .gitleaks.toml for the build folder; use [extend] useDefault = true to keep the default rules."
     required: false
@@ -81,6 +85,7 @@ runs:
         SCAN_PATH: ${{ inputs.path }}
         SCAN_IMAGE: ${{ inputs.image }}
         SCAN_ARCHIVES: ${{ inputs.scan-archives }}
+        MAX_ARCHIVE_MB: ${{ inputs.max-archive-mb }}
         GITLEAKS_CONFIG: ${{ inputs.gitleaks-config }}
         ALLOWLIST: ${{ inputs.allowlist }}
         ENFORCE: ${{ inputs.enforce }}

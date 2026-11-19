@@ -72,6 +72,8 @@ check bad-enforce 2 SCAN_PATH="$CTX/c01" ENFORCE=yes
 check bad-scan-archives 2 SCAN_PATH="$CTX/c01" SCAN_ARCHIVES=yes
 check missing-registry-image 2 SCAN_IMAGE="tykio/secret-scan-test-does-not-exist:none"
 
+check archive-over-limit 2 SCAN_IMAGE="docker://secret-scan-test/s09" MAX_ARCHIVE_MB=0
+check bad-max-archive 2 SCAN_IMAGE="docker://secret-scan-test/s09" MAX_ARCHIVE_MB=lots
 check dash-path 2 SCAN_PATH="-v"
 check dash-image 2 SCAN_IMAGE="--help"
 check dash-local-image 2 SCAN_IMAGE="docker://--help"
