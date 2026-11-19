@@ -150,6 +150,42 @@ else
   fail=1
 fi
 
+# Registry images with a single manifest (classic build, or buildx without
+# provenance) are scanned by digest, and an image the job already has locally
+# is never removed: the job's next docker tag / push must still work.
+REG_PORT=${SECRET_SCAN_TEST_REGISTRY_PORT:-5055}
+REG="localhost:$REG_PORT"
+docker rm -f secret-scan-test-registry > /dev/null 2>&1 || true
+docker pull -q registry:2 > /dev/null
+docker run -d --name secret-scan-test-registry -p "$REG_PORT:5000" registry:2 > /dev/null
+for _ in 1 2 3 4 5 6 7 8 9 10; do curl -fsS "http://$REG/v2/" > /dev/null 2>&1 && break; sleep 1; done
+for id in c01 s01; do
+  docker buildx build -q --provenance=false --sbom=false --load -t "$REG/ss/$id:rel" "$CTX/$id" > /dev/null
+  docker push -q "$REG/ss/$id:rel" > /dev/null
+done
+check single-manifest-clean 0 SCAN_IMAGE="$REG/ss/c01:rel"
+if docker tag "$REG/ss/c01:rel" "$REG/public/c01:rel" 2> /dev/null; then
+  echo "ok    single-manifest local tag kept for the next push"
+else
+  echo "FAIL  single-manifest scan removed the job's local tag"; fail=1
+fi
+if grep -q "$REG/ss/c01@sha256:" "$W/out/single-manifest-clean.log"; then
+  echo "ok    single-manifest scanned by digest"
+else
+  echo "FAIL  single-manifest not scanned by digest"; fail=1
+fi
+check single-manifest-leak 1 SCAN_IMAGE="$REG/ss/s01:rel"
+# Not present locally: pulled for the scan, then removed again.
+docker rmi "$REG/ss/s01:rel" > /dev/null
+check single-manifest-pulled 1 SCAN_IMAGE="$REG/ss/s01:rel"
+if [ -z "$(docker images -q "$REG/ss/s01")" ]; then
+  echo "ok    image pulled by the scan is removed afterwards"
+else
+  echo "FAIL  image pulled by the scan was left behind"; fail=1
+fi
+docker rm -f secret-scan-test-registry > /dev/null
+docker rmi "$REG/ss/c01:rel" "$REG/public/c01:rel" > /dev/null 2>&1 || true
+
 # A real multi-platform release image from Docker Hub: clean on every platform.
 check portal-release 0 SCAN_IMAGE="tykio/portal:v1.20.1"
 for p in linux/amd64 linux/arm64 linux/s390x; do

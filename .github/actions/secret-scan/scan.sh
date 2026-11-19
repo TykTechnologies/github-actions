@@ -137,8 +137,10 @@ scan_folder() {
   scanned+=("build folder")
 }
 
-# Prints "<platform>|<ref>" for each image to scan. A registry reference to a
-# multi-platform index expands to one digest reference per platform.
+# Prints "<platform>|<ref>" for each image to scan. Registry references are
+# always resolved to digests, so every scan reads the same content even if a
+# tag moves: an index expands to one digest per platform, and a single
+# manifest becomes repo@digest.
 image_targets() {
   case "$SCAN_IMAGE" in
     docker://*|file://*) printf '|%s\n' "$SCAN_IMAGE"; return ;;
@@ -148,14 +150,20 @@ image_targets() {
     error "cannot read image manifest for $SCAN_IMAGE: $(head -3 "$OUT_DIR/inspect.log" | tr '\n' ' ')"
     return 1
   fi
+  local repo=${SCAN_IMAGE%@*}
+  case "${repo##*/}" in *:*) repo=${repo%:*} ;; esac
   if jq -e '.manifests' > /dev/null <<< "$raw"; then
-    local repo=${SCAN_IMAGE%@*}
-    case "${repo##*/}" in *:*) repo=${repo%:*} ;; esac
     jq -r --arg repo "$repo" '.manifests[]
       | select(.platform.os != "unknown")
       | "\(.platform.os)/\(.platform.architecture)\(if .platform.variant then "/" + .platform.variant else "" end)|\($repo)@\(.digest)"' <<< "$raw"
   else
-    printf '|%s\n' "$SCAN_IMAGE"
+    local digest
+    if ! digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$SCAN_IMAGE" 2> "$OUT_DIR/inspect.log" | jq -r '.digest // empty') ||
+       [ -z "$digest" ]; then
+      error "cannot resolve the digest of $SCAN_IMAGE: $(head -3 "$OUT_DIR/inspect.log" | tr '\n' ' ')"
+      return 1
+    fi
+    printf '|%s@%s\n' "$repo" "$digest"
   fi
 }
 
@@ -193,7 +201,7 @@ scan_layers() {
 
 # gitleaks on the archives in one image's final filesystem.
 scan_archives() {
-  local platform=$1 ref=$2 n=$3 img cid
+  local platform=$1 ref=$2 n=$3 img cid pulled=false
   case "$ref" in
     docker://*) img=${ref#docker://} ;;
     file://*)
@@ -202,9 +210,14 @@ scan_archives() {
         return
       fi ;;
     *)
-      if ! docker pull -q "$ref" > /dev/null 2> "$OUT_DIR/pull-$n.log"; then
-        error "cannot pull $ref for the archive scan: $(head -3 "$OUT_DIR/pull-$n.log" | tr '\n' ' ')"
-        return
+      # Pull only when the image is not already local (for example, the job
+      # just built it), and remember it so only what this step pulled is removed.
+      if ! docker image inspect "$ref" > /dev/null 2>&1; then
+        if ! docker pull -q "$ref" > /dev/null 2> "$OUT_DIR/pull-$n.log"; then
+          error "cannot pull $ref for the archive scan: $(head -3 "$OUT_DIR/pull-$n.log" | tr '\n' ' ')"
+          return
+        fi
+        pulled=true
       fi
       img=$ref ;;
   esac
@@ -250,11 +263,11 @@ scan_archives() {
       "${GITLEAKS_CONFIG:-$HERE/gitleaks-archives.toml}" "$platform"
   fi
   rm -rf "$archives"
-  # Free the disk before the next platform; only images this step pulled.
-  case "$ref" in
-    docker://*|file://*) ;;
-    *) docker rmi "$ref" > /dev/null 2>&1 || true ;;
-  esac
+  # Free the disk before the next platform, but never remove an image the
+  # job had before this step ran.
+  if [ "$pulled" = "true" ]; then
+    docker rmi "$ref" > /dev/null 2>&1 || true
+  fi
 }
 
 scan_image() {
@@ -276,6 +289,7 @@ scan_image() {
   local n=0 platform ref
   while IFS='|' read -r -u 3 platform ref; do
     n=$((n + 1))
+    echo "secret-scan: scanning $ref${platform:+ ($platform)}"
     scan_layers "$platform" "$ref" "$n"
     [ "$SCAN_ARCHIVES" = "true" ] && scan_archives "$platform" "$ref" "$n"
     scanned+=("image${platform:+ $platform}")

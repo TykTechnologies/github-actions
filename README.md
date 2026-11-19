@@ -65,7 +65,7 @@ Example usage, in a release job after the image is pushed to a private registry 
     allowlist: .github/secret-scan-allowlist.json  # optional
 ```
 
-`image` takes a registry reference (pulled with the job's docker login; every platform of a multi-platform tag is scanned), `docker://<name>` for an image in the local daemon, or `file://<path>` for a saved tarball.
+`image` takes a registry reference (pulled with the job's docker login and resolved to a digest; every platform of a multi-platform tag is scanned, and an image the job already has locally is left in place), `docker://<name>` for an image in the local daemon, or `file://<path>` for a saved tarball.
 
 False positives:
 
