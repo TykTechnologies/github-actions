@@ -1,0 +1,88 @@
+---
+name: Secret scan
+description: >-
+  Scan a build folder (gitleaks) and/or a container image (trufflehog on every
+  layer and platform, gitleaks on archives inside the image) for secrets before
+  the image is published. Fails the job on a finding and fails closed when a
+  scanner cannot run.
+
+inputs:
+  path:
+    description: "Build folder to scan before the image is built. Leave empty to skip."
+    required: false
+    default: ""
+  image:
+    description: >-
+      Image to scan: a registry reference (uses the job's docker login),
+      docker://<name> for a local image, or file://<path> for a saved tarball.
+      Leave empty to skip.
+    required: false
+    default: ""
+  scan-archives:
+    description: >-
+      Also export each platform's final filesystem and scan the archives in it
+      (tar, zip, jar, whl, ...), which the layer scan does not unpack. Needs docker.
+    required: false
+    default: "true"
+  gitleaks-config:
+    description: "Path to a .gitleaks.toml for the build folder; use [extend] useDefault = true to keep the default rules."
+    required: false
+    default: ""
+  allowlist:
+    description: "Path to a JSON allowlist for image findings: [{detector, path, reason}], path is a regex."
+    required: false
+    default: ""
+  enforce:
+    description: "Fail the job when secrets are found. Scanner errors always fail."
+    required: false
+    default: "true"
+
+outputs:
+  findings:
+    description: "Number of findings after the allowlist"
+    value: ${{ steps.scan.outputs.findings }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install gitleaks and trufflehog
+      shell: bash
+      env:
+        RUNNER_ARCH_NAME: ${{ runner.arch }}
+      run: |
+        set -euo pipefail
+        GITLEAKS_VERSION=8.30.1
+        TRUFFLEHOG_VERSION=3.99.9
+        case "$RUNNER_ARCH_NAME" in
+          X64)
+            GL_ARCH=x64; GL_SHA=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+            TH_ARCH=amd64; TH_SHA=12050095c8063bf4d34f9f6cbce6ba9fa8d0deea9d503d0570364feba093658e ;;
+          ARM64)
+            GL_ARCH=arm64; GL_SHA=e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080
+            TH_ARCH=arm64; TH_SHA=778b1913196dc9b9234e8fd366f64387efeb08c01930a1d2110dcb2ffd07e68b ;;
+          *) echo "::error::unsupported runner architecture: $RUNNER_ARCH_NAME"; exit 2 ;;
+        esac
+        BIN="$RUNNER_TEMP/secret-scan-bin"
+        mkdir -p "$BIN"
+        fetch() {
+          curl --proto '=https' --tlsv1.2 -fsSL "$1" -o "$RUNNER_TEMP/$2"
+          echo "$3  $RUNNER_TEMP/$2" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$2" -C "$BIN" "$4"
+        }
+        fetch "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_${GL_ARCH}.tar.gz" \
+          gitleaks.tar.gz "$GL_SHA" gitleaks
+        fetch "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TH_ARCH}.tar.gz" \
+          trufflehog.tar.gz "$TH_SHA" trufflehog
+
+    - name: Scan for secrets
+      id: scan
+      shell: bash
+      env:
+        SCAN_PATH: ${{ inputs.path }}
+        SCAN_IMAGE: ${{ inputs.image }}
+        SCAN_ARCHIVES: ${{ inputs.scan-archives }}
+        GITLEAKS_CONFIG: ${{ inputs.gitleaks-config }}
+        ALLOWLIST: ${{ inputs.allowlist }}
+        ENFORCE: ${{ inputs.enforce }}
+        OUT_DIR: ${{ runner.temp }}/secret-scan-results
+      run: PATH="$RUNNER_TEMP/secret-scan-bin:$PATH" bash "$GITHUB_ACTION_PATH/scan.sh"

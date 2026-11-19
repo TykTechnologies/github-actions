@@ -1,0 +1,6 @@
+# gitleaks rules for archives found inside an image. The generic-api-key rule
+# matches identifiers in minified and vendored JavaScript bundles (for example
+# the Portal theme zip), so only the rules for specific credential formats run.
+[extend]
+useDefault = true
+disabledRules = ["generic-api-key"]
