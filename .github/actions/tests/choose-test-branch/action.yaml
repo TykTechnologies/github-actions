@@ -11,6 +11,9 @@ inputs:
   org_gh_token:
     description: 'GitHub token for API access'
     required: true
+  ref:
+    description: 'Immutable test source revision; bypasses branch selection when set'
+    default: ''
 runs:
   using: "composite"
   steps:
@@ -21,8 +24,9 @@ runs:
         token: ${{ inputs.org_gh_token }}
         fetch-depth: 0
         sparse-checkout: tests/${{ inputs.test_folder }}
+        ref: ${{ inputs.ref }}
     - name: Checkout proper branch
-      if: ${{ github.event.repository.name != 'tyk-analytics' }}
+      if: ${{ inputs.ref == '' && github.event.repository.name != 'tyk-analytics' }}
       working-directory: tyk-analytics/tests/${{ inputs.test_folder }}
       shell: bash
       run: |
