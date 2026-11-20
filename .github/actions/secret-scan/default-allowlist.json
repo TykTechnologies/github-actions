@@ -1,0 +1,7 @@
+[
+  {
+    "detector": "Box",
+    "path": "^/var/lib/dpkg/status\\.d/[^/]+\\.md5sums$",
+    "reason": "dpkg checksum files in Debian and distroless base layers match the Box token pattern"
+  }
+]

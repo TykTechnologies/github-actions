@@ -1,0 +1,5 @@
+# gitleaks rules for the build folder when no gitleaks-config input is given.
+# Passing this explicitly stops gitleaks from loading a .gitleaks.toml found
+# in the scanned folder, which could otherwise replace the rules.
+[extend]
+useDefault = true
