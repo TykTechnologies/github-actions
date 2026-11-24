@@ -16,24 +16,24 @@ jobs:
     steps:
       - name: Generate GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547  # v1
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc  # v3.4.0
         with:
           app-id: ${{ secrets.PROBE_APP_ID }}
           private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
           owner: TykTechnologies
       - name: Git - checkout master
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744  # v3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ inputs.main_branch }}
           fetch-depth: 1
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
       - name: Git - checkout current ref
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744  # v3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
-      - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c  # v3
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           # In order:
           # * Module download cache
@@ -83,8 +83,9 @@ jobs:
             git checkout $ref
           fi
           cp /tmp/.golangci.yaml .golangci.yaml
-      - uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495  # v3
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5  # v7.1.0
         with:
+          cache: false
           go-version: ${{ inputs.go }}
       - name: Fetch modules
         run: |
@@ -101,7 +102,7 @@ jobs:
         run: |
           $(go env GOPATH)/bin/golangci-lint run --verbose --out-format 'checkstyle:golangci_lint.xml' --timeout=300s --new=false --new-from-rev= ./...
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         if: ${{ always() }}
         with:
           name: golangci-report

@@ -47,15 +47,15 @@ jobs:
       IMAGE: 754489498669.dkr.ecr.eu-central-1.amazonaws.com/jira-linter:latest
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
       # Pull requests never push, so they need no credentials. Skipping the
       # login also keeps the ECR token out of a job that builds and runs
       # code from the pull request.
       - name: Configure AWS credentials for use
         if: github.event_name != 'pull_request'
-        uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838  # v1
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
         with:
           role-to-assume: arn:aws:iam::754489498669:role/ecr_rw_tyk
           role-session-name: cipush
@@ -64,10 +64,10 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         if: github.event_name != 'pull_request'
-        uses: aws-actions/amazon-ecr-login@5a88a04c91d5c6f97aae0d9be790e64d9b1d47b7  # v1
+        uses: aws-actions/amazon-ecr-login@7290e214a610b32bc0eef81748948b6d466a8783  # v2.2.0
 
       - name: 'Build jira-linter image'
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
           push: ${{ github.ref_name == 'main' || github.event_name == 'workflow_dispatch' }}
           pull: true

@@ -113,7 +113,7 @@ To use the CI tools from any github pipeline:
 
 ```yaml
 - name: 'Extract tykio/ci-tools:${{ matrix.tag }}'
-  uses: shrink/actions-docker-extract@v3
+  uses: shrink/actions-docker-extract@v4
   with:
     image: tykio/ci-tools:${{ matrix.tag }}
     path: /usr/local/bin/.

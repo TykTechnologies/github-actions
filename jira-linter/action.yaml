@@ -15,7 +15,7 @@ runs:
     # The linter image lives in a private ECR registry, so the action assumes
     # the push role and logs in before running the container.
     - name: Configure AWS credentials for use
-      uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838  # v1
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
         role-to-assume: arn:aws:iam::754489498669:role/ecr_rw_tyk
         role-session-name: cipush
@@ -23,7 +23,7 @@ runs:
 
     - name: Login to Amazon ECR
       id: login-ecr
-      uses: aws-actions/amazon-ecr-login@5a88a04c91d5c6f97aae0d9be790e64d9b1d47b7  # v1
+      uses: aws-actions/amazon-ecr-login@7290e214a610b32bc0eef81748948b6d466a8783  # v2.2.0
 
     - name: Run Jira Linter
       id: linter_step
@@ -90,7 +90,7 @@ runs:
 
     - name: Post Sticky Comment on Failure
       if: steps.linter_step.outcome == 'failure'
-      uses: marocchino/sticky-pull-request-comment@v2
+      uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
       with:
         header: jira-linter
         path: ${{ github.action_path }}/linter-output.txt
@@ -98,7 +98,7 @@ runs:
 
     - name: Delete Sticky Comment on Success
       if: steps.linter_step.outcome == 'success'
-      uses: marocchino/sticky-pull-request-comment@v2
+      uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
       with:
         header: jira-linter
         delete: true

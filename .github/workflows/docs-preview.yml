@@ -85,21 +85,21 @@ jobs:
     steps:
       - name: Generate GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547  # v1
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc  # v3.4.0
         with:
           app-id: ${{ secrets.PROBE_APP_ID }}
           private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
           owner: TykTechnologies
 
       - name: Checkout head
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           path: head
           fetch-depth: 1
 
       - name: Checkout base
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.ref }}
           path: base
@@ -110,13 +110,13 @@ jobs:
 
       - name: Set up Go
         if: inputs.component == 'gateway'
-        uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed  # v5.1.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5  # v7.1.0
         with:
           go-version: '1.21'
 
       - name: Checkout exp (schema-gen and docs scripts)
         if: contains(fromJSON('["gateway","dashboard"]'), inputs.component)
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: TykTechnologies/exp
           path: exp
@@ -190,7 +190,7 @@ jobs:
 
       - name: Checkout config info generator
         if: contains(fromJSON('["gateway","dashboard","pump","mdcb"]'), inputs.component)
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: TykTechnologies/tyk-config-info-generator
           token: ${{ steps.app-token.outputs.token }}
@@ -234,7 +234,7 @@ jobs:
 
       - name: Upload full diff as artifact
         if: steps.diff.outputs.changed == 'true'
-        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882  # v4.4.3
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: docs-preview-diff
           path: docs.diff
@@ -284,7 +284,7 @@ jobs:
 
       - name: Find existing preview comment
         id: fc
-        uses: peter-evans/find-comment@a54c31d7fa095754bfef525c0c8e5e5674c4b4b1  # v2
+        uses: peter-evans/find-comment@b30e6a3c0ed37e7c023ccd3f1db5c6c0b0c23aad  # v4.0.0
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body-includes: ${{ inputs.comment_marker }}
@@ -293,7 +293,7 @@ jobs:
       # existing comment (a PR that never had docs impact stays silent).
       - name: Create or update preview comment
         if: steps.diff.outputs.changed == 'true' || steps.fc.outputs.comment-id != ''
-        uses: peter-evans/create-or-update-comment@23ff15729ef2fc348714a3bb66d2f655ca9066f2  # v3
+        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9  # v5.0.0
         with:
           comment-id: ${{ steps.fc.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
