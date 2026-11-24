@@ -52,6 +52,25 @@ jobs:
               core.setOutput('release_valid','false');
               return;
             }
+            // Only users with write access (write/maintain/admin) may trigger a backport.
+            // author_association is not reliable for private org members, so ask the API.
+            const login = comment.user && comment.user.login;
+            let permission = 'none';
+            try {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: login,
+              });
+              permission = data.permission;
+            } catch (e) {
+              core.warning(`Could not resolve permission for ${login}: ${e.message}`);
+            }
+            if (!['admin', 'write'].includes(permission)) {
+              core.notice(`Ignoring '/release' from ${login}: requires write access (has '${permission}').`);
+              core.setOutput('release_valid','false');
+              return;
+            }
             core.setOutput('release_valid','true');
             core.setOutput('release_branch', m[1]);
             core.setOutput('pr_number', issue.number);
@@ -103,7 +122,7 @@ jobs:
             } >> "$GITHUB_ENV"
           fi
 
-      # Create GitHub App token (owner-based; avoids 'installation-id' warning)
+      # Create GitHub App token scoped to the current repository only
       - name: Create GitHub App token
         id: app_token
         if: env.HAS_APP == 'true'
@@ -112,6 +131,7 @@ jobs:
           app-id: ${{ env.APP_ID }}
           private-key: ${{ env.APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
 
       - name: Select auth token & prepare git remote
         if: steps.check_command.outputs.release_valid == 'true'
