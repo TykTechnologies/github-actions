@@ -38,7 +38,7 @@ jobs:
       # 1) Only run when someone comments `/release to <branch>` on a PR
       - name: Check for release command
         id: check_command
-        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410  # v6
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -83,7 +83,7 @@ jobs:
       # 2) Minimal checkout (shallow + partial clone)
       - name: Checkout repository (shallow, partial)
         if: steps.check_command.outputs.release_valid == 'true'
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 1
           filter: blob:none
@@ -126,7 +126,7 @@ jobs:
       - name: Create GitHub App token
         id: app_token
         if: env.HAS_APP == 'true'
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547  # v1
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc  # v3.4.0
         with:
           app-id: ${{ env.APP_ID }}
           private-key: ${{ env.APP_PRIVATE_KEY }}
@@ -350,7 +350,7 @@ jobs:
       # 6) Comment back on the original PR with the result (uses selected token)
       - name: Comment back on original PR
         if: always() && steps.check_command.outputs.release_valid == 'true'
-        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410  # v6
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         with:
           github-token: ${{ env.GITHUB_TOKEN }}
           script: |
