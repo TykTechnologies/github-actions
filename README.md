@@ -50,6 +50,7 @@ Scans for secrets before an image is published, and fails the job on a finding.
 - **Image** (`image`): for every platform of a multi-platform image,
   - trufflehog on every layer, the image config and the build history. This catches secrets deleted in a later layer, passed as build args, set in `ENV` or `LABEL`, or compiled into a binary;
   - gitleaks on the archives in the final filesystem (`.tar.gz`, `.tgz`, `.zip`, `.jar`, `.whl`, ...), which trufflehog does not fully unpack. Only regular archive files are copied out of the image (never links, absolute or `..` paths), so image contents cannot write outside the scan folder. An archive larger than `max-archive-mb` (default 1024) fails the scan rather than being skipped. Needs docker and python3; turn off with `scan-archives: false`.
+- **Provenance attestation** of a registry image. With BuildKit's `provenance: mode=max`, every build arg value is recorded in the attestation and published with the image, including build args used only in a builder stage, which leave no trace in the final image's layers or history. On GitHub Actions it also holds the triggering event payload (commit messages included). The action fails on a non-empty build arg whose name says it is a secret (`token`, `secret`, `password`, `key`, `auth`, ...; not names ending in `_id`, `_url`, `_path`, `_file` and the like, nor `public_key`), whatever its value, and on anything gitleaks finds in the attestation. An image with no attestation passes with a warning. Turn off with `scan-attestations: false`. Pass secrets to builds with BuildKit secret mounts, never as build args.
 
 `path` and `image` must not start with `-`. Scanner errors always fail the job, even with `enforce: false`: trufflehog exits 0 when it cannot read an image, so the action checks its log and fails if nothing was scanned. Secret values are never printed; findings show the tool, rule, file, platform and layer.
 
@@ -72,12 +73,13 @@ False positives:
 - Build folder: pass `gitleaks-config`, a `.gitleaks.toml` that starts with `[extend]` and `useDefault = true`, then adds `[[allowlists]]` paths. Nothing inside the scanned folder or the working directory changes the rules: the action always passes its own config, ignores `gitleaks:allow` comments and does not read `.gitleaksignore` from the working directory. gitleaks always applies a `.gitleaksignore` at the root of the scanned folder, so the action reports that file as a finding (`unreviewed-gitleaksignore`).
 - Archives in the image: by default all gitleaks rules except `generic-api-key`, which matches identifiers in minified JavaScript bundles. A `gitleaks-config` replaces this.
 - Image layers: a JSON list of `{"detector": "...", "path": "<regex>", "reason": "..."}`; a malformed list or regex fails the scan. A default entry for dpkg checksum files in base images is built in.
+- Provenance attestation: the same `allowlist`. A secret-named build arg has detector `secret-named-build-arg` and path `build-arg:<NAME>`, for example `{"detector": "secret-named-build-arg", "path": "^build-arg:GPG_KEY_ID$", "reason": "key ID, not a key"}`; a gitleaks finding has its gitleaks rule as detector and path `provenance attestation`. The gitleaks rules are the defaults, or `gitleaks-config` when given.
 
 The `gitleaks-config` and `allowlist` files should be reviewed by AppSec (CODEOWNERS).
 
 Reports are written to `$RUNNER_TEMP/secret-scan-results`. trufflehog's raw output there contains the secret values: never upload that folder as an artifact.
 
-`tests/secret-scan` builds 16 images that leak fake credentials in common ways and 2 correctly built controls; `secret-scan-test.yml` runs them, the fail-closed cases and a real multi-platform release image on every change.
+`tests/secret-scan` builds 16 images that leak fake credentials in common ways and 2 correctly built controls, plus images pushed to a local registry with and without provenance attestations; `secret-scan-test.yml` runs them, the fail-closed cases and a real multi-platform release image on every change.
 
 Source: [/.github/actions/secret-scan/action.yml](/.github/actions/secret-scan/action.yml)
 

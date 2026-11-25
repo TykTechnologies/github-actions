@@ -8,12 +8,15 @@
 #   Image:        trufflehog on every layer, the config and the history of
 #                 every platform in a multi-platform image; then gitleaks on
 #                 the archives in each platform's final filesystem, which
-#                 trufflehog does not unpack.
+#                 trufflehog does not unpack; then, for registry images, the
+#                 provenance attestation, where BuildKit's mode=max records
+#                 every build arg value.
 #
 # Environment:
 #   SCAN_PATH        build folder to scan (optional)
 #   SCAN_IMAGE       image to scan: registry ref, docker://<local>, or file://<tar> (optional)
 #   SCAN_ARCHIVES    "true" exports the image and scans its archives; needs docker (default true)
+#   SCAN_ATTESTATIONS "true" scans the provenance attestation of registry images (default true)
 #   GITLEAKS_CONFIG  .gitleaks.toml for gitleaks (optional)
 #   ALLOWLIST        JSON allowlist for trufflehog findings (optional)
 #   MAX_ARCHIVE_MB   largest archive the archive scan copies out; a larger one fails the scan (default 1024)
@@ -28,6 +31,7 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SCAN_PATH=${SCAN_PATH:-}
 SCAN_IMAGE=${SCAN_IMAGE:-}
 SCAN_ARCHIVES=${SCAN_ARCHIVES:-true}
+SCAN_ATTESTATIONS=${SCAN_ATTESTATIONS:-true}
 GITLEAKS_CONFIG=${GITLEAKS_CONFIG:-}
 ALLOWLIST=${ALLOWLIST:-}
 ENFORCE=${ENFORCE:-true}
@@ -48,7 +52,7 @@ if [ -z "$SCAN_PATH" ] && [ -z "$SCAN_IMAGE" ]; then
   echo "::error title=secret-scan::set at least one of path or image" >&2
   exit 2
 fi
-for flag in "ENFORCE=$ENFORCE" "SCAN_ARCHIVES=$SCAN_ARCHIVES"; do
+for flag in "ENFORCE=$ENFORCE" "SCAN_ARCHIVES=$SCAN_ARCHIVES" "SCAN_ATTESTATIONS=$SCAN_ATTESTATIONS"; do
   case "${flag#*=}" in true|false) ;; *) echo "::error title=secret-scan::${flag%%=*} must be true or false" >&2; exit 2 ;; esac
 done
 for value in "$SCAN_PATH" "$SCAN_IMAGE" "${SCAN_IMAGE#docker://}" "${SCAN_IMAGE#file://}"; do
@@ -137,33 +141,40 @@ scan_folder() {
   scanned+=("build folder")
 }
 
-# Prints "<platform>|<ref>" for each image to scan. Registry references are
-# always resolved to digests, so every scan reads the same content even if a
-# tag moves: an index expands to one digest per platform, and a single
-# manifest becomes repo@digest.
+# Pins a registry image to the digest of its index or manifest, once, so the
+# layer, archive and provenance scans all read the same image even if the tag
+# moves. Sets IMAGE_REPO and IMAGE_PINNED (repo@digest).
+IMAGE_REPO=""
+IMAGE_PINNED=""
+resolve_image() {
+  IMAGE_REPO=${SCAN_IMAGE%@*}
+  case "${IMAGE_REPO##*/}" in *:*) IMAGE_REPO=${IMAGE_REPO%:*} ;; esac
+  local digest
+  if ! digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$SCAN_IMAGE" 2> "$OUT_DIR/inspect.log" | jq -r '.digest // empty') ||
+     [ -z "$digest" ]; then
+    error "cannot read image manifest for $SCAN_IMAGE: $(head -3 "$OUT_DIR/inspect.log" | tr '\n' ' ')"
+    return 1
+  fi
+  IMAGE_PINNED="$IMAGE_REPO@$digest"
+}
+
+# Prints "<platform>|<ref>" for each image to scan: an index expands to one
+# digest per platform, and a single manifest is the pinned reference itself.
 image_targets() {
   case "$SCAN_IMAGE" in
     docker://*|file://*) printf '|%s\n' "$SCAN_IMAGE"; return ;;
   esac
   local raw
-  if ! raw=$(docker buildx imagetools inspect --raw "$SCAN_IMAGE" 2> "$OUT_DIR/inspect.log"); then
-    error "cannot read image manifest for $SCAN_IMAGE: $(head -3 "$OUT_DIR/inspect.log" | tr '\n' ' ')"
+  if ! raw=$(docker buildx imagetools inspect --raw "$IMAGE_PINNED" 2> "$OUT_DIR/inspect.log"); then
+    error "cannot read image manifest for $IMAGE_PINNED: $(head -3 "$OUT_DIR/inspect.log" | tr '\n' ' ')"
     return 1
   fi
-  local repo=${SCAN_IMAGE%@*}
-  case "${repo##*/}" in *:*) repo=${repo%:*} ;; esac
   if jq -e '.manifests' > /dev/null <<< "$raw"; then
-    jq -r --arg repo "$repo" '.manifests[]
+    jq -r --arg repo "$IMAGE_REPO" '.manifests[]
       | select(.platform.os != "unknown")
       | "\(.platform.os)/\(.platform.architecture)\(if .platform.variant then "/" + .platform.variant else "" end)|\($repo)@\(.digest)"' <<< "$raw"
   else
-    local digest
-    if ! digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$SCAN_IMAGE" 2> "$OUT_DIR/inspect.log" | jq -r '.digest // empty') ||
-       [ -z "$digest" ]; then
-      error "cannot resolve the digest of $SCAN_IMAGE: $(head -3 "$OUT_DIR/inspect.log" | tr '\n' ' ')"
-      return 1
-    fi
-    printf '|%s@%s\n' "$repo" "$digest"
+    printf '|%s\n' "$IMAGE_PINNED"
   fi
 }
 
@@ -270,10 +281,75 @@ scan_archives() {
   fi
 }
 
+# Provenance attestations of a registry image. With provenance mode=max,
+# BuildKit records every build arg value in them (and, on GitHub Actions, the
+# triggering event payload), and they are published with the image, so a secret
+# passed as a build arg leaks even when no layer holds it, for example one used
+# only in a builder stage. Flags any non-empty build arg whose name says it is a
+# secret, whatever its value (a password has no pattern gitleaks can match), and
+# runs gitleaks on the rest. Findings go through the allowlist like image
+# findings. Local and tarball images carry no attestations.
+scan_provenance() {
+  case "$SCAN_IMAGE" in docker://*|file://*) return ;; esac
+  local raw="$OUT_DIR/provenance.json" by_platform="$OUT_DIR/provenance-by-platform.json"
+  local dir="$OUT_DIR/provenance" found="$OUT_DIR/provenance-findings.jsonl"
+  # These hold build arg values: never leave them in the results folder.
+  cleanup_provenance() { rm -rf "$raw" "$by_platform" "$dir" "$found"; }
+
+  if ! docker buildx imagetools inspect --format '{{json .Provenance}}' "$IMAGE_PINNED" > "$raw" 2> "$OUT_DIR/provenance.log" ||
+     ! jq -e . "$raw" > /dev/null 2>&1; then
+    error "cannot read the provenance of $IMAGE_PINNED: $(head -3 "$OUT_DIR/provenance.log" | tr '\n' ' ')"
+    cleanup_provenance
+    return
+  fi
+
+  # A single-platform image gives one statement, an index a map keyed by
+  # platform, and an image without attestations an empty object.
+  jq 'if . == null then {} elif type == "object" and has("SLSA") then {"": .} else . end' "$raw" > "$by_platform"
+  if [ "$(jq 'length' "$by_platform")" -eq 0 ]; then
+    echo "::warning title=secret-scan::no provenance attestation found for $(escape_cmd "$SCAN_IMAGE"); nothing to scan there" >&2
+    scanned+=("provenance (none)")
+    cleanup_provenance
+    return
+  fi
+
+  : > "$found"
+  jq -c 'to_entries[] | .key as $platform
+    | [.value | .. | objects | to_entries[] | select((.key | startswith("build-arg:")) and .value != "") | .key] | unique[]
+    | ltrimstr("build-arg:") as $name
+    | select($name | test("(^|_)(token|secret|password|passwd|pwd|pass|key|apikey|credentials?|auth)(_|$)"; "i"))
+    | select($name | test("_(id|url|uri|ttl|path|file|mode|type|name|host|port)$|(^|_)public_key($|_)"; "i") | not)
+    | {tool: "provenance", rule: "secret-named-build-arg", file: ., platform: $platform, layer: ""}' \
+    "$by_platform" >> "$found"
+
+  # run_gitleaks appends to FINDINGS: point it at this scan's file so the
+  # allowlist and de-duplication below apply before anything is reported.
+  local n=0 platform
+  mkdir -p "$dir"
+  while IFS= read -r -u 3 platform; do
+    n=$((n + 1))
+    jq --arg p "$platform" '.[$p]' "$by_platform" > "$dir/$n.json"
+    FINDINGS="$found" run_gitleaks "$dir/$n.json" "gitleaks-provenance-$n" gitleaks-provenance "$dir/$n.json" "provenance attestation" \
+      "${GITLEAKS_CONFIG:-$HERE/gitleaks-default.toml}" "$platform"
+  done 3< <(jq -r 'keys[]' "$by_platform")
+
+  # A build arg is recorded several times in one statement: report it once.
+  jq -sc --slurpfile allow "$OUT_DIR/allowlist.json" 'unique[]
+    | . as $f | select(all($allow[0][]; . as $a | ($f.rule != $a.detector) or ($f.file | test($a.path) | not)))' \
+    "$found" >> "$FINDINGS"
+  cleanup_provenance
+  scanned+=("provenance")
+}
+
 scan_image() {
   local allow=("$HERE/default-allowlist.json")
   [ -n "$ALLOWLIST" ] && allow+=("$ALLOWLIST")
   jq -s 'add' "${allow[@]}" > "$OUT_DIR/allowlist.json"
+
+  case "$SCAN_IMAGE" in
+    docker://*|file://*) ;;
+    *) resolve_image || return 0 ;;
+  esac
 
   # image_targets runs in a subshell, so count its error here.
   local targets
@@ -294,6 +370,8 @@ scan_image() {
     [ "$SCAN_ARCHIVES" = "true" ] && scan_archives "$platform" "$ref" "$n"
     scanned+=("image${platform:+ $platform}")
   done 3<<< "$targets"
+  [ "$SCAN_ATTESTATIONS" = "true" ] && scan_provenance
+  return 0
 }
 
 [ -n "$SCAN_PATH" ] && scan_folder

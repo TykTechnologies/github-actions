@@ -183,6 +183,83 @@ if [ -z "$(docker images -q "$REG/ss/s01")" ]; then
 else
   echo "FAIL  image pulled by the scan was left behind"; fail=1
 fi
+# Provenance attestations: with mode=max, BuildKit publishes every build arg
+# value with the image. The ARGs are used only in a builder stage, so no layer,
+# config or history entry of the final image holds them (an ARG in the final
+# stage would show in its history, which the layer scan already reads): only
+# the attestation does.
+mkdir -p "$W/prov"
+printf 'FROM alpine:3.20 AS build\nARG NOTE\nARG DB_PASSWORD\nARG BUILD_PACKAGE_NAME\nRUN echo built > /built\nFROM alpine:3.20\nCOPY --from=build /built /built\n' > "$W/prov/Dockerfile"
+docker buildx rm secret-scan-test > /dev/null 2>&1 || true
+if ! docker buildx create --name secret-scan-test --driver docker-container --driver-opt network=host > /dev/null; then
+  echo "FAIL  cannot create the buildx builder for the provenance tests"; fail=1
+fi
+prov_push() {
+  local tag=$1 mode=$2 provenance; shift 2
+  provenance="mode=$mode"; [ "$mode" = none ] && provenance=false
+  if ! docker buildx build -q --builder secret-scan-test --provenance="$provenance" --sbom=false \
+       "$@" --push -t "$REG/ss/prov:$tag" "$W/prov" > /dev/null; then
+    echo "FAIL  cannot build and push provenance image $tag"; fail=1
+  fi
+}
+prov_push token max --build-arg NOTE="$(cat "$TOKEN_FILE")"
+prov_push password max --build-arg DB_PASSWORD=correct-horse-battery
+prov_push clean max --build-arg BUILD_PACKAGE_NAME=tyk-gateway
+prov_push token-min min --build-arg NOTE="$(cat "$TOKEN_FILE")"
+prov_push benign-names max --build-arg GPG_KEY_ID=ABCDEF0123456789 --build-arg PUBLIC_KEY=ssh-ed25519 --build-arg NPM_TOKEN=
+prov_push none none --build-arg NOTE="$(cat "$TOKEN_FILE")"
+
+check provenance-token 1 SCAN_IMAGE="$REG/ss/prov:token" SCAN_ARCHIVES=false
+if grep -q 'gitleaks-provenance' "$W/out/provenance-token.log"; then
+  echo "ok    provenance-token found by gitleaks in the attestation"
+else
+  echo "FAIL  provenance-token not reported as a provenance finding"; fail=1
+fi
+check provenance-secret-name 1 SCAN_IMAGE="$REG/ss/prov:password" SCAN_ARCHIVES=false
+if grep -q 'secret-named-build-arg' "$W/out/provenance-secret-name.log" &&
+   grep -q 'build-arg:DB_PASSWORD' "$W/out/provenance-secret-name.log" &&
+   ! grep -q 'correct-horse-battery' "$W/out/provenance-secret-name.log"; then
+  echo "ok    provenance-secret-name reported by name, value not printed"
+else
+  echo "FAIL  provenance-secret-name not reported as expected"; fail=1
+fi
+check provenance-clean 0 SCAN_IMAGE="$REG/ss/prov:clean" SCAN_ARCHIVES=false
+if grep -q 'scanned:.*provenance' "$W/out/provenance-clean.log"; then
+  echo "ok    provenance-clean attestation scanned"
+else
+  echo "FAIL  provenance-clean attestation not scanned"; fail=1
+fi
+# The leak is only in the attestation: without the attestation scan it passes,
+# and mode=min does not record build args at all.
+check provenance-token-off 0 SCAN_IMAGE="$REG/ss/prov:token" SCAN_ARCHIVES=false SCAN_ATTESTATIONS=false
+check provenance-token-mode-min 0 SCAN_IMAGE="$REG/ss/prov:token-min" SCAN_ARCHIVES=false
+if [ -n "$(find "$W/out/provenance-token" "$W/out/provenance-secret-name" -name 'provenance*.json*')" ]; then
+  echo "FAIL  provenance files holding build arg values were left in the results folder"; fail=1
+else
+  echo "ok    provenance files removed from the results folder"
+fi
+# Names that only look like secrets, and empty values, are not findings; a
+# real one can be allowlisted by rule and build arg.
+check provenance-benign-names 0 SCAN_IMAGE="$REG/ss/prov:benign-names" SCAN_ARCHIVES=false
+echo '[{"detector":"secret-named-build-arg","path":"^build-arg:DB_PASSWORD$","reason":"test"}]' > "$W/prov-allowlist.json"
+check provenance-allowlisted 0 SCAN_IMAGE="$REG/ss/prov:password" SCAN_ARCHIVES=false ALLOWLIST="$W/prov-allowlist.json"
+# One token is recorded several times in a statement but reported once.
+if [ "$(grep -c 'gitleaks-provenance' "$W/out/provenance-token.log")" = 1 ]; then
+  echo "ok    provenance-token reported once"
+else
+  echo "FAIL  provenance-token reported $(grep -c 'gitleaks-provenance' "$W/out/provenance-token.log") times"; fail=1
+fi
+# An image without attestations passes with a warning, never silently.
+check provenance-none 0 SCAN_IMAGE="$REG/ss/prov:none" SCAN_ARCHIVES=false
+if grep -q '::warning title=secret-scan::no provenance attestation found' "$W/out/provenance-none.log" &&
+   grep -q 'provenance (none)' "$W/out/provenance-none.log"; then
+  echo "ok    provenance-none warned"
+else
+  echo "FAIL  provenance-none did not warn"; fail=1
+fi
+check bad-scan-attestations 2 SCAN_PATH="$CTX/c01" SCAN_ATTESTATIONS=yes
+docker buildx rm secret-scan-test > /dev/null 2>&1 || true
+
 docker rm -f secret-scan-test-registry > /dev/null
 docker rmi "$REG/ss/c01:rel" "$REG/public/c01:rel" > /dev/null 2>&1 || true
 
@@ -196,6 +273,13 @@ for p in linux/amd64 linux/arm64 linux/s390x; do
     fail=1
   fi
 done
+# Its mode=max provenance (one statement per platform) is scanned too, with no
+# false positives.
+if grep -q 'scanned:.*provenance' "$W/out/portal-release.log"; then
+  echo "ok    portal-release provenance scanned"
+else
+  echo "FAIL  portal-release provenance not scanned"; fail=1
+fi
 
 # Secret values never reach the log.
 if grep -rqE 'ghp_[0-9A-Za-z]{36}|npm_[0-9A-Za-z]{36}|sk_live_[0-9A-Za-z]{24}|AKIA[A-Z2-7]{16}' "$W/out"/*.log; then
