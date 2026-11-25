@@ -65,8 +65,11 @@ jobs:
           context: docker/tools/${{ matrix.tag }}
           tags: tykio/ci-tools:${{ matrix.tag }}
 
-      # Report only for now: findings show in the job summary without failing the build.
+      # Report only for now: findings show in the job summary without failing the build. The action
+      # fails on a scanner error even with enforce off, so continue-on-error keeps that from blocking
+      # the push; drop both when the scan starts enforcing.
       - name: 'Scan tykio/ci-tools:${{ matrix.tag }} for secrets'
+        continue-on-error: true
         uses: ./.github/actions/secret-scan
         with:
           image: docker://tykio/ci-tools:${{ matrix.tag }}
