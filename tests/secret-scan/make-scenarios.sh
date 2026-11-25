@@ -89,6 +89,14 @@ mk s15; printf 'FROM alpine:3.20 AS build\nARG AWS_ID\nARG AWS_SECRET\nRUN mkdir
 mk s16; python3 -I -c 'import sys,zipfile; z=zipfile.ZipFile(sys.argv[1],"w"); z.writestr("BOOT-INF/classes/application.properties","aws.accessKeyId=%s\naws.secretKey=%s\n" % (sys.argv[2], sys.argv[3])); z.close()' s16/app.jar "$AWS_ID" "$AWS_SECRET"
 printf 'FROM alpine:3.20\nCOPY app.jar /opt/app.jar\n' > s16/Dockerfile
 
+# D1 dpkg checksum file, as Debian images keep them: the default allowlist must
+# drop it in /var/lib/dpkg/info/ but not the same content anywhere else
+mk d01; python3 -I -c '
+import hashlib,sys
+paths=["usr/bin/busybox","usr/share/doc/busybox/copyright","usr/share/man/man1/busybox.1.gz"]
+open(sys.argv[1],"w").write("".join(hashlib.md5(p.encode()).hexdigest()+"  "+p+"\n" for p in paths))' d01/busybox.md5sums
+printf 'FROM alpine:3.20\nCOPY busybox.md5sums /var/lib/dpkg/info/busybox.md5sums\nCOPY busybox.md5sums /opt/notes/busybox.md5sums\n' > d01/Dockerfile
+
 # C1 negative control: BuildKit secret mount (correct way)
 mk c01; echo "$GH" > c01_token.txt
 printf '# syntax=docker/dockerfile:1\nFROM alpine:3.20\nRUN --mount=type=secret,id=gh test -s /run/secrets/gh && echo used\n' > c01/Dockerfile
@@ -98,7 +106,7 @@ mk c02; cp id_rsa c02/id_rsa
 printf 'FROM alpine:3.20 AS build\nCOPY id_rsa /root/.ssh/id_rsa\nRUN echo built > /out\nFROM alpine:3.20\nCOPY --from=build /out /out\n' > c02/Dockerfile
 
 build() { docker build -q "$@" >/dev/null; }
-for s in s01 s02 s03 s05 s06 s07 s09 s10 s11 s12 s13 s16; do build -t "secret-scan-test/$s" "$s"; done
+for s in s01 s02 s03 s05 s06 s07 s09 s10 s11 s12 s13 s16 d01; do build -t "secret-scan-test/$s" "$s"; done
 build -t secret-scan-test/s04 --build-arg GITHUB_TOKEN="$GH" s04
 build -t secret-scan-test/s08 --build-arg TOKEN="$GH" s08
 build -t secret-scan-test/s14 --build-arg NPM_TOKEN="$NPM" s14

@@ -100,6 +100,15 @@ check c01-both 0 SCAN_PATH="$CTX/c01" SCAN_IMAGE="docker://secret-scan-test/c01"
 check c02-image 0 SCAN_IMAGE="docker://secret-scan-test/c02"
 check c02-folder 1 SCAN_PATH="$CTX/c02"
 
+# The default allowlist drops dpkg checksum files only where dpkg keeps them.
+check d01-dpkg-info 1 SCAN_IMAGE="docker://secret-scan-test/d01" SCAN_ARCHIVES=false
+if grep -q '/opt/notes/busybox.md5sums' "$W/out/d01-dpkg-info.log" &&
+   ! grep -q '/var/lib/dpkg/info/' "$W/out/d01-dpkg-info.log"; then
+  echo "ok    d01 dpkg/info allowlisted, same file elsewhere still reported"
+else
+  echo "FAIL  d01 dpkg/info allowlist not applied as expected"; fail=1
+fi
+
 # Report-only mode passes with findings.
 check s01-report-only 0 SCAN_IMAGE="docker://secret-scan-test/s01" ENFORCE=false
 
