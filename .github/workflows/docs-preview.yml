@@ -112,7 +112,7 @@ jobs:
         if: inputs.component == 'gateway'
         uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5  # v7.1.0
         with:
-          go-version: '1.21'
+          go-version-file: head/go.mod
 
       - name: Checkout exp (schema-gen and docs scripts)
         if: contains(fromJSON('["gateway","dashboard"]'), inputs.component)
