@@ -46,21 +46,43 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550  # v4.8.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      # Built into the local daemon, scanned, then pushed: what reaches Docker Hub is exactly the image
+      # that was scanned. Rebuilding with push: true instead could pull a newer base image (pull: true).
       - name: 'Build tykio/ci-tools:${{ matrix.tag }}'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
-          push: ${{ github.ref_name == 'main' || github.event_name == 'workflow_dispatch' }}
           pull: true
-          load: ${{ github.ref_name != 'main' && github.event_name != 'workflow_dispatch' }}
+          load: true
+          # Keeps the provenance attestation buildx attached when this step pushed.
+          provenance: mode=max
           no-cache: true
           context: docker/tools/${{ matrix.tag }}
           tags: tykio/ci-tools:${{ matrix.tag }}
+
+      # Report only for now: findings show in the job summary without failing the build. The action
+      # fails on a scanner error even with enforce off, so continue-on-error keeps that from blocking
+      # the push; drop both when the scan starts enforcing.
+      - name: 'Scan tykio/ci-tools:${{ matrix.tag }} for secrets'
+        continue-on-error: true
+        timeout-minutes: 20
+        uses: ./.github/actions/secret-scan
+        with:
+          image: docker://tykio/ci-tools:${{ matrix.tag }}
+          enforce: "false"
+
+      - name: 'Push tykio/ci-tools:${{ matrix.tag }}'
+        if: github.ref_name == 'main' || github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ matrix.tag }}
+        run: docker push "tykio/ci-tools:$TAG"
 
       - run: docker image ls
 
