@@ -61,6 +61,8 @@ jobs:
         with:
           pull: true
           load: true
+          # Keeps the provenance attestation buildx attached when this step pushed.
+          provenance: mode=max
           no-cache: true
           context: docker/tools/${{ matrix.tag }}
           tags: tykio/ci-tools:${{ matrix.tag }}
@@ -70,6 +72,7 @@ jobs:
       # the push; drop both when the scan starts enforcing.
       - name: 'Scan tykio/ci-tools:${{ matrix.tag }} for secrets'
         continue-on-error: true
+        timeout-minutes: 20
         uses: ./.github/actions/secret-scan
         with:
           image: docker://tykio/ci-tools:${{ matrix.tag }}
