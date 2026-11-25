@@ -2,7 +2,8 @@
 name: Secret scan
 description: >-
   Scan a build folder (gitleaks) and/or a container image (trufflehog on every
-  layer and platform, gitleaks on archives inside the image) for secrets before
+  layer and platform, gitleaks on archives inside the image and on its
+  provenance attestation) for secrets before
   the image is published. Fails the job on a finding and fails closed when a
   scanner cannot run.
 
@@ -24,16 +25,24 @@ inputs:
       (tar, zip, jar, whl, ...), which the layer scan does not unpack. Needs docker and python3.
     required: false
     default: "true"
+  scan-attestations:
+    description: >-
+      Also scan the provenance attestation of registry images. With provenance
+      mode=max it holds every build arg value and is published with the image.
+      Fails on a non-empty build arg named like a secret (token, password, key,
+      ...) and on anything gitleaks finds in it; both go through the allowlist.
+    required: false
+    default: "true"
   max-archive-mb:
     description: "Largest archive (MB) the archive scan copies out of the image; a larger one fails the scan."
     required: false
     default: "1024"
   gitleaks-config:
-    description: "Path to a .gitleaks.toml for the build folder; use [extend] useDefault = true to keep the default rules."
+    description: "Path to a .gitleaks.toml for the build folder, the archives in the image and the provenance attestation; use [extend] useDefault = true to keep the default rules."
     required: false
     default: ""
   allowlist:
-    description: "Path to a JSON allowlist for image findings: [{detector, path, reason}], path is a regex."
+    description: "Path to a JSON allowlist for image and provenance findings: [{detector, path, reason}], path is a regex."
     required: false
     default: ""
   enforce:
@@ -85,6 +94,7 @@ runs:
         SCAN_PATH: ${{ inputs.path }}
         SCAN_IMAGE: ${{ inputs.image }}
         SCAN_ARCHIVES: ${{ inputs.scan-archives }}
+        SCAN_ATTESTATIONS: ${{ inputs.scan-attestations }}
         MAX_ARCHIVE_MB: ${{ inputs.max-archive-mb }}
         GITLEAKS_CONFIG: ${{ inputs.gitleaks-config }}
         ALLOWLIST: ${{ inputs.allowlist }}
