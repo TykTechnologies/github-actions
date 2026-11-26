@@ -65,11 +65,10 @@ jobs:
             '**/pyproject.toml' '**/poetry.lock' '**/setup.py' '**/setup.cfg'
           )
 
-          # Add extra paths if provided
+          # Add extra paths if provided (split on spaces, no glob expansion)
           if [ -n "$EXTRA_PATHS" ]; then
-            for p in $EXTRA_PATHS; do
-              PATHS+=("$p")
-            done
+            read -ra EXTRA <<<"$EXTRA_PATHS"
+            PATHS+=("${EXTRA[@]}")
           fi
 
           if git merge-base "origin/$BASE_REF" HEAD >/dev/null 2>&1; then
@@ -83,7 +82,12 @@ jobs:
             echo "::error::Dependency files changed in this PR. A reviewer must verify the changes and add the '$LABEL' label to unblock CI."
             echo ""
             echo "Changed dependency files:"
+            # File names come from the PR: a line starting with :: must not be read as a
+            # workflow command, so command processing is off while they are printed.
+            STOP="$(openssl rand -hex 16)"
+            echo "::stop-commands::$STOP"
             echo "$CHANGED"
+            echo "::$STOP::"
             echo ""
             echo "To unblock: add the '$LABEL' label after reviewing the dependency changes, then re-run the failed jobs."
             exit 1
