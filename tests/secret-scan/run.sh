@@ -290,6 +290,56 @@ else
   echo "FAIL  portal-release provenance not scanned"; fail=1
 fi
 
+# With REPORT_DETAILS=false the finding still fails the scan and is in the
+# report, but its file and rule stay out of the log and the job summary.
+mkdir -p "$W/out/quiet"
+: > "$W/out/quiet/summary.md"; : > "$W/out/quiet/output"
+got=0
+REPORT_DETAILS=false SCAN_PATH="$CTX/s01" OUT_DIR="$W/out/quiet/scan" \
+  GITHUB_STEP_SUMMARY="$W/out/quiet/summary.md" GITHUB_OUTPUT="$W/out/quiet/output" \
+  bash "$SCAN" > "$W/out/quiet.log" 2>&1 || got=$?
+report=$(sed -n 's/^report=//p' "$W/out/quiet/output")
+if [ "$got" = 1 ] \
+  && ! grep -q '\.pat' "$W/out/quiet.log" "$W/out/quiet/summary.md" \
+  && grep -q 'withheld' "$W/out/quiet.log" \
+  && [ "$report" = "$W/out/quiet/scan/report/findings.jsonl" ] && grep -q '\.pat' "$report" \
+  && [ "$(ls -A "$W/out/quiet/scan/report")" = "findings.jsonl" ]; then
+  echo "ok    report-details=false withholds details, keeps the report"
+else
+  echo "FAIL  report-details=false (exit $got, report '$report')"
+  sed 's/^/        /' "$W/out/quiet.log" "$W/out/quiet/summary.md"
+  fail=1
+fi
+check bad-report-details 2 REPORT_DETAILS=maybe SCAN_PATH="$CTX/s01"
+
+# The same for an image: neither the file nor the detector shows in the log.
+check quiet-image 0 REPORT_DETAILS=false ENFORCE=false SCAN_IMAGE="docker://secret-scan-test/s01"
+if grep -qiE '\.pat|github' "$W/out/quiet-image.log"; then
+  echo "FAIL  quiet-image log names the finding"; sed 's/^/        /' "$W/out/quiet-image.log"; fail=1
+elif ! grep -q '\.pat' "$W/out/quiet-image/report/findings.jsonl"; then
+  echo "FAIL  quiet-image finding missing from the report"; fail=1
+else
+  echo "ok    quiet-image withholds details, keeps the report"
+fi
+
+# A scanner error's log can name files in the image: withheld too.
+check quiet-scanner-error 2 REPORT_DETAILS=false SCAN_IMAGE="docker://secret-scan-test/s09" MAX_ARCHIVE_MB=0
+if grep -q 'archive larger than' "$W/out/quiet-scanner-error.log"; then
+  echo "FAIL  quiet-scanner-error log names a file in the image"; sed 's/^/        /' "$W/out/quiet-scanner-error.log"; fail=1
+elif ! grep -q 'archive larger than' "$W/out/archive-over-limit.log"; then
+  echo "FAIL  archive-over-limit log no longer names the archive, so quiet-scanner-error proves nothing"; fail=1
+else
+  echo "ok    quiet-scanner-error withholds the scanner log"
+fi
+
+# Docker's own errors (manifest, pull, provenance) are withheld the same way.
+check quiet-registry-error 2 REPORT_DETAILS=false SCAN_IMAGE="tykio/secret-scan-test-does-not-exist:none"
+if grep -q 'withheld' "$W/out/quiet-registry-error.log" && ! grep -qi 'not found\|denied\|unauthorized' "$W/out/quiet-registry-error.log"; then
+  echo "ok    quiet-registry-error withholds docker's error"
+else
+  echo "FAIL  quiet-registry-error shows docker's error"; sed 's/^/        /' "$W/out/quiet-registry-error.log"; fail=1
+fi
+
 # Secret values never reach the log.
 if grep -rqE 'ghp_[0-9A-Za-z]{36}|npm_[0-9A-Za-z]{36}|sk_live_[0-9A-Za-z]{24}|AKIA[A-Z2-7]{16}' "$W/out"/*.log; then
   echo "FAIL  a secret value appears in the scan output"
