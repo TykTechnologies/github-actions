@@ -35,7 +35,6 @@ jobs:
             const comment = context.payload.comment;
             const issue = context.payload.issue;
             const repo = context.repo;
-            const octokit = github;
 
             // Verify the comment is on a pull request
             if (!issue.pull_request) {
@@ -53,7 +52,7 @@ jobs:
 
             const reason = commentBody.substring(forceMergePrefix.length).trim();
             if (!reason) {
-              await octokit.rest.issues.createComment({
+              await github.rest.issues.createComment({
                 owner: repo.owner,
                 repo: repo.repo,
                 issue_number: issue.number,
@@ -65,7 +64,7 @@ jobs:
 
             // Check if the commenter is an admin
             const username = comment.user.login;
-            const permission = await octokit.rest.repos.getCollaboratorPermissionLevel({
+            const permission = await github.rest.repos.getCollaboratorPermissionLevel({
               owner: repo.owner,
               repo: repo.repo,
               username: username
@@ -77,7 +76,7 @@ jobs:
             }
 
             // Fetch the pull request details to get the description (body)
-            const pr = await octokit.rest.pulls.get({
+            const pr = await github.rest.pulls.get({
               owner: repo.owner,
               repo: repo.repo,
               pull_number: issue.number
@@ -86,7 +85,7 @@ jobs:
 
             // Attempt to squash merge the pull request
             try {
-              await octokit.rest.pulls.merge({
+              await github.rest.pulls.merge({
                 owner: repo.owner,
                 repo: repo.repo,
                 pull_number: issue.number,
@@ -109,7 +108,7 @@ jobs:
               console.log('Slack notification sent');
             } catch (error) {
               console.error('Squash merge failed:', error.message);
-              await octokit.rest.issues.createComment({
+              await github.rest.issues.createComment({
                 owner: repo.owner,
                 repo: repo.repo,
                 issue_number: issue.number,
