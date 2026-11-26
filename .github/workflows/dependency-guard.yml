@@ -15,21 +15,46 @@ on:
 jobs:
   dependency-guard:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    # No permissions block here: a called workflow can only lower the caller's
+    # permissions, and asking for more than the caller grants fails the run.
+    # Callers set them where they call this workflow:
+    #   permissions:
+    #     contents: read
+    #     pull-requests: read   # optional: lets a re-run see a label added later
     steps:
       - name: Checkout
+        if: ${{ github.event.pull_request }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           filter: tree:0
           fetch-depth: 0
 
       - name: Check for dependency changes
-        if: ${{ github.event.pull_request && !contains(github.event.pull_request.labels.*.name, inputs.label_name) }}
+        if: ${{ github.event.pull_request }}
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
           EXTRA_PATHS: ${{ inputs.extra_paths }}
+          LABEL: ${{ inputs.label_name }}
+          EVENT_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # Read the PR's labels now, not from the event: a re-run after
+          # someone adds the label then sees it, so callers don't need the
+          # `labeled` trigger. Without pull-requests: read the API call fails
+          # and the labels from the event are used, as before.
+          if LABELS=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.labels[].name' 2>/dev/null); then
+            echo "Labels read from the PR now."
+          else
+            LABELS=$(jq -r '.[]' <<<"$EVENT_LABELS")
+            echo "::notice title=Dependency Guard::Could not read the PR's current labels (grant pull-requests: read to the caller); using the labels from the event."
+          fi
+          if grep -qxF -- "$LABEL" <<<"$LABELS"; then
+            echo "'$LABEL' is on the PR: dependency check skipped."
+            exit 0
+          fi
+
           git fetch origin "$BASE_REF" --depth=1
 
           # Default monitored paths
@@ -55,12 +80,12 @@ jobs:
           fi
 
           if [ -n "$CHANGED" ]; then
-            echo "::error::Dependency files changed in this PR. A reviewer must verify the changes and add the '${{ inputs.label_name }}' label to unblock CI."
+            echo "::error::Dependency files changed in this PR. A reviewer must verify the changes and add the '$LABEL' label to unblock CI."
             echo ""
             echo "Changed dependency files:"
             echo "$CHANGED"
             echo ""
-            echo "To unblock: add the '${{ inputs.label_name }}' label after reviewing the dependency changes."
+            echo "To unblock: add the '$LABEL' label after reviewing the dependency changes, then re-run the failed jobs."
             exit 1
           fi
 
