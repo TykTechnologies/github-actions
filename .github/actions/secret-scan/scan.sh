@@ -21,8 +21,12 @@
 #   ALLOWLIST        JSON allowlist for trufflehog findings (optional)
 #   MAX_ARCHIVE_MB   largest archive the archive scan copies out; a larger one fails the scan (default 1024)
 #   ENFORCE          "true" fails on findings; "false" reports only (default true)
+#   REPORT_DETAILS   "false" keeps finding details (files, rules) and scanner logs
+#                    out of the job log and summary, for public repositories; the
+#                    findings stay in $OUT_DIR/report/findings.jsonl (default true)
 #   OUT_DIR          where reports are written (default ./secret-scan-results).
-#                    trufflehog's raw output there contains secret values: never upload it.
+#                    trufflehog's raw output there contains secret values: never
+#                    upload it. Only $OUT_DIR/report is safe to keep.
 #
 # Exit codes: 0 clean (or findings with ENFORCE=false), 1 findings, 2 scanner error or bad input.
 set -euo pipefail
@@ -35,6 +39,7 @@ SCAN_ATTESTATIONS=${SCAN_ATTESTATIONS:-true}
 GITLEAKS_CONFIG=${GITLEAKS_CONFIG:-}
 ALLOWLIST=${ALLOWLIST:-}
 ENFORCE=${ENFORCE:-true}
+REPORT_DETAILS=${REPORT_DETAILS:-true}
 OUT_DIR=${OUT_DIR:-secret-scan-results}
 MAX_ARCHIVE_MB=${MAX_ARCHIVE_MB:-1024}
 
@@ -46,13 +51,23 @@ escape_cmd() {
   printf '%s' "$s"
 }
 errors=0
+# Scanner logs can name files inside the scanned image, so they follow
+# REPORT_DETAILS. Reads the log on stdin and prints its first lines.
+log_excerpt() {
+  if [ "$REPORT_DETAILS" = "true" ]; then
+    head -3 | tr '\n' ' '
+  else
+    cat > /dev/null
+    printf '(details withheld)'
+  fi
+}
 error() { echo "::error title=secret-scan::$(escape_cmd "$*")" >&2; errors=$((errors + 1)); }
 
 if [ -z "$SCAN_PATH" ] && [ -z "$SCAN_IMAGE" ]; then
   echo "::error title=secret-scan::set at least one of path or image" >&2
   exit 2
 fi
-for flag in "ENFORCE=$ENFORCE" "SCAN_ARCHIVES=$SCAN_ARCHIVES" "SCAN_ATTESTATIONS=$SCAN_ATTESTATIONS"; do
+for flag in "ENFORCE=$ENFORCE" "SCAN_ARCHIVES=$SCAN_ARCHIVES" "SCAN_ATTESTATIONS=$SCAN_ATTESTATIONS" "REPORT_DETAILS=$REPORT_DETAILS"; do
   case "${flag#*=}" in true|false) ;; *) echo "::error title=secret-scan::${flag%%=*} must be true or false" >&2; exit 2 ;; esac
 done
 for value in "$SCAN_PATH" "$SCAN_IMAGE" "${SCAN_IMAGE#docker://}" "${SCAN_IMAGE#file://}"; do
@@ -81,7 +96,8 @@ fi
 
 mkdir -p "$OUT_DIR"
 OUT_DIR=$(cd "$OUT_DIR" && pwd)
-FINDINGS="$OUT_DIR/findings.jsonl"
+mkdir -p "$OUT_DIR/report"
+FINDINGS="$OUT_DIR/report/findings.jsonl"
 : > "$FINDINGS"
 NO_IGNORE="$OUT_DIR/no-gitleaksignore"
 mkdir -p "$NO_IGNORE"
@@ -111,7 +127,9 @@ run_gitleaks() {
       ;;
     *)
       error "gitleaks failed with exit code $rc"
-      sed -E 's/^/  gitleaks: /' "$OUT_DIR/$name.log" >&2
+      if [ "$REPORT_DETAILS" = "true" ]; then
+        sed -E 's/^/  gitleaks: /' "$OUT_DIR/$name.log" >&2
+      fi
       ;;
   esac
 }
@@ -137,7 +155,7 @@ scan_folder() {
        grep -qE '^[[:space:]]*url[[:space:]]*=[[:space:]]*[a-z+]+://[^/@[:space:]]+:[^/@[:space:]]+@' "$cfg"; then
       jq -nc --arg f "$cfg" '{tool: "secret-scan", rule: "git-credentials", file: $f, platform: "", layer: ""}' >> "$FINDINGS"
     fi
-  done < <(find "$SCAN_PATH" -type f -path '*/.git/config' -print0)
+  done < <(find "$SCAN_PATH" -type f -path '*/.git/config' -print0 2> /dev/null)
   scanned+=("build folder")
 }
 
@@ -152,7 +170,7 @@ resolve_image() {
   local digest
   if ! digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$SCAN_IMAGE" 2> "$OUT_DIR/inspect.log" | jq -r '.digest // empty') ||
      [ -z "$digest" ]; then
-    error "cannot read image manifest for $SCAN_IMAGE: $(head -3 "$OUT_DIR/inspect.log" | tr '\n' ' ')"
+    error "cannot read image manifest for $SCAN_IMAGE: $(log_excerpt < "$OUT_DIR/inspect.log")"
     return 1
   fi
   IMAGE_PINNED="$IMAGE_REPO@$digest"
@@ -166,7 +184,7 @@ image_targets() {
   esac
   local raw
   if ! raw=$(docker buildx imagetools inspect --raw "$IMAGE_PINNED" 2> "$OUT_DIR/inspect.log"); then
-    error "cannot read image manifest for $IMAGE_PINNED: $(head -3 "$OUT_DIR/inspect.log" | tr '\n' ' ')"
+    error "cannot read image manifest for $IMAGE_PINNED: $(log_excerpt < "$OUT_DIR/inspect.log")"
     return 1
   fi
   if jq -e '.manifests' > /dev/null <<< "$raw"; then
@@ -192,7 +210,7 @@ scan_layers() {
   local log_errors chunks
   log_errors=$(jq -Rr 'fromjson? | select(.level == "error") | "\(.msg): \(.error // "")"' "$OUT_DIR/trufflehog-$n.log")
   if [ -n "$log_errors" ]; then
-    error "trufflehog could not scan $ref: $(head -3 <<< "$log_errors" | tr '\n' ' ')"
+    error "trufflehog could not scan $ref: $(log_excerpt <<< "$log_errors")"
     return
   fi
   chunks=$(jq -Rr 'fromjson? | select(.msg == "finished scanning") | .chunks // 0' "$OUT_DIR/trufflehog-$n.log" | tail -1)
@@ -225,7 +243,7 @@ scan_archives() {
       # just built it), and remember it so only what this step pulled is removed.
       if ! docker image inspect "$ref" > /dev/null 2>&1; then
         if ! docker pull -q "$ref" > /dev/null 2> "$OUT_DIR/pull-$n.log"; then
-          error "cannot pull $ref for the archive scan: $(head -3 "$OUT_DIR/pull-$n.log" | tr '\n' ' ')"
+          error "cannot pull $ref for the archive scan: $(log_excerpt < "$OUT_DIR/pull-$n.log")"
           return
         fi
         pulled=true
@@ -249,13 +267,15 @@ scan_archives() {
       > "$OUT_DIR/archive-count-$n.txt" 2> "$OUT_DIR/extract-$n.log" || rc=$?
   docker rm "$cid" > /dev/null
   if [ "$rc" -ne 0 ]; then
-    error "cannot extract the archives from $img: $(cat "$OUT_DIR/export-$n.log" "$OUT_DIR/extract-$n.log" | head -3 | tr '\n' ' ')"
+    error "cannot extract the archives from $img: $(cat "$OUT_DIR/export-$n.log" "$OUT_DIR/extract-$n.log" | log_excerpt)"
     return
   fi
 
   # gitleaks picks the archive format from the file extension and skips short
   # or zip-based ones, so rename those to an extension it recognises.
-  (cd "$archives" && find . -type f -print0) |
+  # The loop runs in a subshell, so a failed rename is counted here. Its error
+  # would name a file in the image, so it is not printed.
+  if ! (cd "$archives" && find . -type f -print0) |
     while IFS= read -r -d '' f; do
       local staged=""
       case "$(tr '[:upper:]' '[:lower:]' <<< "$f")" in
@@ -265,9 +285,11 @@ scan_archives() {
         *.jar|*.war|*.ear|*.whl|*.egg) staged="$f.secret-scan.zip" ;;
       esac
       if [ -n "$staged" ]; then
-        mv "$archives/$f" "$archives/$staged"
+        mv "$archives/$f" "$archives/$staged" 2> /dev/null || exit 1
       fi
-    done
+    done; then
+    error "cannot stage the archives from $img for gitleaks"
+  fi
 
   if [ -n "$(find "$archives" -type f -print -quit)" ]; then
     run_gitleaks "$archives" "gitleaks-archives-$n" gitleaks-archive "$archives/" "/" \
@@ -298,7 +320,7 @@ scan_provenance() {
 
   if ! docker buildx imagetools inspect --format '{{json .Provenance}}' "$IMAGE_PINNED" > "$raw" 2> "$OUT_DIR/provenance.log" ||
      ! jq -e . "$raw" > /dev/null 2>&1; then
-    error "cannot read the provenance of $IMAGE_PINNED: $(head -3 "$OUT_DIR/provenance.log" | tr '\n' ' ')"
+    error "cannot read the provenance of $IMAGE_PINNED: $(log_excerpt < "$OUT_DIR/provenance.log")"
     cleanup_provenance
     return
   fi
@@ -379,10 +401,14 @@ scan_image() {
 
 count=$(wc -l < "$FINDINGS" | tr -d ' ')
 
-# File names come from the scanned folder or image: escape them.
-jq -r 'def cmd: gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A");
-  def prop: cmd | gsub(":"; "%3A") | gsub(","; "%2C");
-  "::error title=\("secret-scan (\(.tool) \(.rule))" | prop)::\("\(.file)\(if .platform != "" then " [\(.platform)]" else "" end)\(if .layer != "" then " in layer \(.layer)" else "" end)" | cmd)"' "$FINDINGS"
+if [ "$REPORT_DETAILS" = "false" ]; then
+  [ "$count" -gt 0 ] && echo "::error title=secret-scan::$count finding(s); details are withheld from this log" >&2
+else
+  # File names come from the scanned folder or image: escape them.
+  jq -r 'def cmd: gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A");
+    def prop: cmd | gsub(":"; "%3A") | gsub(","; "%2C");
+    "::error title=\("secret-scan (\(.tool) \(.rule))" | prop)::\("\(.file)\(if .platform != "" then " [\(.platform)]" else "" end)\(if .layer != "" then " in layer \(.layer)" else "" end)" | cmd)"' "$FINDINGS"
+fi
 
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   {
@@ -396,22 +422,29 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     fi
     echo
     if [ "$errors" -gt 0 ]; then
-      echo ":x: The scan itself failed ($errors error(s)); see the job log."
+      if [ "$REPORT_DETAILS" = "true" ]; then
+        echo ":x: The scan itself failed ($errors error(s)); see the job log."
+      else
+        echo ":x: The scan itself failed ($errors error(s)). Details are withheld; rerun privately with report-details true."
+      fi
     elif [ "$count" -eq 0 ]; then
       echo ":white_check_mark: No secrets found."
+    elif [ "$REPORT_DETAILS" = "false" ]; then
+      echo ":x: $count finding(s). Details are withheld here; see the report output."
     else
       echo "| Tool | Rule | File | Platform | Layer |"
       echo "|------|------|------|----------|-------|"
       jq -r 'def cell: gsub("[\r\n]"; " ") | gsub("\\|"; "\\|") | gsub("`"; "'"'"'");
         "| \(.tool) | \(.rule) | `\(.file | cell)` | \(.platform) | \(.layer[0:19]) |"' "$FINDINGS"
       echo
-      echo "Rotate any real credential first, then remove it from the build. False positives go in the allowlist, reviewed by AppSec."
+      echo "Rotate any real credential first, then remove it from the build. False positives go in the allowlist, reviewed by the security team."
     fi
   } >> "$GITHUB_STEP_SUMMARY"
 fi
 
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   echo "findings=$count" >> "$GITHUB_OUTPUT"
+  echo "report=$FINDINGS" >> "$GITHUB_OUTPUT"
 fi
 
 echo "secret-scan: $count finding(s), $errors scanner error(s); scanned: ${scanned[*]:-nothing}"

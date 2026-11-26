@@ -31,9 +31,11 @@ False positives:
 - Image layers: a JSON list of `{"detector": "...", "path": "<regex>", "reason": "..."}`; a malformed list or regex fails the scan. A default entry for dpkg checksum files in base images is built in.
 - Provenance attestation: the same `allowlist`. A secret-named build arg has detector `secret-named-build-arg` and path `build-arg:<NAME>`, for example `{"detector": "secret-named-build-arg", "path": "^build-arg:GPG_KEY_ID$", "reason": "key ID, not a key"}`; a gitleaks finding has its gitleaks rule as detector and path `provenance attestation`. The gitleaks rules are the defaults, or `gitleaks-config` when given.
 
-The `gitleaks-config` and `allowlist` files should be reviewed by AppSec (CODEOWNERS).
+The `gitleaks-config` and `allowlist` files should be reviewed by the security team (CODEOWNERS).
 
-Reports are written to `$RUNNER_TEMP/secret-scan-results`. trufflehog's raw output there contains the secret values: never upload that folder as an artifact.
+Reports are written to `$RUNNER_TEMP/secret-scan-results`. trufflehog's raw output there contains the secret values: never upload that folder as an artifact. The findings alone (tool, rule, file, platform, layer; no values) are in its `report/findings.jsonl`, whose path is the `report` output. The file is on the runner, so read it in a later step of the same job, with `if: always()` when `enforce` is on.
+
+In a public repository, where anyone can read the job log, set `report-details: false`: the log and summary then give only the number of findings, scanner error logs are left out too, and the job sends the `report` file somewhere private, such as a Slack alert to the security team.
 
 `tests/secret-scan` builds 16 images that leak fake credentials in common ways and 2 correctly built controls, plus images pushed to a local registry with and without provenance attestations; `secret-scan-test.yml` runs them, the fail-closed cases and a real multi-platform release image on every change.
 

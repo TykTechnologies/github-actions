@@ -49,11 +49,26 @@ inputs:
     description: "Fail the job when secrets are found. Scanner errors always fail."
     required: false
     default: "true"
+  report-details:
+    description: >-
+      Show each finding's file and rule, and scanner error logs, in the job
+      log and summary. Set to "false" in a public repository, where anyone can
+      read the log, and send the report output to a private place instead.
+    required: false
+    default: "true"
 
 outputs:
   findings:
     description: "Number of findings after the allowlist"
     value: ${{ steps.scan.outputs.findings }}
+  report:
+    description: >-
+      Path to the findings report (JSON lines: tool, rule, file, platform,
+      layer; never secret values), alone in its own folder. The file is on the
+      runner, so read it in a later step of the same job; with enforce "true"
+      that step needs "if: always()". The rest of the results folder holds raw
+      scanner output with secret values: never upload it.
+    value: ${{ steps.scan.outputs.report }}
 
 runs:
   using: composite
@@ -99,5 +114,6 @@ runs:
         GITLEAKS_CONFIG: ${{ inputs.gitleaks-config }}
         ALLOWLIST: ${{ inputs.allowlist }}
         ENFORCE: ${{ inputs.enforce }}
+        REPORT_DETAILS: ${{ inputs.report-details }}
         OUT_DIR: ${{ runner.temp }}/secret-scan-results
       run: PATH="$RUNNER_TEMP/secret-scan-bin:$PATH" bash "$GITHUB_ACTION_PATH/scan.sh"
